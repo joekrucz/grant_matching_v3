@@ -13,19 +13,6 @@
     "**/*.py",
     "requirements.txt",
     "manage.py"
-  ],
-  "ignore": [
-    "../Gemfile",
-    "../Gemfile.lock",
-    "../config.ru",
-    "../Rakefile",
-    "../bin/rails",
-    "../app/",
-    "../config/",
-    "../db/",
-    "../lib/",
-    "../spec/",
-    "../vendor/"
   ]
 }
 
