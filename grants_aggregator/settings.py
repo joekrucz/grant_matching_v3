@@ -56,10 +56,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'grants_aggregator.middleware.RailwayHostMiddleware',  # Allow Railway dynamic domains (must be before SecurityMiddleware)
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files in production
     'corsheaders.middleware.CorsMiddleware',
-    'grants_aggregator.middleware.RailwayHostMiddleware',  # Allow Railway dynamic domains
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
