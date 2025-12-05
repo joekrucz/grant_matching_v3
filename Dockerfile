@@ -28,5 +28,6 @@ EXPOSE 8000
 
 # Use entrypoint script to handle PORT variable at runtime
 # If RAILWAY_SERVICE_NAME is "celery", use celery entrypoint, otherwise use web entrypoint
-ENTRYPOINT ["/bin/bash", "-c", "if [ \"$RAILWAY_SERVICE_NAME\" = \"celery\" ]; then /app/celery_entrypoint.sh; else /app/entrypoint.sh; fi"]
+# Also check for CELERY_WORKER env var as fallback
+ENTRYPOINT ["/bin/bash", "-c", "if [ \"$RAILWAY_SERVICE_NAME\" = \"celery\" ] || [ \"$CELERY_WORKER\" = \"true\" ]; then echo 'Detected Celery service, starting worker...'; /app/celery_entrypoint.sh; else echo 'Detected Web service, starting Gunicorn...'; /app/entrypoint.sh; fi"]
 

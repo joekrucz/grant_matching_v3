@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+echo "=========================================="
+echo "CELERY ENTRYPOINT - Starting Celery Worker"
+echo "RAILWAY_SERVICE_NAME: ${RAILWAY_SERVICE_NAME:-not set}"
+echo "=========================================="
+
 # Run database migrations on startup (Celery also needs DB access)
 echo "Running database migrations..."
 python manage.py migrate --noinput || {
