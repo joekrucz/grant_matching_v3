@@ -1,10 +1,21 @@
 #!/bin/bash
 set -e
 
+# Check if this should be running as Celery worker instead
+if [ "$RAILWAY_SERVICE_NAME" = "celery" ] || [ "$CELERY_WORKER" = "true" ]; then
+    echo "=========================================="
+    echo "ENTRYPOINT.SH - Detected Celery service, redirecting to celery_entrypoint.sh"
+    echo "RAILWAY_SERVICE_NAME: ${RAILWAY_SERVICE_NAME:-not set}"
+    echo "CELERY_WORKER: ${CELERY_WORKER:-not set}"
+    echo "=========================================="
+    exec /app/celery_entrypoint.sh
+fi
+
 # Get PORT from environment variable, default to 8000 if not set
 PORT=${PORT:-8000}
 
 # Debug: Log environment variables (without sensitive data)
+echo "WEB ENTRYPOINT - Starting Gunicorn"
 echo "Starting with PORT=$PORT"
 if [ -n "$REDIS_URL" ]; then
     echo "REDIS_URL is set (length: ${#REDIS_URL})"
