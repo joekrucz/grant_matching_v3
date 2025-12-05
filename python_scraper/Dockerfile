@@ -1,12 +1,15 @@
 FROM python:3.12-slim
 
 # Build arg to force cache invalidation - scraper service only
-ARG CACHE_BUST=scraper-v4-$(date +%s)
+ARG CACHE_BUST=scraper-v5
 ARG SERVICE_NAME=scraper
+
+# Force cache break with a unique RUN command
+RUN echo "Scraper service build - $(date)" > /tmp/build-id.txt
 
 WORKDIR /app
 
-# Scraper service Dockerfile - v4 (force cache break)
+# Scraper service Dockerfile - v5 (force cache break)
 # This service uses python:3.12-slim and does NOT use django/manage.py
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
