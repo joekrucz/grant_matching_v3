@@ -16,3 +16,7 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Load task modules from all registered Django apps.
 app.autodiscover_tasks()
 
+# Don't connect to broker on import - only when actually needed
+# This prevents connection errors from blocking Django startup
+app.conf.broker_connection_retry_on_startup = True
+
