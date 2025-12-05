@@ -10,8 +10,14 @@ from django.db.models import Q
 from django.conf import settings
 from .models import Company, FundingSearch, GrantMatchResult
 from .services import CompaniesHouseService, CompaniesHouseError
-from .tasks import match_grants_with_chatgpt
+from grants_aggregator import CELERY_AVAILABLE
 from grants.models import Grant
+
+# Import tasks only if Celery is available
+if CELERY_AVAILABLE:
+    from .tasks import match_grants_with_chatgpt
+else:
+    match_grants_with_chatgpt = None
 
 
 @login_required
@@ -305,6 +311,11 @@ def funding_search_match(request, id):
         
         if funding_search.matching_status == 'running':
             messages.info(request, 'Matching job is already running.')
+            return redirect('companies:funding_search_detail', id=id)
+        
+        # Check if Celery is available
+        if not CELERY_AVAILABLE or match_grants_with_chatgpt is None:
+            messages.error(request, 'Background task service (Celery) is not available. Please check Redis connection.')
             return redirect('companies:funding_search_detail', id=id)
         
         # Trigger Celery task

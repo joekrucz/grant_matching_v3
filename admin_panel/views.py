@@ -8,7 +8,13 @@ from django.core.paginator import Paginator
 from grants.models import Grant, ScrapeLog
 from users.models import User
 from companies.models import Company
-from .tasks import trigger_ukri_scrape
+from grants_aggregator import CELERY_AVAILABLE
+
+# Import tasks only if Celery is available
+if CELERY_AVAILABLE:
+    from .tasks import trigger_ukri_scrape
+else:
+    trigger_ukri_scrape = None
 
 
 def admin_required(view_func):
@@ -42,9 +48,16 @@ def dashboard(request):
 def run_scrapers(request):
     """Trigger scraper workers."""
     if request.method == 'POST':
-        # Trigger the scraper chain
-        trigger_ukri_scrape.delay()
-        messages.success(request, 'Scrapers triggered. Check scrape logs for progress.')
+        if not CELERY_AVAILABLE or trigger_ukri_scrape is None:
+            messages.error(request, 'Background task service (Celery) is not available. Please check Redis connection.')
+            return redirect('admin_panel:dashboard')
+        
+        try:
+            # Trigger the scraper chain
+            trigger_ukri_scrape.delay()
+            messages.success(request, 'Scrapers triggered. Check scrape logs for progress.')
+        except Exception as e:
+            messages.error(request, f'Failed to trigger scrapers: {str(e)}')
         return redirect('admin_panel:scrape_logs')
     
     return redirect('admin_panel:dashboard')
