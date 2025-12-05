@@ -26,8 +26,10 @@ RUN chmod +x /app/entrypoint.sh /app/celery_entrypoint.sh
 # Expose port
 EXPOSE 8000
 
-# Use entrypoint script to handle PORT variable at runtime
-# If RAILWAY_SERVICE_NAME is "celery", use celery entrypoint, otherwise use web entrypoint
-# Also check for CELERY_WORKER env var as fallback
-ENTRYPOINT ["/bin/bash", "-c", "if [ \"$RAILWAY_SERVICE_NAME\" = \"celery\" ] || [ \"$CELERY_WORKER\" = \"true\" ]; then echo 'Detected Celery service, starting worker...'; /app/celery_entrypoint.sh; else echo 'Detected Web service, starting Gunicorn...'; /app/entrypoint.sh; fi"]
+# Use a wrapper script to detect service type
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Use wrapper script to handle service detection
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
