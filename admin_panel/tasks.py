@@ -46,11 +46,13 @@ if app is not None:
     @app.task
     def trigger_ukri_scrape():
         """Trigger UKRI scraper and chain to NIHR."""
+        logger.info("trigger_ukri_scrape task started")
         scrape_log = ScrapeLog.objects.create(
             source='ukri',
             status='running',
             started_at=timezone.now(),
         )
+        logger.info(f"Created ScrapeLog with ID: {scrape_log.id}")
         
         try:
             _safe_scraper_request(
