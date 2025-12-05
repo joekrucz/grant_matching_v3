@@ -68,6 +68,14 @@ SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=not DEBUG)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 
+# Proxy settings for Railway
+# Railway is behind a proxy, so we need to trust the X-Forwarded-* headers
+if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PROJECT_ID'):
+    # Trust proxy headers from Railway
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+    USE_X_FORWARDED_PORT = True
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
