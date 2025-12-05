@@ -20,6 +20,7 @@ except Exception as e:
 
 def _safe_scraper_request(url, log_id, timeout=300):
     """Make HTTP request to scraper service with error handling."""
+    logger.info(f"Attempting to connect to scraper service at: {url}")
     try:
         response = requests.post(
             url,
@@ -27,9 +28,12 @@ def _safe_scraper_request(url, log_id, timeout=300):
             timeout=timeout,
         )
         response.raise_for_status()
+        logger.info(f"Successfully connected to scraper service: {url}")
         return True
     except requests.exceptions.ConnectionError as e:
         logger.error(f"Scraper service connection error: {e}")
+        logger.error(f"Failed to connect to: {url}")
+        logger.error(f"PYTHON_SCRAPER_URL setting: {settings.PYTHON_SCRAPER_URL}")
         raise Exception(f"Scraper service is not available: {str(e)}")
     except requests.exceptions.Timeout as e:
         logger.error(f"Scraper service timeout: {e}")
