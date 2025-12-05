@@ -20,7 +20,16 @@ SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-me-in-production'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG', default=False)
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
+# ALLOWED_HOSTS: Allow Railway domains by default
+# Railway provides RAILWAY_PUBLIC_DOMAIN or you can set ALLOWED_HOSTS manually
+default_hosts = ['localhost', '127.0.0.1', '*.railway.app']
+if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
+    default_hosts.append(os.environ['RAILWAY_PUBLIC_DOMAIN'])
+# Also check for any custom domain
+if 'RAILWAY_CUSTOM_DOMAIN' in os.environ:
+    default_hosts.append(os.environ['RAILWAY_CUSTOM_DOMAIN'])
+
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=default_hosts)
 
 # Application definition
 INSTALLED_APPS = [
