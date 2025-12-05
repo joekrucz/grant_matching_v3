@@ -79,8 +79,11 @@ def run_nihr_job(log_id: Optional[int] = None) -> Dict[str, Any]:
       return {"message": "No grants found", "created": 0, "updated": 0, "skipped": 0}
     return _post_to_django(grants, log_id=log_id)
   except Exception as e:
+    import traceback
+    error_traceback = traceback.format_exc()
     print(f"Error in run_nihr_job: {e}")
-    raise HTTPException(status_code=500, detail=f"NIHR scraper failed: {str(e)}")
+    print(f"Full traceback:\n{error_traceback}")
+    raise HTTPException(status_code=500, detail=f"NIHR scraper failed: {str(e)}\n\nTraceback:\n{error_traceback}")
 
 
 def run_catapult_job(log_id: Optional[int] = None) -> Dict[str, Any]:
@@ -92,8 +95,11 @@ def run_catapult_job(log_id: Optional[int] = None) -> Dict[str, Any]:
       return {"message": "No grants found", "created": 0, "updated": 0, "skipped": 0}
     return _post_to_django(grants, log_id=log_id)
   except Exception as e:
+    import traceback
+    error_traceback = traceback.format_exc()
     print(f"Error in run_catapult_job: {e}")
-    raise HTTPException(status_code=500, detail=f"Catapult scraper failed: {str(e)}")
+    print(f"Full traceback:\n{error_traceback}")
+    raise HTTPException(status_code=500, detail=f"Catapult scraper failed: {str(e)}\n\nTraceback:\n{error_traceback}")
 
 
 @app.get("/health")
