@@ -14,9 +14,13 @@ fi
 
 # Run database migrations on startup
 echo "Running database migrations..."
-python manage.py migrate --noinput || {
-    echo "WARNING: Migrations failed, but continuing startup..."
-}
+python manage.py migrate --noinput
+if [ $? -eq 0 ]; then
+    echo "Migrations completed successfully"
+else
+    echo "ERROR: Migrations failed!"
+    exit 1
+fi
 
 # Start Gunicorn
 exec gunicorn --bind 0.0.0.0:$PORT --workers 3 --timeout 120 grants_aggregator.wsgi:application
