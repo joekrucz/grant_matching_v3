@@ -12,6 +12,10 @@ else
     echo "WARNING: REDIS_URL is not set, using default"
 fi
 
+# Check if migrations need to be run (optional - uncomment to auto-run migrations)
+# echo "Checking database migrations..."
+# python manage.py migrate --check || echo "WARNING: Database migrations may need to be run. Execute: python manage.py migrate"
+
 # Start Gunicorn
 exec gunicorn --bind 0.0.0.0:$PORT --workers 3 --timeout 120 grants_aggregator.wsgi:application
 
