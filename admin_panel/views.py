@@ -35,10 +35,27 @@ def dashboard(request):
     open_grants = Grant.objects.filter(status='open').count()
     last_scrape = ScrapeLog.objects.filter(status='success').order_by('-completed_at').first()
     
+    # Check Celery worker status
+    celery_status = "Unknown"
+    if CELERY_AVAILABLE:
+        try:
+            from celery import current_app
+            inspect = current_app.control.inspect()
+            active_workers = inspect.active()
+            if active_workers:
+                celery_status = f"Active ({len(active_workers)} worker(s))"
+            else:
+                celery_status = "No active workers"
+        except Exception as e:
+            celery_status = f"Error checking: {str(e)}"
+    else:
+        celery_status = "Celery not available"
+    
     context = {
         'total_grants': total_grants,
         'open_grants': open_grants,
         'last_scrape': last_scrape,
+        'celery_status': celery_status,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 

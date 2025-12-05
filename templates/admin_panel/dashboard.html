@@ -26,6 +26,12 @@
     <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
             <h2 class="card-title">Scraper Actions</h2>
+            <div class="mb-4">
+                <p class="text-sm font-semibold">Celery Worker Status:</p>
+                <p class="text-sm {% if 'Active' in celery_status %}text-success{% elif 'not available' in celery_status %}text-error{% else %}text-warning{% endif %}">
+                    {{ celery_status }}
+                </p>
+            </div>
             <form method="post" action="{% url 'admin_panel:run_scrapers' %}">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-primary">Run Scrapers</button>
