@@ -31,6 +31,6 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # Use wrapper script to handle service detection
-# Use CMD instead of ENTRYPOINT so Railway can override it
-CMD ["/app/docker-entrypoint.sh"]
+# Use ENTRYPOINT so it always runs, Railway can still override with start command if needed
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
