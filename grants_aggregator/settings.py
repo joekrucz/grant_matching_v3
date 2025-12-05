@@ -139,7 +139,13 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@grantsaggregator
 
 # Celery Configuration
 # Railway may provide REDIS_URL or REDISCLOUD_URL
-REDIS_URL = env('REDIS_URL', default=env('REDISCLOUD_URL', default='redis://redis:6379/0'))
+# Ensure database number is included (default to /0 if not present)
+raw_redis_url = env('REDIS_URL', default=env('REDISCLOUD_URL', default='redis://redis:6379/0'))
+# Add /0 if no database number is specified
+if raw_redis_url and not raw_redis_url.endswith('/0') and not raw_redis_url.endswith('/1'):
+    if '/' not in raw_redis_url.split('@')[-1]:
+        raw_redis_url = f"{raw_redis_url}/0"
+REDIS_URL = raw_redis_url
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ['json']
