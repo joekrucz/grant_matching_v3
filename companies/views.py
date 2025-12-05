@@ -67,37 +67,91 @@ def company_detail(request, id):
 
 @login_required
 def company_create(request):
-    """Create company from Companies House API."""
+    """Create company from Companies House API or manual entry."""
     if request.method == 'POST':
-        company_number = request.POST.get('company_number', '').strip()
+        creation_mode = request.POST.get('creation_mode', 'registered')
         
-        if not company_number:
-            messages.error(request, 'Company number is required.')
-            return render(request, 'companies/create.html')
-        
-        try:
-            # Check if company already exists
-            if Company.objects.filter(company_number=company_number).exists():
-                messages.error(request, f'Company {company_number} already exists.')
-                return render(request, 'companies/create.html')
+        if creation_mode == 'manual':
+            # Manual entry for unregistered companies
+            name = request.POST.get('name', '').strip()
             
-            # Fetch from Companies House API
-            api_data = CompaniesHouseService.fetch_company(company_number)
-            normalized_data = CompaniesHouseService.normalize_company_data(api_data)
+            if not name:
+                messages.error(request, 'Company name is required.')
+                return render(request, 'companies/create.html', {'mode': 'manual'})
             
-            # Create company
+            # Check for duplicate names (case-insensitive)
+            if Company.objects.filter(name__iexact=name, user=request.user).exists():
+                messages.warning(request, f'A company named "{name}" already exists. Continuing anyway...')
+            
+            # Generate unique company_number for unregistered companies
+            import uuid
+            from datetime import datetime
+            unique_id = f"UNREG-{request.user.id}-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+            
+            # Ensure uniqueness
+            while Company.objects.filter(company_number=unique_id).exists():
+                unique_id = f"UNREG-{request.user.id}-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+            
+            # Build address from form fields
+            address = {}
+            if request.POST.get('address_line_1'):
+                address = {
+                    'address_line_1': request.POST.get('address_line_1', ''),
+                    'address_line_2': request.POST.get('address_line_2', ''),
+                    'locality': request.POST.get('locality', ''),
+                    'postal_code': request.POST.get('postal_code', ''),
+                    'country': request.POST.get('country', ''),
+                }
+            
+            # Create unregistered company
             company = Company.objects.create(
                 user=request.user,
-                **normalized_data
+                company_number=unique_id,
+                name=name,
+                is_registered=False,
+                registration_status='unregistered',
+                company_type=request.POST.get('company_type', ''),
+                website=request.POST.get('website', '') or None,
+                address=address,
+                notes=request.POST.get('notes', ''),
             )
             
-            messages.success(request, f'Company {company.name} created successfully.')
+            messages.success(request, f'Unregistered company "{company.name}" created successfully.')
             return redirect('companies:detail', id=company.id)
         
-        except CompaniesHouseError as e:
-            messages.error(request, str(e))
-        except Exception as e:
-            messages.error(request, f'Error creating company: {str(e)}')
+        else:
+            # Companies House API lookup (existing flow)
+            company_number = request.POST.get('company_number', '').strip()
+            
+            if not company_number:
+                messages.error(request, 'Company number is required.')
+                return render(request, 'companies/create.html')
+            
+            try:
+                # Check if company already exists
+                if Company.objects.filter(company_number=company_number).exists():
+                    messages.error(request, f'Company {company_number} already exists.')
+                    return render(request, 'companies/create.html')
+                
+                # Fetch from Companies House API
+                api_data = CompaniesHouseService.fetch_company(company_number)
+                normalized_data = CompaniesHouseService.normalize_company_data(api_data)
+                
+                # Create company with registered status
+                company = Company.objects.create(
+                    user=request.user,
+                    is_registered=True,
+                    registration_status='registered',
+                    **normalized_data
+                )
+                
+                messages.success(request, f'Company {company.name} created successfully.')
+                return redirect('companies:detail', id=company.id)
+            
+            except CompaniesHouseError as e:
+                messages.error(request, str(e))
+            except Exception as e:
+                messages.error(request, f'Error creating company: {str(e)}')
     
     return render(request, 'companies/create.html')
 

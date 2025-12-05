@@ -21,10 +21,22 @@ TRL_LEVELS = [
 
 
 class Company(models.Model):
-    """Company model from Companies House."""
+    """Company model from Companies House or manually entered."""
     
-    company_number = models.CharField(max_length=20, unique=True, db_index=True)
+    REGISTRATION_STATUS_CHOICES = [
+        ('registered', 'Registered'),
+        ('unregistered', 'Not Yet Registered'),
+    ]
+    
+    company_number = models.CharField(max_length=20, unique=True, db_index=True, blank=True, null=True)
     name = models.CharField(max_length=500)
+    is_registered = models.BooleanField(default=True, db_index=True)  # True if registered with Companies House
+    registration_status = models.CharField(
+        max_length=20, 
+        choices=REGISTRATION_STATUS_CHOICES, 
+        default='registered',
+        db_index=True
+    )
     company_type = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=100, blank=True, null=True)
     sic_codes = models.TextField(blank=True, null=True)  # Can be comma-separated or JSON
@@ -41,11 +53,15 @@ class Company(models.Model):
         db_table = 'companies'
         indexes = [
             models.Index(fields=['company_number']),
+            models.Index(fields=['is_registered']),
+            models.Index(fields=['registration_status']),
         ]
         verbose_name_plural = 'companies'
     
     def __str__(self):
-        return f"{self.name} ({self.company_number})"
+        if self.company_number:
+            return f"{self.name} ({self.company_number})"
+        return f"{self.name} (Unregistered)"
     
     def sic_codes_array(self):
         """Return array of SIC codes, handling both string and array formats."""
