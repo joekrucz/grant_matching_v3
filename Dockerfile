@@ -26,5 +26,6 @@ RUN chmod +x /app/entrypoint.sh
 EXPOSE 8000
 
 # Use entrypoint script to handle PORT variable at runtime
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Use CMD instead of ENTRYPOINT to allow Railway to override if needed
+CMD ["/app/entrypoint.sh"]
 
