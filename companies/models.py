@@ -108,6 +108,7 @@ class FundingSearch(models.Model):
     file_type = models.CharField(max_length=50, blank=True, null=True)  # 'pdf', 'docx', 'txt', 'text'
     last_matched_at = models.DateTimeField(blank=True, null=True)
     matching_status = models.CharField(max_length=50, default='pending', choices=MATCHING_STATUS_CHOICES, db_index=True)
+    matching_error = models.TextField(blank=True, null=True)  # Store error message if matching fails
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

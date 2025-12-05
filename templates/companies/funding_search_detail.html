@@ -164,6 +164,12 @@
                 {% elif funding_search.matching_status == 'error' %}
                 <div class="alert alert-error mt-4">
                     <span>❌ An error occurred during matching. Please try again.</span>
+                    {% if funding_search.matching_error %}
+                    <div class="mt-2 text-sm">
+                        <strong>Error details:</strong>
+                        <pre class="mt-1 text-xs bg-base-300 p-2 rounded overflow-auto">{{ funding_search.matching_error }}</pre>
+                    </div>
+                    {% endif %}
                 </div>
                 {% elif funding_search.matching_status == 'completed' and funding_search.last_matched_at %}
                 <div class="alert alert-success mt-4">

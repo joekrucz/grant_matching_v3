@@ -132,8 +132,12 @@ if CELERY_TASKS_AVAILABLE:
             return result_summary
         
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
+            error_message = f"Matching failed: {str(e)}"
             logger.error(f"Matching failed for funding_search_id {funding_search_id}: {e}", exc_info=True)
             funding_search.matching_status = 'error'
+            funding_search.matching_error = error_message  # Store error message
             funding_search.save()
             raise Exception(f"Matching failed: {str(e)}")
 else:
