@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Scrape Logs - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <h1 class="text-3xl font-bold">Scrape Logs</h1>
+    <a href="{% url 'admin_panel:dashboard' %}" class="btn btn-ghost">Back to Dashboard</a>
+</div>
+
+<div class="overflow-x-auto">
+    <table class="table table-zebra">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Started At</th>
+                <th>Completed At</th>
+                <th>Duration</th>
+                <th>Created</th>
+                <th>Updated</th>
+                <th>Skipped</th>
+                <th>Error</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in page_obj %}
+            <tr>
+                <td>{{ log.get_source_display }}</td>
+                <td>
+                    <div class="badge {% if log.status == 'success' %}badge-success{% elif log.status == 'error' %}badge-error{% else %}badge-warning{% endif %}">
+                        {{ log.get_status_display }}
+                    </div>
+                </td>
+                <td>{{ log.started_at|date:"M d, Y H:i" }}</td>
+                <td>{% if log.completed_at %}{{ log.completed_at|date:"M d, Y H:i" }}{% else %}-{% endif %}</td>
+                <td>{% if log.duration_seconds %}{{ log.duration_seconds|floatformat:0 }}s{% else %}-{% endif %}</td>
+                <td>{{ log.grants_created }}</td>
+                <td>{{ log.grants_updated }}</td>
+                <td>{{ log.grants_skipped }}</td>
+                <td class="text-error text-sm">
+                    {% if log.error_message %}{{ log.error_message|truncatewords:10 }}{% else %}-{% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center">No scrape logs found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="join flex justify-center mt-6">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}" class="join-item btn">Previous</a>
+    {% endif %}
+    <button class="join-item btn btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}" class="join-item btn">Next</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Sign In - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="hero min-h-[80vh]">
+    <div class="hero-content flex-col lg:flex-row-reverse">
+        <div class="text-center lg:text-left">
+            <h1 class="text-5xl font-bold">Sign In</h1>
+            <p class="py-6">Access your grants and companies</p>
+        </div>
+        <div class="card bg-base-200 w-full max-w-md shadow-xl">
+            <form method="post" action="{% url 'users:sign_in' %}" class="card-body">
+                {% csrf_token %}
+                
+                <div class="form-control">
+                    <label class="label" for="id_email">
+                        <span class="label-text">Email</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        name="email" 
+                        id="id_email" 
+                        required 
+                        class="input input-bordered"
+                        placeholder="your@email.com"
+                    >
+                </div>
+                
+                <div class="form-control">
+                    <label class="label" for="id_password">
+                        <span class="label-text">Password</span>
+                    </label>
+                    <input 
+                        type="password" 
+                        name="password" 
+                        id="id_password" 
+                        required 
+                        class="input input-bordered"
+                        placeholder="••••••••"
+                    >
+                </div>
+                
+                <div class="form-control mt-6">
+                    <button type="submit" class="btn btn-primary">Sign In</button>
+                </div>
+            </form>
+            
+            <div class="card-body pt-0">
+                <div class="text-center space-y-2 text-sm">
+                    <p>
+                        Don't have an account? <a href="{% url 'users:sign_up' %}" class="link link-primary">Sign up</a>
+                    </p>
+                    <p>
+                        <a href="{% url 'users:password_reset_request' %}" class="link link-secondary">Forgot password?</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

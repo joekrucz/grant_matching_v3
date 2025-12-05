@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Profile - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-3xl font-bold mb-6">Profile</h1>
+    
+    <div class="card bg-base-200 shadow-xl">
+        <form method="post" action="{% url 'users:profile' %}" class="card-body">
+            {% csrf_token %}
+            
+            <div class="form-control">
+                <label class="label" for="id_email">
+                    <span class="label-text">Email</span>
+                </label>
+                <input 
+                    type="email" 
+                    value="{{ user.email }}" 
+                    disabled
+                    class="input input-bordered input-disabled"
+                >
+            </div>
+            
+            <div class="form-control">
+                <label class="label" for="id_name">
+                    <span class="label-text">Name</span>
+                </label>
+                <input 
+                    type="text" 
+                    name="name" 
+                    id="id_name" 
+                    value="{{ user.name|default:'' }}" 
+                    class="input input-bordered"
+                >
+            </div>
+            
+            <div class="form-control">
+                <label class="label" for="id_theme">
+                    <span class="label-text">Theme</span>
+                </label>
+                <select 
+                    name="theme" 
+                    id="id_theme" 
+                    class="select select-bordered"
+                >
+                    <option value="">Default (Dark)</option>
+                    <option value="light" {% if user.theme == 'light' %}selected{% endif %}>Light</option>
+                    <option value="dark" {% if user.theme == 'dark' %}selected{% endif %}>Dark</option>
+                    <option value="cupcake" {% if user.theme == 'cupcake' %}selected{% endif %}>Cupcake</option>
+                    <option value="bumblebee" {% if user.theme == 'bumblebee' %}selected{% endif %}>Bumblebee</option>
+                    <option value="emerald" {% if user.theme == 'emerald' %}selected{% endif %}>Emerald</option>
+                    <option value="corporate" {% if user.theme == 'corporate' %}selected{% endif %}>Corporate</option>
+                    <option value="synthwave" {% if user.theme == 'synthwave' %}selected{% endif %}>Synthwave</option>
+                    <option value="retro" {% if user.theme == 'retro' %}selected{% endif %}>Retro</option>
+                    <option value="cyberpunk" {% if user.theme == 'cyberpunk' %}selected{% endif %}>Cyberpunk</option>
+                    <option value="valentine" {% if user.theme == 'valentine' %}selected{% endif %}>Valentine</option>
+                    <option value="halloween" {% if user.theme == 'halloween' %}selected{% endif %}>Halloween</option>
+                    <option value="garden" {% if user.theme == 'garden' %}selected{% endif %}>Garden</option>
+                    <option value="forest" {% if user.theme == 'forest' %}selected{% endif %}>Forest</option>
+                    <option value="aqua" {% if user.theme == 'aqua' %}selected{% endif %}>Aqua</option>
+                    <option value="lofi" {% if user.theme == 'lofi' %}selected{% endif %}>Lofi</option>
+                    <option value="pastel" {% if user.theme == 'pastel' %}selected{% endif %}>Pastel</option>
+                    <option value="fantasy" {% if user.theme == 'fantasy' %}selected{% endif %}>Fantasy</option>
+                    <option value="wireframe" {% if user.theme == 'wireframe' %}selected{% endif %}>Wireframe</option>
+                    <option value="black" {% if user.theme == 'black' %}selected{% endif %}>Black</option>
+                    <option value="luxury" {% if user.theme == 'luxury' %}selected{% endif %}>Luxury</option>
+                    <option value="dracula" {% if user.theme == 'dracula' %}selected{% endif %}>Dracula</option>
+                    <option value="cmyk" {% if user.theme == 'cmyk' %}selected{% endif %}>CMYK</option>
+                    <option value="autumn" {% if user.theme == 'autumn' %}selected{% endif %}>Autumn</option>
+                    <option value="business" {% if user.theme == 'business' %}selected{% endif %}>Business</option>
+                    <option value="acid" {% if user.theme == 'acid' %}selected{% endif %}>Acid</option>
+                    <option value="lemonade" {% if user.theme == 'lemonade' %}selected{% endif %}>Lemonade</option>
+                    <option value="night" {% if user.theme == 'night' %}selected{% endif %}>Night</option>
+                    <option value="coffee" {% if user.theme == 'coffee' %}selected{% endif %}>Coffee</option>
+                    <option value="winter" {% if user.theme == 'winter' %}selected{% endif %}>Winter</option>
+                    <option value="dim" {% if user.theme == 'dim' %}selected{% endif %}>Dim</option>
+                    <option value="nord" {% if user.theme == 'nord' %}selected{% endif %}>Nord</option>
+                    <option value="sunset" {% if user.theme == 'sunset' %}selected{% endif %}>Sunset</option>
+                </select>
+            </div>
+            
+            <div class="form-control mt-6">
+                <button type="submit" class="btn btn-primary">Update Profile</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

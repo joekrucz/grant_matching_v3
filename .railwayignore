@@ -1,0 +1,13 @@
+# Ignore Rails files from parent directory
+../Gemfile
+../Gemfile.lock
+../config.ru
+../Rakefile
+../bin/rails
+../app/
+../config/
+../db/
+../lib/
+../spec/
+../vendor/
+

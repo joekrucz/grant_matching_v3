@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}Users - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <h1 class="text-3xl font-bold">Users</h1>
+    <a href="{% url 'admin_panel:dashboard' %}" class="btn btn-ghost">Back to Dashboard</a>
+</div>
+
+<div class="overflow-x-auto">
+    <table class="table table-zebra">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Name</th>
+                <th>Admin</th>
+                <th>Created</th>
+                <th>Last Login</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in page_obj %}
+            <tr>
+                <td>{{ user.email }}</td>
+                <td>{{ user.name|default:"-" }}</td>
+                <td>
+                    {% if user.admin %}
+                    <div class="badge badge-primary">Admin</div>
+                    {% else %}
+                    <span class="text-base-content/50">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ user.date_joined|date:"M d, Y" }}</td>
+                <td>{% if user.last_login %}{{ user.last_login|date:"M d, Y H:i" }}{% else %}-{% endif %}</td>
+                <td>
+                    <a href="{% url 'admin_panel:user_detail' user.id %}" class="btn btn-ghost btn-sm">View</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center">No users found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="join flex justify-center mt-6">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}" class="join-item btn">Previous</a>
+    {% endif %}
+    <button class="join-item btn btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}" class="join-item btn">Next</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

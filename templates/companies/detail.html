@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ company.name }} - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{% url 'companies:list' %}" class="btn btn-ghost btn-sm">
+        ← Back to Companies
+    </a>
+</div>
+
+<div class="card bg-base-200 shadow-xl mb-6">
+    <div class="card-body">
+        <div class="flex justify-between items-start mb-4">
+            <h1 class="card-title text-3xl">{{ company.name }}</h1>
+            {% if can_edit %}
+            <a href="{% url 'companies:delete' company.id %}" class="btn btn-error btn-sm">
+                Delete
+            </a>
+            {% endif %}
+        </div>
+        
+        <div class="stats shadow mb-6">
+            <div class="stat">
+                <div class="stat-title">Company Number</div>
+                <div class="stat-value text-primary">{{ company.company_number }}</div>
+            </div>
+            {% if company.company_type %}
+            <div class="stat">
+                <div class="stat-title">Company Type</div>
+                <div class="stat-value text-secondary">{{ company.company_type }}</div>
+            </div>
+            {% endif %}
+            {% if company.status %}
+            <div class="stat">
+                <div class="stat-title">Status</div>
+                <div class="stat-value text-accent">{{ company.status }}</div>
+            </div>
+            {% endif %}
+            {% if company.date_of_creation %}
+            <div class="stat">
+                <div class="stat-title">Date of Creation</div>
+                <div class="stat-value">{{ company.date_of_creation|date:"M d, Y" }}</div>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if company.formatted_address %}
+        <div class="mb-4">
+            <div class="text-sm font-semibold mb-1">Address</div>
+            <div>{{ company.formatted_address }}</div>
+        </div>
+        {% endif %}
+        
+        {% if company.sic_codes_array %}
+        <div class="mb-4">
+            <div class="text-sm font-semibold mb-1">SIC Codes</div>
+            <div class="flex flex-wrap gap-1">
+                {% for code in company.sic_codes_array %}
+                <span class="badge badge-outline">{{ code }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if can_edit %}
+        <form method="post" class="mt-6 space-y-4">
+            {% csrf_token %}
+            <div class="form-control">
+                <label class="label" for="id_website">
+                    <span class="label-text">Website</span>
+                </label>
+                <input 
+                    type="url" 
+                    name="website" 
+                    id="id_website" 
+                    value="{{ company.website|default:'' }}" 
+                    class="input input-bordered"
+                >
+            </div>
+            <div class="form-control">
+                <label class="label" for="id_notes">
+                    <span class="label-text">Notes</span>
+                </label>
+                <textarea 
+                    name="notes" 
+                    id="id_notes" 
+                    rows="4"
+                    class="textarea textarea-bordered"
+                >{{ company.notes|default:'' }}</textarea>
+            </div>
+            <div class="form-control mt-6">
+                <button type="submit" class="btn btn-primary">Update Company</button>
+            </div>
+        </form>
+        {% else %}
+        {% if company.website %}
+        <div class="mb-4">
+            <div class="text-sm font-semibold mb-1">Website</div>
+            <a href="{{ company.website }}" target="_blank" class="link link-primary">
+                {{ company.website }}
+            </a>
+        </div>
+        {% endif %}
+        {% if company.notes %}
+        <div class="mb-4">
+            <div class="text-sm font-semibold mb-1">Notes</div>
+            <div class="whitespace-pre-wrap">{{ company.notes }}</div>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="card-title text-2xl">Funding Searches</h2>
+            <button onclick="document.getElementById('funding-search-form').classList.toggle('hidden')" 
+                    class="btn btn-primary btn-sm">
+                Add Funding Search
+            </button>
+        </div>
+        
+        <div id="funding-search-form" class="hidden mb-6">
+            <div class="card bg-base-300">
+                <form method="post" action="{% url 'companies:funding_search_create' company.id %}" class="card-body">
+                    {% csrf_token %}
+                    <div class="form-control">
+                        <label class="label" for="id_name">
+                            <span class="label-text">Name</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="name" 
+                            id="id_name" 
+                            required 
+                            class="input input-bordered"
+                        >
+                    </div>
+                    <div class="form-control">
+                        <label class="label" for="id_trl_level">
+                            <span class="label-text">TRL Level</span>
+                        </label>
+                        <select name="trl_level" id="id_trl_level" class="select select-bordered">
+                            <option value="">Select TRL Level</option>
+                            {% for value, label in trl_levels %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-control">
+                        <label class="label" for="id_notes">
+                            <span class="label-text">Notes</span>
+                        </label>
+                        <textarea 
+                            name="notes" 
+                            id="id_notes" 
+                            rows="3"
+                            class="textarea textarea-bordered"
+                        ></textarea>
+                    </div>
+                    <div class="form-control mt-4">
+                        <button type="submit" class="btn btn-success">Create Funding Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        {% if funding_searches %}
+        <div class="space-y-2">
+            {% for search in funding_searches %}
+            <div class="card bg-base-300">
+                <div class="card-body py-3">
+                    <a href="{% url 'companies:funding_search_detail' search.id %}" class="card-title text-lg link link-primary">
+                        {{ search.name }}
+                    </a>
+                    {% if search.trl_level %}
+                    <div class="badge badge-outline">{{ search.trl_level }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <span>No funding searches yet.</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

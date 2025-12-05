@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{% if user.is_authenticated and user.theme %}{{ user.theme }}{% else %}dark{% endif %}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Grants Aggregator{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@sudodevnull/datastar@latest/dist/datastar.js"></script>
+    <style>
+        [data-loading] {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-base-100 text-base-content">
+    <div class="navbar bg-base-200 border-b border-base-300">
+        <div class="navbar-start">
+            <a href="/" class="btn btn-ghost text-xl font-bold">
+                Grants Aggregator
+            </a>
+        </div>
+        <div class="navbar-center hidden lg:flex">
+            {% if user.is_authenticated %}
+            <ul class="menu menu-horizontal px-1">
+                <li><a href="{% url 'grants:list' %}" class="btn btn-ghost">Grants</a></li>
+                <li><a href="{% url 'companies:list' %}" class="btn btn-ghost">Companies</a></li>
+                {% if user.admin %}
+                <li><a href="{% url 'admin_panel:dashboard' %}" class="btn btn-ghost">Admin</a></li>
+                {% endif %}
+            </ul>
+            {% endif %}
+        </div>
+        <div class="navbar-end">
+            {% if user.is_authenticated %}
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost">
+                    {{ user.email }}
+                </div>
+                <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-200 rounded-box w-52">
+                    <li><a href="{% url 'users:profile' %}">Profile</a></li>
+                    <li><a href="{% url 'users:sign_out' %}">Sign Out</a></li>
+                </ul>
+            </div>
+            {% else %}
+            <a href="{% url 'users:sign_in' %}" class="btn btn-ghost">Sign In</a>
+            <a href="{% url 'users:sign_up' %}" class="btn btn-primary">Sign Up</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+        {% for message in messages %}
+        <div role="alert" class="alert mb-2 {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">
+            <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer footer-center bg-base-200 text-base-content border-t border-base-300 mt-12 p-6">
+        <p class="text-sm">
+            &copy; 2024 Grants Aggregator. Unified UK grant intelligence.
+        </p>
+    </footer>
+</body>
+</html>
+

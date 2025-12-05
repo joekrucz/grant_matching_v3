@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard - Grants Aggregator{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Admin Dashboard</h1>
+
+<div class="stats shadow w-full mb-8">
+    <div class="stat">
+        <div class="stat-title">Total Grants</div>
+        <div class="stat-value text-primary">{{ total_grants }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Open Grants</div>
+        <div class="stat-value text-secondary">{{ open_grants }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Last Scraped</div>
+        <div class="stat-value text-accent">
+            {% if last_scrape %}{{ last_scrape.completed_at|date:"M d, Y H:i" }}{% else %}Never{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="space-y-4">
+    <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Scraper Actions</h2>
+            <form method="post" action="{% url 'admin_panel:run_scrapers' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">Run Scrapers</button>
+            </form>
+            <p class="text-sm text-base-content/60 mt-2">
+                Triggers sequential scraper chain: UKRI → NIHR → Catapult
+            </p>
+        </div>
+    </div>
+    
+    <div class="card bg-base-200 shadow-xl border border-error">
+        <div class="card-body">
+            <h2 class="card-title text-error">Danger Zone</h2>
+            <a href="{% url 'admin_panel:wipe_grants' %}" class="btn btn-error">
+                Wipe All Grants
+            </a>
+            <p class="text-sm text-base-content/60 mt-2">
+                Permanently delete all grants from the database.
+            </p>
+        </div>
+    </div>
+    
+    <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Quick Links</h2>
+            <div class="flex gap-4">
+                <a href="{% url 'admin_panel:scrape_logs' %}" class="btn btn-ghost">Scrape Logs</a>
+                <a href="{% url 'admin_panel:users_list' %}" class="btn btn-ghost">Users</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

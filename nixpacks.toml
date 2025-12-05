@@ -1,0 +1,16 @@
+# Nixpacks configuration to explicitly use Python/Django
+[phases.setup]
+nixPkgs = ["python311", "pip"]
+
+[phases.install]
+cmds = [
+  "pip install -r requirements.txt",
+  "python manage.py collectstatic --noinput || true"
+]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "gunicorn --bind 0.0.0.0:$PORT --workers 3 --timeout 120 grants_aggregator.wsgi:application"
+

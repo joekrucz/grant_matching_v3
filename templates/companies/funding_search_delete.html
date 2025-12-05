@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Funding Search - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="hero min-h-[80vh]">
+    <div class="hero-content">
+        <div class="card bg-base-200 w-full max-w-md shadow-xl border border-error">
+            <div class="card-body">
+                <h1 class="card-title text-3xl justify-center mb-4 text-error">Delete Funding Search</h1>
+                
+                <div class="alert alert-error mb-4">
+                    <span><strong>Warning:</strong> This action will permanently delete the funding search <strong>{{ funding_search.name }}</strong>. This cannot be undone.</span>
+                </div>
+                
+                <form method="post" action="{% url 'companies:funding_search_delete' funding_search.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-error w-full">Confirm: Delete Funding Search</button>
+                </form>
+                
+                <div class="text-center mt-4">
+                    <a href="{% url 'companies:funding_search_detail' funding_search.id %}" class="link link-primary">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

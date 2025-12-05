@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block title %}Grants - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-3xl font-bold mb-4">Grants</h1>
+    
+    <form method="get" action="{% url 'grants:list' %}" class="mb-6">
+        <div class="flex flex-wrap gap-4">
+            <input 
+                type="text" 
+                name="q" 
+                value="{{ query }}" 
+                placeholder="Search grants..." 
+                class="input input-bordered flex-1"
+            >
+            <select name="source" class="select select-bordered">
+                <option value="">All Sources</option>
+                <option value="ukri" {% if source_filter == 'ukri' %}selected{% endif %}>UKRI</option>
+                <option value="nihr" {% if source_filter == 'nihr' %}selected{% endif %}>NIHR</option>
+                <option value="catapult" {% if source_filter == 'catapult' %}selected{% endif %}>Catapult</option>
+            </select>
+            <select name="status" class="select select-bordered">
+                <option value="">All Statuses</option>
+                <option value="open" {% if status_filter == 'open' %}selected{% endif %}>Open</option>
+                <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Closed</option>
+                <option value="unknown" {% if status_filter == 'unknown' %}selected{% endif %}>Unknown</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </div>
+    </form>
+</div>
+
+<div class="space-y-4">
+    {% for grant in page_obj %}
+    <div class="card bg-base-200 shadow-md hover:shadow-xl transition-shadow">
+        <div class="card-body">
+            <div class="flex justify-between items-start mb-2">
+                <h2 class="card-title">
+                    <a href="{% url 'grants:detail' grant.slug %}" class="link link-primary">
+                        {{ grant.title }}
+                    </a>
+                </h2>
+                <div class="flex gap-2">
+                    <div class="badge {% if grant.source == 'ukri' %}badge-primary{% elif grant.source == 'nihr' %}badge-secondary{% else %}badge-accent{% endif %}">
+                        {{ grant.get_source_display }}
+                    </div>
+                    <div class="badge {% if grant.status == 'open' %}badge-success{% elif grant.status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
+                        {{ grant.get_status_display }}
+                    </div>
+                </div>
+            </div>
+            
+            {% if grant.summary %}
+            <p class="text-base-content/70 mb-3">{{ grant.summary|truncatewords:30 }}</p>
+            {% endif %}
+            
+            <div class="card-actions justify-start">
+                {% if grant.deadline %}
+                <div class="badge badge-outline">Deadline: {{ grant.deadline|date:"M d, Y" }}</div>
+                {% endif %}
+                {% if grant.funding_amount %}
+                <div class="badge badge-outline">Funding: {{ grant.funding_amount }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info">
+        <span>No grants found.</span>
+    </div>
+    {% endfor %}
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="join flex justify-center mt-6">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" 
+       class="join-item btn">
+        Previous
+    </a>
+    {% endif %}
+    
+    <button class="join-item btn btn-active">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </button>
+    
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" 
+       class="join-item btn">
+        Next
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+

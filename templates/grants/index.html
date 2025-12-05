@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Grants Aggregator - Unified UK grant intelligence{% endblock %}
+
+{% block content %}
+<div class="hero py-12">
+    <div class="hero-content text-center">
+        <div class="max-w-md">
+            <h1 class="text-5xl font-bold">Unified UK grant intelligence</h1>
+            <p class="py-6 text-lg">
+                Daily aggregation of UKRI, NIHR and Catapult funding calls in a single searchable interface.
+            </p>
+            <div class="flex justify-center gap-4">
+                {% if user.is_authenticated %}
+                <a href="{% url 'grants:list' %}" class="btn btn-primary">Browse Grants</a>
+                {% else %}
+                <a href="{% url 'grants:list' %}" class="btn btn-primary">Browse Grants</a>
+                <a href="{% url 'users:sign_up' %}" class="btn btn-secondary">Create Account</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if total_grants %}
+<div class="stats shadow w-full max-w-4xl mx-auto">
+    <div class="stat">
+        <div class="stat-title">Total Grants</div>
+        <div class="stat-value text-primary">{{ total_grants }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Open Grants</div>
+        <div class="stat-value text-secondary">{{ open_grants }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Last Scraped</div>
+        <div class="stat-value text-accent">
+            {% if last_scrape %}{{ last_scrape.completed_at|date:"M d, Y" }}{% else %}Never{% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
