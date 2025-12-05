@@ -22,14 +22,29 @@ DEBUG = env('DEBUG', default=False)
 
 # ALLOWED_HOSTS: Allow Railway domains by default
 # Railway provides RAILWAY_PUBLIC_DOMAIN or you can set ALLOWED_HOSTS manually
-default_hosts = ['localhost', '127.0.0.1', '*.railway.app']
+default_hosts = ['localhost', '127.0.0.1']
+
+# Check for Railway environment variables
 if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
-    default_hosts.append(os.environ['RAILWAY_PUBLIC_DOMAIN'])
+    railway_domain = os.environ['RAILWAY_PUBLIC_DOMAIN']
+    default_hosts.append(railway_domain)
+    # Also add without port if it has one
+    if ':' in railway_domain:
+        default_hosts.append(railway_domain.split(':')[0])
+
 # Also check for any custom domain
 if 'RAILWAY_CUSTOM_DOMAIN' in os.environ:
     default_hosts.append(os.environ['RAILWAY_CUSTOM_DOMAIN'])
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=default_hosts)
+# If on Railway (detected by presence of Railway env vars) and no explicit ALLOWED_HOSTS set,
+# allow all hosts. This is necessary because Railway generates dynamic domains.
+# For production, you should set ALLOWED_HOSTS explicitly via environment variable.
+if (os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PROJECT_ID')) and not os.environ.get('ALLOWED_HOSTS'):
+    # On Railway without explicit ALLOWED_HOSTS, allow all (Railway handles routing)
+    ALLOWED_HOSTS = ['*']
+else:
+    # Use explicit ALLOWED_HOSTS or defaults
+    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=default_hosts)
 
 # Application definition
 INSTALLED_APPS = [
