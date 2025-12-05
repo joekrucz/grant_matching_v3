@@ -80,6 +80,55 @@
                 </select>
             </div>
             
+            <div class="divider">Change Password</div>
+            
+            <div class="form-control">
+                <label class="label" for="id_current_password">
+                    <span class="label-text">Current Password</span>
+                </label>
+                <input 
+                    type="password" 
+                    name="current_password" 
+                    id="id_current_password" 
+                    class="input input-bordered"
+                    placeholder="Enter current password to change it"
+                >
+                <label class="label">
+                    <span class="label-text-alt">Leave blank if you don't want to change your password</span>
+                </label>
+            </div>
+            
+            <div class="form-control">
+                <label class="label" for="id_new_password">
+                    <span class="label-text">New Password</span>
+                </label>
+                <input 
+                    type="password" 
+                    name="new_password" 
+                    id="id_new_password" 
+                    class="input input-bordered"
+                    placeholder="Enter new password"
+                    minlength="8"
+                >
+                <label class="label">
+                    <span class="label-text-alt">Must be at least 8 characters</span>
+                </label>
+            </div>
+            
+            <div class="form-control">
+                <label class="label" for="id_confirm_password">
+                    <span class="label-text">Confirm New Password</span>
+                </label>
+                <input 
+                    type="password" 
+                    name="confirm_password" 
+                    id="id_confirm_password" 
+                    class="input input-bordered"
+                    placeholder="Confirm new password"
+                    minlength="8"
+                >
+            </div>
+            
             <div class="form-control mt-6">
                 <button type="submit" class="btn btn-primary">Update Profile</button>
             </div>

@@ -180,11 +180,40 @@ def profile(request):
     """User profile view."""
     if request.method == 'POST':
         user = request.user
+        
+        # Handle profile updates
         user.name = request.POST.get('name', user.name)
         theme = request.POST.get('theme', '').strip()
         user.theme = theme if theme else None
+        
+        # Handle password change if provided
+        current_password = request.POST.get('current_password', '').strip()
+        new_password = request.POST.get('new_password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
+        
+        if new_password:  # User wants to change password
+            if not current_password:
+                messages.error(request, 'Please enter your current password to change it.')
+                return render(request, 'users/profile.html')
+            
+            if not user.check_password(current_password):
+                messages.error(request, 'Current password is incorrect.')
+                return render(request, 'users/profile.html')
+            
+            if new_password != confirm_password:
+                messages.error(request, 'New passwords do not match.')
+                return render(request, 'users/profile.html')
+            
+            if len(new_password) < 8:
+                messages.error(request, 'Password must be at least 8 characters long.')
+                return render(request, 'users/profile.html')
+            
+            user.set_password(new_password)
+            messages.success(request, 'Password updated successfully.')
+        
         user.save()
-        messages.success(request, 'Profile updated successfully.')
+        if not new_password:  # Only show profile update message if password wasn't changed
+            messages.success(request, 'Profile updated successfully.')
         return redirect('users:profile')
     
     return render(request, 'users/profile.html')
