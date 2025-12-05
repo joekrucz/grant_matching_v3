@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 # Build arg to force cache invalidation - scraper service only
-ARG CACHE_BUST=scraper-v5
+ARG CACHE_BUST=scraper-v6
 ARG SERVICE_NAME=scraper
 
 # Force cache break with a unique RUN command
