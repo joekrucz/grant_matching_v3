@@ -146,6 +146,21 @@ if raw_redis_url and not raw_redis_url.endswith('/0') and not raw_redis_url.ends
     if '/' not in raw_redis_url.split('@')[-1]:
         raw_redis_url = f"{raw_redis_url}/0"
 REDIS_URL = raw_redis_url
+
+# Log Redis URL for debugging (mask password)
+import logging
+logger = logging.getLogger(__name__)
+if REDIS_URL.startswith('redis://'):
+    # Mask password in logs
+    masked_url = REDIS_URL
+    if '@' in REDIS_URL:
+        parts = REDIS_URL.split('@')
+        if ':' in parts[0]:
+            user_pass = parts[0].split(':', 1)
+            if len(user_pass) > 1:
+                masked_url = f"redis://{user_pass[0]}:****@{parts[1]}"
+    logger.warning(f"Using Redis URL: {masked_url}")
+
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ['json']
