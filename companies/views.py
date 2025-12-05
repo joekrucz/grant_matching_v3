@@ -297,8 +297,13 @@ def funding_search_upload(request, id):
 @login_required
 def funding_search_match(request, id):
     """Trigger matching job."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     funding_search = get_object_or_404(FundingSearch, id=id)
     can_edit = request.user == funding_search.user or request.user.admin
+    
+    logger.info(f"Funding search match requested for ID: {id}, user: {request.user.email}, can_edit: {can_edit}")
     
     if not can_edit:
         messages.error(request, 'You do not have permission to run matching for this funding search.')
@@ -306,23 +311,30 @@ def funding_search_match(request, id):
     
     if request.method == 'POST':
         if not funding_search.project_description:
+            logger.warning(f"Funding search {id} has no project description")
             messages.error(request, 'Please provide project description or upload a file first.')
             return redirect('companies:funding_search_detail', id=id)
         
         if funding_search.matching_status == 'running':
+            logger.info(f"Funding search {id} matching already running")
             messages.info(request, 'Matching job is already running.')
             return redirect('companies:funding_search_detail', id=id)
         
         # Check if Celery is available
+        logger.info(f"Checking Celery availability. CELERY_AVAILABLE={CELERY_AVAILABLE}, match_grants_with_chatgpt={match_grants_with_chatgpt}")
         if not CELERY_AVAILABLE or match_grants_with_chatgpt is None:
+            logger.error(f"Celery not available for funding search {id}")
             messages.error(request, 'Background task service (Celery) is not available. Please check Redis connection.')
             return redirect('companies:funding_search_detail', id=id)
         
         # Trigger Celery task
         try:
+            logger.info(f"Triggering matching task for funding search {id}")
             task = match_grants_with_chatgpt.delay(funding_search.id)
-            messages.info(request, f'Matching job started. Processing all grants... This may take 1-2 minutes.')
+            logger.info(f"Matching task queued successfully. Task ID: {task.id}")
+            messages.info(request, f'Matching job started (Task ID: {task.id}). Processing all grants... This may take 1-2 minutes.')
         except Exception as e:
+            logger.error(f"Failed to trigger matching task for funding search {id}: {e}", exc_info=True)
             messages.error(request, f'Failed to start matching job: {str(e)}')
     
     return redirect('companies:funding_search_detail', id=id)

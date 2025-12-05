@@ -35,7 +35,11 @@ if CELERY_TASKS_AVAILABLE:
         Returns:
             dict with status, matches_created, grants_processed
         """
+        logger.info(f"match_grants_with_chatgpt task started for funding_search_id: {funding_search_id}")
+        
         funding_search = FundingSearch.objects.get(id=funding_search_id)
+        logger.info(f"Found funding search: {funding_search.name}, project_description length: {len(funding_search.project_description or '')}")
+        
         funding_search.matching_status = 'running'
         funding_search.save()
         
@@ -50,11 +54,15 @@ if CELERY_TASKS_AVAILABLE:
                 'id', 'title', 'source', 'summary', 'description',
                 'funding_amount', 'deadline', 'status', 'slug'
             ))
+            logger.info(f"Found {len(grants_list)} grants to match against")
             
             # Initialize matcher
             try:
+                logger.info("Initializing ChatGPTMatchingService...")
                 matcher = ChatGPTMatchingService()
+                logger.info("ChatGPTMatchingService initialized successfully")
             except GrantMatchingError as e:
+                logger.error(f"Failed to initialize matching service: {e}", exc_info=True)
                 raise Exception(f"Failed to initialize matching service: {str(e)}")
             
             # Progress tracking function
@@ -69,12 +77,13 @@ if CELERY_TASKS_AVAILABLE:
             GrantMatchResult.objects.filter(funding_search=funding_search).delete()
             
             # Match all grants
-            print(f"Starting matching for {len(grants_list)} grants...")
+            logger.info(f"Starting matching for {len(grants_list)} grants...")
             match_results = matcher.match_all_grants(
                 project_text,
                 grants_list,
                 progress_callback=progress_callback
             )
+            logger.info(f"Matching completed. Got {len(match_results)} results")
             
             # Save results to database
             matches_created = 0
@@ -112,15 +121,18 @@ if CELERY_TASKS_AVAILABLE:
             funding_search.last_matched_at = timezone.now()
             funding_search.save()
             
-            return {
+            result_summary = {
                 'status': 'success',
                 'matches_created': matches_created,
                 'matches_updated': matches_updated,
                 'grants_processed': len(grants_list),
                 'total_results': len(match_results),
             }
+            logger.info(f"Matching completed successfully: {result_summary}")
+            return result_summary
         
         except Exception as e:
+            logger.error(f"Matching failed for funding_search_id {funding_search_id}: {e}", exc_info=True)
             funding_search.matching_status = 'error'
             funding_search.save()
             raise Exception(f"Matching failed: {str(e)}")
