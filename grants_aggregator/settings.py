@@ -138,8 +138,10 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@grantsaggregator.com')
 
 # Celery Configuration
-CELERY_BROKER_URL = env('REDIS_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = env('REDIS_URL', default='redis://redis:6379/0')
+# Railway may provide REDIS_URL or REDISCLOUD_URL
+REDIS_URL = env('REDIS_URL', default=env('REDISCLOUD_URL', default='redis://redis:6379/0'))
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
