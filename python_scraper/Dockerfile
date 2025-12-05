@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Scraper service Dockerfile
+# Scraper service Dockerfile - v2
+# This comment forces a cache break
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
