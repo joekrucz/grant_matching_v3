@@ -48,16 +48,27 @@ def dashboard(request):
 def run_scrapers(request):
     """Trigger scraper workers."""
     if request.method == 'POST':
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Run scrapers button clicked. CELERY_AVAILABLE={CELERY_AVAILABLE}, trigger_ukri_scrape={trigger_ukri_scrape}")
+        
         if not CELERY_AVAILABLE or trigger_ukri_scrape is None:
-            messages.error(request, 'Background task service (Celery) is not available. Please check Redis connection.')
+            error_msg = 'Background task service (Celery) is not available. Please check Redis connection.'
+            logger.error(error_msg)
+            messages.error(request, error_msg)
             return redirect('admin_panel:dashboard')
         
         try:
             # Trigger the scraper chain
-            trigger_ukri_scrape.delay()
-            messages.success(request, 'Scrapers triggered. Check scrape logs for progress.')
+            logger.info("Calling trigger_ukri_scrape.delay()...")
+            result = trigger_ukri_scrape.delay()
+            logger.info(f"Task queued successfully. Task ID: {result.id}")
+            messages.success(request, f'Scrapers triggered (Task ID: {result.id}). Check scrape logs for progress.')
         except Exception as e:
-            messages.error(request, f'Failed to trigger scrapers: {str(e)}')
+            error_msg = f'Failed to trigger scrapers: {str(e)}'
+            logger.error(f"Error triggering scrapers: {e}", exc_info=True)
+            messages.error(request, error_msg)
         return redirect('admin_panel:scrape_logs')
     
     return redirect('admin_panel:dashboard')
