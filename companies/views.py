@@ -321,17 +321,48 @@ def funding_search_upload(request, id):
             messages.error(request, 'File size exceeds 10MB limit.')
             return redirect('companies:funding_search_detail', id=id)
         
-        # Determine file type
+        # SECURITY: Validate file type by extension AND content
         file_name = uploaded_file.name.lower()
+        
+        # Check extension first
         if file_name.endswith('.pdf'):
-            file_type = 'pdf'
+            expected_type = 'pdf'
         elif file_name.endswith('.docx'):
-            file_type = 'docx'
+            expected_type = 'docx'
         elif file_name.endswith('.txt'):
-            file_type = 'txt'
+            expected_type = 'txt'
         else:
             messages.error(request, 'Unsupported file type. Please upload PDF, DOCX, or TXT.')
             return redirect('companies:funding_search_detail', id=id)
+        
+        # Validate content type (basic check)
+        uploaded_file.seek(0)
+        file_content = uploaded_file.read(1024)  # Read first 1KB for validation
+        uploaded_file.seek(0)  # Reset for processing
+        
+        # Basic content validation
+        if expected_type == 'pdf':
+            # PDF files start with %PDF
+            if not file_content.startswith(b'%PDF'):
+                messages.error(request, 'Invalid PDF file. File content does not match PDF format.')
+                return redirect('companies:funding_search_detail', id=id)
+        elif expected_type == 'docx':
+            # DOCX files are ZIP archives with specific structure
+            if not file_content.startswith(b'PK\x03\x04'):  # ZIP file signature
+                messages.error(request, 'Invalid DOCX file. File content does not match DOCX format.')
+                return redirect('companies:funding_search_detail', id=id)
+        elif expected_type == 'txt':
+            # Try to decode as text to validate
+            try:
+                file_content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    file_content.decode('latin-1')
+                except UnicodeDecodeError:
+                    messages.error(request, 'Invalid text file. File contains binary data.')
+                    return redirect('companies:funding_search_detail', id=id)
+        
+        file_type = expected_type
         
         try:
             # Extract text from file
