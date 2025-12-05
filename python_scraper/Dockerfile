@@ -1,13 +1,16 @@
 FROM python:3.12-slim
 
-# Build arg to force cache invalidation
-ARG CACHE_BUST=1
+# Build arg to force cache invalidation - scraper service only
+ARG CACHE_BUST=scraper-v4-$(date +%s)
+ARG SERVICE_NAME=scraper
 
 WORKDIR /app
 
-# Scraper service Dockerfile - v3
+# Scraper service Dockerfile - v4 (force cache break)
+# This service uses python:3.12-slim and does NOT use django/manage.py
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    SERVICE_TYPE=scraper
 
 # Install system dependencies for Selenium
 RUN apt-get update && apt-get install -y \
