@@ -23,6 +23,6 @@ EXPOSE 8000
 
 # Use environment variable PORT if available (for Railway/Render), otherwise default to 8000
 # Default command uses gunicorn for production
-# Use sh -c to ensure PORT variable expansion works
-CMD sh -c "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 120 grants_aggregator.wsgi:application"
+# Use exec form with shell to ensure PORT variable expansion works
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 120 grants_aggregator.wsgi:application"]
 
