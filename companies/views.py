@@ -339,3 +339,24 @@ def funding_search_match(request, id):
     
     return redirect('companies:funding_search_detail', id=id)
 
+
+@login_required
+def funding_search_status(request, id):
+    """API endpoint to get matching status and progress (for AJAX polling)."""
+    from django.http import JsonResponse
+    
+    funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to view this funding search
+    if request.user != funding_search.user and not request.user.admin:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    progress = funding_search.matching_progress or {'current': 0, 'total': 0, 'percentage': 0}
+    
+    return JsonResponse({
+        'status': funding_search.matching_status,
+        'progress': progress,
+        'error': funding_search.matching_error,
+        'last_matched_at': funding_search.last_matched_at.isoformat() if funding_search.last_matched_at else None,
+    })
+

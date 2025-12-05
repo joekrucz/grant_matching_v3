@@ -16,5 +16,6 @@ urlpatterns = [
     path('funding_searches/<int:id>/delete', views.funding_search_delete, name='funding_search_delete'),
     path('funding_searches/<int:id>/upload', views.funding_search_upload, name='funding_search_upload'),
     path('funding_searches/<int:id>/match', views.funding_search_match, name='funding_search_match'),
+    path('funding_searches/<int:id>/status', views.funding_search_status, name='funding_search_status'),
 ]
 

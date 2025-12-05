@@ -109,6 +109,7 @@ class FundingSearch(models.Model):
     last_matched_at = models.DateTimeField(blank=True, null=True)
     matching_status = models.CharField(max_length=50, default='pending', choices=MATCHING_STATUS_CHOICES, db_index=True)
     matching_error = models.TextField(blank=True, null=True)  # Store error message if matching fails
+    matching_progress = models.JSONField(default=dict, blank=True)  # Store progress: {'current': 0, 'total': 0, 'percentage': 0}
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

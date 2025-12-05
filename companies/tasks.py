@@ -41,6 +41,7 @@ if CELERY_TASKS_AVAILABLE:
         logger.info(f"Found funding search: {funding_search.name}, project_description length: {len(funding_search.project_description or '')}")
         
         funding_search.matching_status = 'running'
+        funding_search.matching_progress = {'current': 0, 'total': 0, 'percentage': 0}
         funding_search.save()
         
         try:
@@ -65,12 +66,21 @@ if CELERY_TASKS_AVAILABLE:
                 logger.error(f"Failed to initialize matching service: {e}", exc_info=True)
                 raise Exception(f"Failed to initialize matching service: {str(e)}")
             
-            # Progress tracking function
+            # Progress tracking function - updates database for real-time progress
             def progress_callback(current, total):
-                progress = (current / total) * 100
+                percentage = (current / total) * 100 if total > 0 else 0
+                # Update Celery task state
                 self.update_state(
                     state='PROGRESS',
-                    meta={'current': current, 'total': total, 'progress': f'{progress:.1f}%'}
+                    meta={'current': current, 'total': total, 'progress': f'{percentage:.1f}%'}
+                )
+                # Update database for real-time frontend polling
+                FundingSearch.objects.filter(id=funding_search_id).update(
+                    matching_progress={
+                        'current': current,
+                        'total': total,
+                        'percentage': round(percentage, 1)
+                    }
                 )
             
             # Clear old matches
@@ -119,6 +129,7 @@ if CELERY_TASKS_AVAILABLE:
             # Update funding search
             funding_search.matching_status = 'completed'
             funding_search.last_matched_at = timezone.now()
+            funding_search.matching_progress = {'current': len(grants_list), 'total': len(grants_list), 'percentage': 100}
             funding_search.save()
             
             result_summary = {
@@ -138,6 +149,7 @@ if CELERY_TASKS_AVAILABLE:
             logger.error(f"Matching failed for funding_search_id {funding_search_id}: {e}", exc_info=True)
             funding_search.matching_status = 'error'
             funding_search.matching_error = error_message  # Store error message
+            # Keep progress as-is so user can see how far it got
             funding_search.save()
             raise Exception(f"Matching failed: {str(e)}")
 else:
