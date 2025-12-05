@@ -18,11 +18,13 @@ COPY . .
 # Collect static files (for production)
 RUN python manage.py collectstatic --noinput || true
 
+# Copy and set up entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Expose port
 EXPOSE 8000
 
-# Use environment variable PORT if available (for Railway/Render), otherwise default to 8000
-# Default command uses gunicorn for production
-# Use exec form with shell to ensure PORT variable expansion works
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 3 --timeout 120 grants_aggregator.wsgi:application"]
+# Use entrypoint script to handle PORT variable at runtime
+ENTRYPOINT ["/app/entrypoint.sh"]
 
