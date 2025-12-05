@@ -31,6 +31,9 @@
                 <p class="text-sm {% if 'Active' in celery_status %}text-success{% elif 'not available' in celery_status %}text-error{% else %}text-warning{% endif %}">
                     {{ celery_status }}
                 </p>
+                {% if celery_details %}
+                <p class="text-xs text-base-content/60 mt-1">{{ celery_details }}</p>
+                {% endif %}
             </div>
             <form method="post" action="{% url 'admin_panel:run_scrapers' %}">
                 {% csrf_token %}

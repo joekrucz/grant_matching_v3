@@ -37,6 +37,7 @@ def dashboard(request):
     
     # Check Celery worker status
     celery_status = "Unknown"
+    celery_details = ""
     if CELERY_AVAILABLE:
         try:
             from celery import current_app
@@ -44,18 +45,23 @@ def dashboard(request):
             active_workers = inspect.active()
             if active_workers:
                 celery_status = f"Active ({len(active_workers)} worker(s))"
+                celery_details = f"Workers: {', '.join(active_workers.keys())}"
             else:
                 celery_status = "No active workers"
+                celery_details = "Tasks are queued but no workers are processing them. Check Celery service is running."
         except Exception as e:
             celery_status = f"Error checking: {str(e)}"
+            celery_details = "Cannot connect to Celery workers. They may not be running or Redis connection failed."
     else:
         celery_status = "Celery not available"
+        celery_details = "Celery is not initialized. Check Redis connection and web service logs."
     
     context = {
         'total_grants': total_grants,
         'open_grants': open_grants,
         'last_scrape': last_scrape,
         'celery_status': celery_status,
+        'celery_details': celery_details,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
