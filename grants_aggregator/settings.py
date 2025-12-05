@@ -36,15 +36,9 @@ if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
 if 'RAILWAY_CUSTOM_DOMAIN' in os.environ:
     default_hosts.append(os.environ['RAILWAY_CUSTOM_DOMAIN'])
 
-# If on Railway (detected by presence of Railway env vars) and no explicit ALLOWED_HOSTS set,
-# allow all hosts. This is necessary because Railway generates dynamic domains.
-# For production, you should set ALLOWED_HOSTS explicitly via environment variable.
-if (os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PROJECT_ID')) and not os.environ.get('ALLOWED_HOSTS'):
-    # On Railway without explicit ALLOWED_HOSTS, allow all (Railway handles routing)
-    ALLOWED_HOSTS = ['*']
-else:
-    # Use explicit ALLOWED_HOSTS or defaults
-    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=default_hosts)
+# Use explicit ALLOWED_HOSTS or defaults
+# Note: RailwayHostMiddleware will dynamically add hosts when on Railway
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=default_hosts)
 
 # Application definition
 INSTALLED_APPS = [
@@ -65,6 +59,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # Serve static files in production
     'corsheaders.middleware.CorsMiddleware',
+    'grants_aggregator.middleware.RailwayHostMiddleware',  # Allow Railway dynamic domains
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
