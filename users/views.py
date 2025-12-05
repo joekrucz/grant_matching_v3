@@ -14,6 +14,8 @@ from .models import User
 from .forms import SignUpForm, SignInForm, PasswordResetRequestForm, PasswordResetForm
 
 
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
+@never_cache
 def sign_up(request):
     """User registration view."""
     if request.user.is_authenticated:
@@ -36,6 +38,8 @@ def sign_up(request):
     return render(request, 'users/sign_up.html', {'form': form})
 
 
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
+@never_cache
 def sign_in(request):
     """User login view."""
     if request.user.is_authenticated:
@@ -47,6 +51,9 @@ def sign_in(request):
             email = form.cleaned_data['email']
             password = form.cleaned_data['password']
             
+            # SECURITY: Add small random delay to prevent timing attacks
+            time.sleep(0.1 + (hash(email) % 100) / 1000)  # 0.1-0.2 second delay
+            
             try:
                 user = User.objects.get(email=email)
                 if user.check_password(password):
@@ -55,8 +62,10 @@ def sign_in(request):
                     user.save(update_fields=['last_login'])
                     return redirect(request.GET.get('next', '/'))
                 else:
+                    # SECURITY: Same error message to prevent user enumeration
                     messages.error(request, 'Invalid email or password.')
             except User.DoesNotExist:
+                # SECURITY: Same error message to prevent user enumeration
                 messages.error(request, 'Invalid email or password.')
     else:
         form = SignInForm()
@@ -83,6 +92,8 @@ def confirm_email(request, token):
         return redirect('users:sign_in')
 
 
+@ratelimit(key='ip', rate='3/m', method='POST', block=True)
+@never_cache
 def password_reset_request(request):
     """Password reset request view."""
     if request.method == 'POST':

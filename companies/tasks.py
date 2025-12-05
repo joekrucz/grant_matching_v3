@@ -145,10 +145,22 @@ if CELERY_TASKS_AVAILABLE:
         except Exception as e:
             import traceback
             error_traceback = traceback.format_exc()
-            error_message = f"Matching failed: {str(e)}"
+            # SECURITY: Store sanitized error message (no internal details)
+            # Log full traceback server-side only
             logger.error(f"Matching failed for funding_search_id {funding_search_id}: {e}", exc_info=True)
+            
+            # Create user-friendly error message without exposing internals
+            if "OPENAI_API_KEY" in str(e) or "API" in str(e):
+                user_error = "Matching service configuration error. Please contact support."
+            elif "RateLimitError" in str(type(e).__name__):
+                user_error = "Matching service rate limit exceeded. Please try again later."
+            elif "Timeout" in str(e) or "timeout" in str(e).lower():
+                user_error = "Matching request timed out. Please try again."
+            else:
+                user_error = "Matching failed due to an unexpected error. Please try again or contact support."
+            
             funding_search.matching_status = 'error'
-            funding_search.matching_error = error_message  # Store error message
+            funding_search.matching_error = user_error  # Store sanitized error message
             # Keep progress as-is so user can see how far it got
             funding_search.save()
             raise Exception(f"Matching failed: {str(e)}")

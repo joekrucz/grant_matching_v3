@@ -243,8 +243,12 @@ SCRAPER_API_KEY = env('SCRAPER_API_KEY', default='')
 DJANGO_API_URL = env('DJANGO_API_URL', default='http://web:8000')
 
 # CORS settings (for API access from scraper service)
+# SECURITY: Only allow specific origins - never use wildcards in production
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
-CORS_ALLOW_CREDENTIALS = True
+# If CORS_ALLOWED_ORIGINS is empty, disable CORS credentials for security
+CORS_ALLOW_CREDENTIALS = True if CORS_ALLOWED_ORIGINS else False
+# Explicitly deny all origins if not configured
+CORS_ALLOW_ALL_ORIGINS = False
 
 # Login URLs
 LOGIN_URL = '/users/sign_in'
@@ -288,7 +292,7 @@ LOGGING = {
         },
         'grants_aggregator': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO' if not DEBUG else 'DEBUG',  # SECURITY: Don't use DEBUG in production
             'propagate': False,
         },
     },

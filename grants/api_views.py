@@ -64,5 +64,11 @@ def upsert_grants(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        # SECURITY: Don't expose internal error details to API clients
+        # Log the full error server-side for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in upsert_grants: {e}", exc_info=True)
+        # Return generic error message
+        return JsonResponse({'error': 'An error occurred processing the request'}, status=500)
 

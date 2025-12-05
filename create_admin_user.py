@@ -37,6 +37,7 @@ else:
     )
     print(f'Created admin user: {email}')
 
-print(f'Admin user ready. Email: {email}, Password: {password}')
+print(f'Admin user ready. Email: {email}')
 print('⚠️  IMPORTANT: Change the password after first login!')
+# SECURITY: Never log passwords - password is set but not displayed
 

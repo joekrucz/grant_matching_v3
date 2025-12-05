@@ -19,7 +19,18 @@ urlpatterns = [
     path('api/', include('grants.api_urls')),
 ]
 
+# SECURITY: Serve media files with authentication in production
 if settings.DEBUG:
+    # In development, serve media files directly
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    # In production, serve media files through Django with authentication
+    # This ensures only authenticated users can access uploaded files
+    from django.contrib.auth.decorators import login_required
+    from django.views.static import serve
+    
+    urlpatterns += [
+        path(f'{settings.MEDIA_URL.strip("/")}<path:path>', login_required(serve), {'document_root': settings.MEDIA_ROOT}),
+    ]
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
