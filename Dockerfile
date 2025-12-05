@@ -18,14 +18,15 @@ COPY . .
 # Collect static files (for production)
 RUN python manage.py collectstatic --noinput || true
 
-# Copy and set up entrypoint script
+# Copy and set up entrypoint scripts
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY celery_entrypoint.sh /app/celery_entrypoint.sh
+RUN chmod +x /app/entrypoint.sh /app/celery_entrypoint.sh
 
 # Expose port
 EXPOSE 8000
 
 # Use entrypoint script to handle PORT variable at runtime
-# Use CMD instead of ENTRYPOINT to allow Railway to override if needed
-CMD ["/app/entrypoint.sh"]
+# If RAILWAY_SERVICE_NAME is "celery", use celery entrypoint, otherwise use web entrypoint
+ENTRYPOINT ["/bin/bash", "-c", "if [ \"$RAILWAY_SERVICE_NAME\" = \"celery\" ]; then /app/celery_entrypoint.sh; else /app/entrypoint.sh; fi"]
 
