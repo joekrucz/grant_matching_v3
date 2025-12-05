@@ -3,6 +3,110 @@
 {% block title %}Admin Dashboard - Grants Aggregator{% endblock %}
 
 {% block content %}
+<script>
+    // Real-time progress polling for scraper status
+    let scraperPollInterval = null;
+    
+    function startScraperPolling() {
+        // Clear any existing interval
+        if (scraperPollInterval) {
+            clearInterval(scraperPollInterval);
+        }
+        
+        // Poll every 2 seconds for real-time updates
+        scraperPollInterval = setInterval(function() {
+            fetch('/admin-panel/scraper_status')
+                .then(response => response.json())
+                .then(data => {
+                    updateScraperProgress(data);
+                    
+                    // If status changed from 'running', stop polling
+                    if (data.status !== 'running') {
+                        clearInterval(scraperPollInterval);
+                        scraperPollInterval = null;
+                        
+                        // Reload page after a short delay to show final results
+                        if (data.status === 'completed' || data.status === 'error') {
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error polling scraper status:', error);
+                });
+        }, 2000); // Poll every 2 seconds
+    }
+    
+    function updateScraperProgress(data) {
+        // Update progress bar
+        const progressBar = document.getElementById('scraper-progress-bar');
+        const progressText = document.getElementById('scraper-progress-text');
+        const scraperStatusAlert = document.getElementById('scraper-status-alert');
+        const scraperDetails = document.getElementById('scraper-details');
+        
+        if (progressBar && progressText) {
+            const percentage = data.progress.percentage || 0;
+            const current = data.progress.current || 0;
+            const total = data.progress.total || 3;
+            
+            progressBar.style.width = percentage + '%';
+            progressBar.setAttribute('aria-valuenow', percentage);
+            progressText.textContent = `${current} of ${total} scrapers completed (${percentage.toFixed(1)}%)`;
+        }
+        
+        // Update scraper details
+        if (scraperDetails && data.scrapers) {
+            let html = '<div class="space-y-2 mt-2">';
+            data.scrapers.forEach(scraper => {
+                const statusClass = scraper.status === 'success' ? 'badge-success' : 
+                                   scraper.status === 'running' ? 'badge-info' : 'badge-error';
+                const statusIcon = scraper.status === 'success' ? '✓' : 
+                                  scraper.status === 'running' ? '⏳' : '❌';
+                html += `
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="font-semibold">${scraper.source.toUpperCase()}</span>
+                        <span class="badge ${statusClass}">${statusIcon} ${scraper.status}</span>
+                        <span class="text-xs text-base-content/60">
+                            ${scraper.grants_created} created, ${scraper.grants_updated} updated
+                        </span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            if (data.total_grants_processed > 0) {
+                html += `<div class="text-sm font-semibold mt-2">Total grants processed: ${data.total_grants_processed}</div>`;
+            }
+            scraperDetails.innerHTML = html;
+        }
+        
+        // Show/hide status alert
+        if (scraperStatusAlert) {
+            if (data.status === 'running') {
+                scraperStatusAlert.classList.remove('hidden');
+            } else if (data.status === 'idle') {
+                scraperStatusAlert.classList.add('hidden');
+            }
+        }
+    }
+    
+    // Start polling if page loads and scrapers might be running
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check initial status
+        fetch('/admin-panel/scraper_status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'running') {
+                    startScraperPolling();
+                    updateScraperProgress(data);
+                }
+            })
+            .catch(error => {
+                console.error('Error checking initial scraper status:', error);
+            });
+    });
+</script>
 <h1 class="text-3xl font-bold mb-6">Admin Dashboard</h1>
 
 <div class="stats shadow w-full mb-8">
@@ -35,13 +139,31 @@
                 <p class="text-xs text-base-content/60 mt-1">{{ celery_details }}</p>
                 {% endif %}
             </div>
-            <form method="post" action="{% url 'admin_panel:run_scrapers' %}">
+            <form method="post" action="{% url 'admin_panel:run_scrapers' %}" id="run-scrapers-form">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-primary">Run Scrapers</button>
+                <button type="submit" class="btn btn-primary" id="run-scrapers-btn" onclick="startScraperPolling(); return true;">Run Scrapers</button>
             </form>
             <p class="text-sm text-base-content/60 mt-2">
                 Triggers sequential scraper chain: UKRI → NIHR → Catapult
             </p>
+            
+            <!-- Progress indicator (hidden by default) -->
+            <div id="scraper-status-alert" class="alert alert-info mt-4 hidden">
+                <span>⏳ Scrapers running... This may take several minutes.</span>
+                <div class="mt-4">
+                    <div class="flex justify-between text-sm mb-2">
+                        <span id="scraper-progress-text">Initializing...</span>
+                    </div>
+                    <progress 
+                        id="scraper-progress-bar"
+                        class="progress progress-primary w-full" 
+                        value="0" 
+                        max="100"
+                        aria-valuenow="0"
+                    ></progress>
+                </div>
+                <div id="scraper-details" class="mt-4"></div>
+            </div>
         </div>
     </div>
     

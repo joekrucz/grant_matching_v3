@@ -126,6 +126,98 @@ def scrape_logs(request):
 
 @login_required
 @admin_required
+def scraper_status(request):
+    """API endpoint to get scraper chain status and progress (for AJAX polling)."""
+    from django.http import JsonResponse
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # Get the most recent chain (scrapers started in the last 10 minutes)
+    recent_time = timezone.now() - timedelta(minutes=10)
+    recent_logs = ScrapeLog.objects.filter(
+        started_at__gte=recent_time
+    ).order_by('-started_at')[:3]
+    
+    # Group by chain_started_at from metadata
+    chains = {}
+    for log in recent_logs:
+        chain_started_at = log.metadata.get('chain_started_at') if log.metadata else None
+        if chain_started_at:
+            if chain_started_at not in chains:
+                chains[chain_started_at] = []
+            chains[chain_started_at].append(log)
+    
+    # Get the most recent chain
+    if not chains:
+        return JsonResponse({
+            'status': 'idle',
+            'progress': {'current': 0, 'total': 3, 'percentage': 0},
+            'scrapers': []
+        })
+    
+    # Get the most recent chain
+    most_recent_chain_time = max(chains.keys())
+    chain_logs = chains[most_recent_chain_time]
+    
+    # Sort by chain_position
+    chain_logs.sort(key=lambda x: x.metadata.get('chain_position', 0) if x.metadata else 0)
+    
+    # Build scraper statuses
+    scrapers = []
+    completed_count = 0
+    running_count = 0
+    error_count = 0
+    total_grants = 0
+    
+    for log in chain_logs:
+        scraper_status = log.status
+        if scraper_status == 'success':
+            completed_count += 1
+        elif scraper_status == 'running':
+            running_count += 1
+        elif scraper_status == 'error':
+            error_count += 1
+        
+        total_grants += log.total_grants_processed()
+        
+        scrapers.append({
+            'source': log.source,
+            'status': scraper_status,
+            'grants_created': log.grants_created,
+            'grants_updated': log.grants_updated,
+            'grants_skipped': log.grants_skipped,
+            'error_message': log.error_message,
+            'started_at': log.started_at.isoformat() if log.started_at else None,
+            'completed_at': log.completed_at.isoformat() if log.completed_at else None,
+        })
+    
+    # Determine overall status
+    if error_count > 0:
+        overall_status = 'error'
+    elif running_count > 0:
+        overall_status = 'running'
+    elif completed_count == 3:
+        overall_status = 'completed'
+    else:
+        overall_status = 'idle'
+    
+    # Calculate progress
+    progress_percentage = (completed_count / 3) * 100
+    
+    return JsonResponse({
+        'status': overall_status,
+        'progress': {
+            'current': completed_count,
+            'total': 3,
+            'percentage': round(progress_percentage, 1)
+        },
+        'scrapers': scrapers,
+        'total_grants_processed': total_grants,
+    })
+
+
+@login_required
+@admin_required
 def users_list(request):
     """List all users."""
     users = User.objects.all().order_by('-date_joined')

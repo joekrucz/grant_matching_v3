@@ -51,10 +51,12 @@ if app is not None:
     def trigger_ukri_scrape():
         """Trigger UKRI scraper and chain to NIHR."""
         logger.info("trigger_ukri_scrape task started")
+        chain_started_at = timezone.now()
         scrape_log = ScrapeLog.objects.create(
             source='ukri',
             status='running',
-            started_at=timezone.now(),
+            started_at=chain_started_at,
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 1, 'chain_total': 3}
         )
         logger.info(f"Created ScrapeLog with ID: {scrape_log.id}")
         
@@ -66,7 +68,7 @@ if app is not None:
             )
             
             # Chain to NIHR scraper
-            trigger_nihr_scrape.delay()
+            trigger_nihr_scrape.delay(chain_started_at.isoformat())
             
             scrape_log.status = 'success'
             scrape_log.completed_at = timezone.now()
@@ -80,12 +82,15 @@ if app is not None:
 
 
     @app.task
-    def trigger_nihr_scrape():
+    def trigger_nihr_scrape(chain_started_at_str=None):
         """Trigger NIHR scraper and chain to Catapult."""
+        from datetime import datetime
+        chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
         scrape_log = ScrapeLog.objects.create(
             source='nihr',
             status='running',
             started_at=timezone.now(),
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 2, 'chain_total': 3}
         )
         
         try:
@@ -96,7 +101,7 @@ if app is not None:
             )
             
             # Chain to Catapult scraper
-            trigger_catapult_scrape.delay()
+            trigger_catapult_scrape.delay(chain_started_at_str)
             
             scrape_log.status = 'success'
             scrape_log.completed_at = timezone.now()
@@ -110,12 +115,15 @@ if app is not None:
 
 
     @app.task
-    def trigger_catapult_scrape():
+    def trigger_catapult_scrape(chain_started_at_str=None):
         """Trigger Catapult scraper (last in chain)."""
+        from datetime import datetime
+        chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
         scrape_log = ScrapeLog.objects.create(
             source='catapult',
             status='running',
             started_at=timezone.now(),
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 3, 'chain_total': 3}
         )
         
         try:

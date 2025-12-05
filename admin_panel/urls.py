@@ -11,6 +11,7 @@ urlpatterns = [
     path('run_scrapers', views.run_scrapers, name='run_scrapers'),
     path('wipe_grants', views.wipe_grants, name='wipe_grants'),
     path('scrape_logs', views.scrape_logs, name='scrape_logs'),
+    path('scraper_status', views.scraper_status, name='scraper_status'),
     path('users', views.users_list, name='users_list'),
     path('users/<int:id>/', views.user_detail, name='user_detail'),
     path('users/<int:id>/delete', views.user_delete, name='user_delete'),
