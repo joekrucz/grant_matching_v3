@@ -40,6 +40,34 @@ if 'RAILWAY_CUSTOM_DOMAIN' in os.environ:
 # Note: RailwayHostMiddleware will dynamically add hosts when on Railway
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=default_hosts)
 
+# CSRF Configuration for Railway
+# Railway is behind a proxy, so we need to trust Railway domains
+default_csrf_origins = []
+# Add Railway public domain if available
+if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
+    railway_domain = os.environ['RAILWAY_PUBLIC_DOMAIN']
+    # Add both http and https versions
+    default_csrf_origins.append(f'https://{railway_domain.split(":")[0]}')
+    default_csrf_origins.append(f'http://{railway_domain.split(":")[0]}')
+# Add custom domain if available
+if 'RAILWAY_CUSTOM_DOMAIN' in os.environ:
+    custom_domain = os.environ['RAILWAY_CUSTOM_DOMAIN']
+    default_csrf_origins.append(f'https://{custom_domain}')
+    default_csrf_origins.append(f'http://{custom_domain}')
+
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=default_csrf_origins)
+
+# CSRF Cookie settings for Railway
+# Railway uses HTTPS, so we should set secure cookies
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=not DEBUG)
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# Session cookie settings (for consistency)
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=not DEBUG)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',

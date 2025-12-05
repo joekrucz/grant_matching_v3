@@ -41,6 +41,15 @@ class RailwayHostMiddleware:
             if host and host not in settings.ALLOWED_HOSTS:
                 settings.ALLOWED_HOSTS.append(host)
                 logger.debug(f"Added host '{host}' to ALLOWED_HOSTS for Railway request")
+            
+            # Also add to CSRF_TRUSTED_ORIGINS if not explicitly set
+            if not os.environ.get('CSRF_TRUSTED_ORIGINS'):
+                # Get the scheme (http or https) from the request
+                scheme = 'https' if request.is_secure() else 'http'
+                origin = f'{scheme}://{host}'
+                if origin not in settings.CSRF_TRUSTED_ORIGINS:
+                    settings.CSRF_TRUSTED_ORIGINS.append(origin)
+                    logger.debug(f"Added origin '{origin}' to CSRF_TRUSTED_ORIGINS for Railway request")
         
         response = self.get_response(request)
         return response
