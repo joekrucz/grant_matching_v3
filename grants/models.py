@@ -113,11 +113,27 @@ class Grant(models.Model):
             # Calculate hash
             hash_checksum = grant_data.get('hash_checksum') or cls.calculate_hash(grant_data)
             
-            # Try to find existing grant
+            # Get URL for fallback lookup
+            url = grant_data.get('url', '')
+            
+            # Try to find existing grant - check by slug first, then by URL
+            grant = None
             try:
+                # First try: lookup by slug and source (primary method)
                 grant = cls.objects.get(slug=slug, source=source)
-                
-                # Check if hash changed
+            except cls.DoesNotExist:
+                # Second try: if URL is provided, lookup by URL and source (fallback)
+                if url:
+                    try:
+                        grant = cls.objects.get(url=url, source=source)
+                        # Update slug if it changed (e.g., title normalization)
+                        if grant.slug != slug:
+                            grant.slug = slug
+                    except cls.DoesNotExist:
+                        pass
+            
+            if grant:
+                # Grant exists - check if hash changed
                 if grant.hash_checksum != hash_checksum:
                     # Update grant
                     grant.title = title
@@ -136,8 +152,8 @@ class Grant(models.Model):
                 else:
                     # No changes, skip
                     skipped += 1
-            except cls.DoesNotExist:
-                # Create new grant
+            else:
+                # Grant doesn't exist - create new grant
                 grant = cls.objects.create(
                     title=title,
                     slug=slug,
