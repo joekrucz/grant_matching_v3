@@ -8,9 +8,13 @@ echo "=========================================="
 
 # Run database migrations on startup (Celery also needs DB access)
 echo "Running database migrations..."
-python manage.py migrate --noinput || {
-    echo "WARNING: Migrations failed, but continuing..."
-}
+python manage.py migrate --noinput
+if [ $? -eq 0 ]; then
+    echo "Migrations completed successfully for Celery service"
+else
+    echo "ERROR: Migrations failed for Celery service! Exiting."
+    exit 1
+fi
 
 # Create admin user if needed (optional)
 if [ -n "$ADMIN_EMAIL" ]; then
