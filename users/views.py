@@ -19,8 +19,6 @@ from .forms import SignUpForm, SignInForm, PasswordResetRequestForm, PasswordRes
 
 @ratelimit(key='ip', rate='5/m', method='POST', block=True)
 @never_cache
-@ratelimit(key='ip', rate='5/m', method='POST', block=True)
-@never_cache
 def sign_up(request):
     """User registration view."""
     if request.user.is_authenticated:
