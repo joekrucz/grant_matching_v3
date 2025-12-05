@@ -1,9 +1,11 @@
 FROM python:3.12-slim
 
+# Build arg to force cache invalidation
+ARG CACHE_BUST=1
+
 WORKDIR /app
 
-# Scraper service Dockerfile - v2
-# This comment forces a cache break
+# Scraper service Dockerfile - v3
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
