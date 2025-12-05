@@ -2,6 +2,7 @@
 User authentication views.
 """
 import secrets
+import time
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
@@ -10,6 +11,8 @@ from django.utils import timezone
 from django.conf import settings
 from django.core.mail import send_mail
 from django.urls import reverse
+from django.views.decorators.cache import never_cache
+from django_ratelimit.decorators import ratelimit
 from .models import User
 from .forms import SignUpForm, SignInForm, PasswordResetRequestForm, PasswordResetForm
 
