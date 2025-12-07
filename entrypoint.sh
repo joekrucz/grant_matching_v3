@@ -11,10 +11,10 @@ if [ "$RAILWAY_SERVICE_NAME" = "celery" ] || [ "$CELERY_WORKER" = "true" ]; then
     exec /app/celery_entrypoint.sh
 fi
 
-# Get PORT from environment variable, default to 8000 if not set
-# Railway automatically sets PORT, but we provide a fallback
+# Get PORT from environment variable, default to 8080 if not set
+# Railway automatically sets PORT to 8080 (or another port), but we provide a fallback
 if [ -z "$PORT" ]; then
-    PORT=8000
+    PORT=8080
     echo "WARNING: PORT environment variable not set, using default: $PORT"
 else
     # Validate PORT is a number
@@ -22,7 +22,7 @@ else
         echo "ERROR: PORT must be a number, got: '$PORT'"
         exit 1
     fi
-    echo "Using PORT from environment: $PORT"
+    echo "Using PORT from Railway environment: $PORT"
 fi
 
 # Debug: Log environment variables (without sensitive data)
