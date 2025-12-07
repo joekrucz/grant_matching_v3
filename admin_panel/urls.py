@@ -15,5 +15,7 @@ urlpatterns = [
     path('users', views.users_list, name='users_list'),
     path('users/<int:id>/', views.user_detail, name='user_detail'),
     path('users/<int:id>/delete', views.user_delete, name='user_delete'),
+    path('refresh_companies', views.refresh_companies, name='refresh_companies'),
+    path('companies_refresh_status', views.companies_refresh_status, name='companies_refresh_status'),
 ]
 

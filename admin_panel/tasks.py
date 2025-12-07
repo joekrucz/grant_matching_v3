@@ -165,3 +165,103 @@ else:
     def trigger_catapult_scrape():
         raise Exception("Celery is not available")
 
+
+if app is not None:
+    @app.task(bind=True)
+    def refresh_companies_house_data(self):
+        """
+        Refresh Companies House data for all registered companies.
+        Updates company information and filing history.
+        """
+        from companies.models import Company
+        from companies.services import CompaniesHouseService, CompaniesHouseError
+        
+        logger.info("refresh_companies_house_data task started")
+        
+        # Get all registered companies with company numbers
+        companies = Company.objects.filter(
+            is_registered=True,
+            company_number__isnull=False
+        ).exclude(company_number='')
+        
+        total_companies = companies.count()
+        logger.info(f"Found {total_companies} companies to refresh")
+        
+        updated_count = 0
+        error_count = 0
+        errors = []
+        
+        # Progress tracking function
+        def progress_callback(current, total):
+            percentage = (current / total) * 100 if total > 0 else 0
+            self.update_state(
+                state='PROGRESS',
+                meta={
+                    'current': current,
+                    'total': total,
+                    'percentage': round(percentage, 1),
+                    'updated': updated_count,
+                    'errors': error_count
+                }
+            )
+        
+        for idx, company in enumerate(companies):
+            try:
+                # Fetch updated company data
+                api_data = CompaniesHouseService.fetch_company(company.company_number)
+                
+                # Fetch filing history
+                try:
+                    filing_history = CompaniesHouseService.fetch_filing_history(company.company_number)
+                except CompaniesHouseError as e:
+                    logger.warning(f"Could not fetch filing history for company {company.company_number}: {e}")
+                    filing_history = None
+                
+                # Normalize data
+                normalized_data = CompaniesHouseService.normalize_company_data(api_data, filing_history)
+                
+                # Update company fields
+                company.name = normalized_data.get('name', company.name)
+                company.company_type = normalized_data.get('company_type', company.company_type)
+                company.status = normalized_data.get('status', company.status)
+                company.sic_codes = normalized_data.get('sic_codes', company.sic_codes)
+                company.address = normalized_data.get('address', company.address)
+                company.date_of_creation = normalized_data.get('date_of_creation', company.date_of_creation)
+                company.raw_data = normalized_data.get('raw_data', company.raw_data)
+                
+                # Update filing history if available
+                if filing_history:
+                    company.filing_history = filing_history
+                
+                company.save()
+                updated_count += 1
+                logger.info(f"Updated company {company.company_number} ({idx + 1}/{total_companies})")
+                
+            except CompaniesHouseError as e:
+                error_count += 1
+                error_msg = f"Company {company.company_number}: {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg)
+            except Exception as e:
+                error_count += 1
+                error_msg = f"Company {company.company_number}: Unexpected error - {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg, exc_info=True)
+            
+            # Update progress
+            progress_callback(idx + 1, total_companies)
+        
+        result = {
+            'status': 'completed',
+            'total': total_companies,
+            'updated': updated_count,
+            'errors': error_count,
+            'error_messages': errors[:10]  # Limit to first 10 errors
+        }
+        
+        logger.info(f"Refresh completed: {updated_count} updated, {error_count} errors")
+        return result
+else:
+    def refresh_companies_house_data():
+        raise Exception("Celery is not available")
+

@@ -5,6 +5,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.urls import reverse
 from grants.models import Grant, ScrapeLog
 from users.models import User
 from companies.models import Company
@@ -12,9 +13,10 @@ from grants_aggregator import CELERY_AVAILABLE
 
 # Import tasks only if Celery is available
 if CELERY_AVAILABLE:
-    from .tasks import trigger_ukri_scrape
+    from .tasks import trigger_ukri_scrape, refresh_companies_house_data
 else:
     trigger_ukri_scrape = None
+    refresh_companies_house_data = None
 
 
 def admin_required(view_func):
@@ -270,4 +272,109 @@ def user_delete(request, id):
         return redirect('admin_panel:users_list')
     
     return render(request, 'admin_panel/user_delete.html', {'target_user': user})
+
+
+@login_required
+@admin_required
+def refresh_companies(request):
+    """Trigger Companies House data refresh for all companies."""
+    if request.method == 'POST':
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not CELERY_AVAILABLE or refresh_companies_house_data is None:
+            error_msg = 'Background task service (Celery) is not available. Please check Redis connection.'
+            logger.error(error_msg)
+            messages.error(request, error_msg)
+            return redirect('admin_panel:dashboard')
+        
+        try:
+            # Trigger the refresh task
+            logger.info("Calling refresh_companies_house_data.delay()...")
+            result = refresh_companies_house_data.delay()
+            logger.info(f"Task queued successfully. Task ID: {result.id}")
+            messages.success(request, f'Companies House data refresh started (Task ID: {result.id}).')
+            
+            # Return JSON response with task ID for AJAX handling
+            from django.http import JsonResponse
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'task_id': result.id, 'status': 'started'})
+            
+            # Redirect with task ID for non-AJAX requests
+            return redirect(f"{reverse('admin_panel:dashboard')}?task_id={result.id}")
+        except Exception as e:
+            error_msg = f'Failed to start refresh: {str(e)}'
+            logger.error(f"Error triggering refresh: {e}", exc_info=True)
+            messages.error(request, error_msg)
+        
+        return redirect('admin_panel:dashboard')
+    
+    return redirect('admin_panel:dashboard')
+
+
+@login_required
+@admin_required
+def companies_refresh_status(request):
+    """API endpoint to get Companies House refresh status and progress (for AJAX polling)."""
+    from django.http import JsonResponse
+    from celery.result import AsyncResult
+    
+    # Get task ID from request
+    task_id = request.GET.get('task_id')
+    if not task_id:
+        return JsonResponse({
+            'status': 'idle',
+            'progress': {'current': 0, 'total': 0, 'percentage': 0}
+        })
+    
+    try:
+        task_result = AsyncResult(task_id)
+        
+        if task_result.state == 'PENDING':
+            status = 'running'
+            progress = {'current': 0, 'total': 0, 'percentage': 0}
+        elif task_result.state == 'PROGRESS':
+            status = 'running'
+            meta = task_result.info or {}
+            progress = {
+                'current': meta.get('current', 0),
+                'total': meta.get('total', 0),
+                'percentage': meta.get('percentage', 0),
+                'updated': meta.get('updated', 0),
+                'errors': meta.get('errors', 0)
+            }
+        elif task_result.state == 'SUCCESS':
+            status = 'completed'
+            result = task_result.result or {}
+            progress = {
+                'current': result.get('total', 0),
+                'total': result.get('total', 0),
+                'percentage': 100,
+                'updated': result.get('updated', 0),
+                'errors': result.get('errors', 0),
+                'error_messages': result.get('error_messages', [])
+            }
+        elif task_result.state == 'FAILURE':
+            status = 'error'
+            progress = {
+                'current': 0,
+                'total': 0,
+                'percentage': 0,
+                'error': str(task_result.info)
+            }
+        else:
+            status = 'unknown'
+            progress = {'current': 0, 'total': 0, 'percentage': 0}
+        
+        return JsonResponse({
+            'status': status,
+            'progress': progress,
+            'task_id': task_id
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'progress': {'current': 0, 'total': 0, 'percentage': 0},
+            'error': str(e)
+        }, status=500)
 
