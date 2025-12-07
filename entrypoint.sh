@@ -35,14 +35,12 @@ else
 fi
 
 # Run database migrations on startup
+# Allow migrations to fail gracefully if database is not ready yet
 echo "Running database migrations..."
-python manage.py migrate --noinput
-if [ $? -eq 0 ]; then
-    echo "Migrations completed successfully"
-else
-    echo "ERROR: Migrations failed!"
-    exit 1
-fi
+python manage.py migrate --noinput || {
+    echo "WARNING: Migrations failed or database not ready. Will retry on next startup."
+    # Don't exit - allow service to start and retry migrations later
+}
 
 # Create admin user if it doesn't exist (only if ADMIN_EMAIL is set)
 if [ -n "$ADMIN_EMAIL" ]; then

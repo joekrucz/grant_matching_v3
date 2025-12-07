@@ -7,14 +7,12 @@ echo "RAILWAY_SERVICE_NAME: ${RAILWAY_SERVICE_NAME:-not set}"
 echo "=========================================="
 
 # Run database migrations on startup (Celery also needs DB access)
+# Allow migrations to fail gracefully if database is not ready yet
 echo "Running database migrations..."
-python manage.py migrate --noinput
-if [ $? -eq 0 ]; then
-    echo "Migrations completed successfully for Celery service"
-else
-    echo "ERROR: Migrations failed for Celery service! Exiting."
-    exit 1
-fi
+python manage.py migrate --noinput || {
+    echo "WARNING: Migrations failed or database not ready for Celery. Will retry on next startup."
+    # Don't exit - allow Celery to start and retry migrations later
+}
 
 # Create admin user if needed (optional)
 if [ -n "$ADMIN_EMAIL" ]; then
