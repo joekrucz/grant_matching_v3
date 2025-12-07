@@ -292,25 +292,96 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
             if len(full_description) > len(description):
               description = full_description
           
-          # Extract Summary section from tab content (if available)
+          # Extract structured sections from detail page
+          sections = {}
           summary_from_tab = None
-          # Look for Summary tab content - it's in a div with kt-tab-inner-content and kt-inner-tab-1 classes
-          summary_tab_content = detail_soup.select_one(
-              ".kt-tab-inner-content.kt-inner-tab-1, "
-              "[class*='kt-tab-inner-content'][class*='kt-inner-tab-1']"
-          )
-          if summary_tab_content:
-            # Get the text content
-            summary_text = summary_tab_content.get_text("\n", strip=True)
-            # Remove "Overview" heading if present at the start
-            if summary_text.startswith("Overview"):
-              summary_text = summary_text.replace("Overview", "", 1).strip()
-            # Stop at next major section (Challenge, IPEC, etc.) if present
-            for section in ["Challenge", "IPEC", "Dates", "How to apply"]:
-              if section in summary_text:
-                summary_text = summary_text.split(section)[0].strip()
-                break
-            summary_from_tab = summary_text
+          
+          # Look for tab content sections
+          tab_contents = detail_soup.select(".kt-tab-inner-content")
+          for tab in tab_contents:
+            tab_text = tab.get_text("\n", strip=True)
+            if not tab_text:
+              continue
+            
+            # Try to identify section by class or content
+            tab_classes = " ".join(tab.get("class", []))
+            section_name = None
+            
+            # Check for known section patterns in class names
+            if "kt-inner-tab-1" in tab_classes or "overview" in tab_text.lower()[:50]:
+              section_name = "overview"
+            elif "challenge" in tab_text.lower()[:50] or "kt-inner-tab-2" in tab_classes:
+              section_name = "challenge"
+            elif "ipec" in tab_text.lower()[:50] or "kt-inner-tab-3" in tab_classes:
+              section_name = "ipec"
+            elif "dates" in tab_text.lower()[:50] or "timeline" in tab_text.lower()[:50]:
+              section_name = "dates"
+            elif "apply" in tab_text.lower()[:50] or "application" in tab_text.lower()[:50]:
+              section_name = "how_to_apply"
+            elif "eligibility" in tab_text.lower()[:50]:
+              section_name = "eligibility"
+            elif "funding" in tab_text.lower()[:50]:
+              section_name = "funding"
+            
+            # If we identified a section, clean and store it
+            if section_name:
+              # Remove section title if it's at the start
+              lines = tab_text.split("\n")
+              if lines and lines[0].lower() in [section_name.replace("_", " "), section_name]:
+                tab_text = "\n".join(lines[1:]).strip()
+              sections[section_name] = tab_text
+            elif not sections.get("overview"):  # First tab without clear section is usually overview
+              # Remove "Overview" heading if present
+              if tab_text.startswith("Overview"):
+                tab_text = tab_text.replace("Overview", "", 1).strip()
+              sections["overview"] = tab_text
+              summary_from_tab = tab_text
+          
+          # If no tab sections found, try to extract from main content by headings
+          if not sections and detail_desc_el:
+            # Look for headings (h2, h3) to identify sections
+            headings = detail_desc_el.find_all(["h2", "h3"])
+            current_section = None
+            current_content = []
+            
+            for element in detail_desc_el.descendants:
+              if element.name in ["h2", "h3"]:
+                # Save previous section
+                if current_section and current_content:
+                  sections[current_section] = "\n".join(current_content).strip()
+                # Start new section
+                heading_text = element.get_text(strip=True).lower()
+                current_section = None
+                if "overview" in heading_text or "summary" in heading_text:
+                  current_section = "overview"
+                elif "challenge" in heading_text:
+                  current_section = "challenge"
+                elif "ipec" in heading_text:
+                  current_section = "ipec"
+                elif "date" in heading_text or "timeline" in heading_text:
+                  current_section = "dates"
+                elif "apply" in heading_text or "application" in heading_text:
+                  current_section = "how_to_apply"
+                elif "eligibility" in heading_text:
+                  current_section = "eligibility"
+                elif "funding" in heading_text:
+                  current_section = "funding"
+                else:
+                  current_section = "other"
+                current_content = []
+              elif element.name in ["p", "div", "li"] and current_section:
+                text = element.get_text(strip=True)
+                if text:
+                  current_content.append(text)
+            
+            # Save last section
+            if current_section and current_content:
+              sections[current_section] = "\n".join(current_content).strip()
+          
+          # If we still have no sections, use the full description as overview
+          if not sections and description:
+            sections["overview"] = description
+            summary_from_tab = description[:500] if len(description) > 500 else description
           
           # Extract funding amount from detail page
           funding_amount = None
@@ -333,16 +404,41 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
         # Use Summary from tab if available, otherwise use description summary
         final_summary = summary_from_tab if summary_from_tab else (description[:200] + "..." if len(description) > 200 else description)
         
+        # Format description with section headings for better readability
+        formatted_description = description
+        if sections:
+          # Build formatted description with clear section headings
+          formatted_parts = []
+          section_order = ["overview", "challenge", "eligibility", "ipec", "funding", "dates", "how_to_apply", "other"]
+          
+          for section_key in section_order:
+            if section_key in sections:
+              section_title = section_key.replace("_", " ").title()
+              formatted_parts.append(f"## {section_title}\n\n{sections[section_key]}")
+          
+          # Add any remaining sections not in the standard order
+          for section_key, section_content in sections.items():
+            if section_key not in section_order:
+              section_title = section_key.replace("_", " ").title()
+              formatted_parts.append(f"## {section_title}\n\n{section_content}")
+          
+          if formatted_parts:
+            formatted_description = "\n\n".join(formatted_parts)
+        
         grant: Dict[str, Any] = {
             "source": "catapult",
             "title": title,
             "url": url,
             "summary": final_summary,
-            "description": description,
+            "description": formatted_description,
             "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
             "funding_amount": funding_amount,
             "status": "open",
-            "raw_data": {"listing_url": listing_url, "scraped_url": url},
+            "raw_data": {
+                "listing_url": listing_url,
+                "scraped_url": url,
+                "sections": sections if sections else None
+            },
         }
         grant["hash_checksum"] = sha256_for_grant(grant)
         grants.append(grant)
