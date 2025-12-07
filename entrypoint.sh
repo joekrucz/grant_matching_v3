@@ -11,8 +11,8 @@ if [ "$RAILWAY_SERVICE_NAME" = "celery" ] || [ "$CELERY_WORKER" = "true" ]; then
     exec /app/celery_entrypoint.sh
 fi
 
-# Get PORT from environment variable, default to 8000 if not set
-PORT=${PORT:-8000}
+# Get PORT from environment variable, default to 8080 if not set
+PORT=${PORT:-8080}
 
 # Debug: Log environment variables (without sensitive data)
 echo "WEB ENTRYPOINT - Starting Gunicorn"

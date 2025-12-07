@@ -26,7 +26,7 @@ def companies_list(request):
     # SECURITY: Only show companies owned by the current user (unless admin)
     if request.user.admin:
         # Admins can see all companies
-    companies = Company.objects.all().select_related('user').order_by('-created_at')
+        companies = Company.objects.all().select_related('user').order_by('-created_at')
     else:
         # Regular users only see their own companies
         companies = Company.objects.filter(user=request.user).select_related('user').order_by('-created_at')
