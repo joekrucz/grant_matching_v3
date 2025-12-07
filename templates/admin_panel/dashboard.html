@@ -62,12 +62,12 @@
             data.scrapers.forEach(scraper => {
                 const statusClass = scraper.status === 'success' ? 'badge-success' : 
                                    scraper.status === 'running' ? 'badge-info' : 'badge-error';
-                const statusIcon = scraper.status === 'success' ? '✓' : 
-                                  scraper.status === 'running' ? '⏳' : '❌';
+                const statusLabel = scraper.status === 'success' ? 'Success' : 
+                                   scraper.status === 'running' ? 'Running' : 'Failed';
                 html += `
                     <div class="flex items-center justify-between text-sm">
                         <span class="font-semibold">${scraper.source.toUpperCase()}</span>
-                        <span class="badge ${statusClass}">${statusIcon} ${scraper.status}</span>
+                        <span class="badge ${statusClass}">${statusLabel}</span>
                         <span class="text-xs text-base-content/60">
                             ${scraper.grants_created} created, ${scraper.grants_updated} updated
                         </span>
@@ -149,7 +149,7 @@
             
             <!-- Progress indicator (hidden by default) -->
             <div id="scraper-status-alert" class="alert alert-info mt-4 hidden">
-                <span>⏳ Scrapers running... This may take several minutes.</span>
+                <span>Status: Scrapers running... This may take several minutes.</span>
                 <div class="mt-4">
                     <div class="flex justify-between text-sm mb-2">
                         <span id="scraper-progress-text">Initializing...</span>

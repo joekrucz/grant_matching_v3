@@ -42,7 +42,7 @@
                         // Reload page to show final results
                         if (data.status === 'completed' || data.status === 'error') {
                             setTimeout(() => {
-                                window.location.reload();
+        window.location.reload();
                             }, 500);
                         }
                     }
@@ -198,16 +198,16 @@
                             <span class="loading loading-spinner loading-md"></span>
                             Matching in progress... This may take 1-2 minutes
                         {% elif funding_search.matching_status == 'completed' %}
-                            🔄 Run Matching Job Again
+                            Run Matching Job Again
                         {% else %}
-                            🔍 Run Matching Job
+                            Run Matching Job
                         {% endif %}
                     </button>
                 </form>
                 
                 {% if funding_search.matching_status == 'running' %}
                 <div id="matching-status-alert" class="alert alert-info mt-4">
-                    <span>⏳ Processing grants... This may take 1-2 minutes.</span>
+                    <span>Status: Processing grants... This may take 1-2 minutes.</span>
                     {% if funding_search.matching_progress %}
                     <div class="mt-4">
                         <div class="flex justify-between text-sm mb-2">
@@ -243,7 +243,7 @@
                 </div>
                 {% elif funding_search.matching_status == 'error' %}
                 <div class="alert alert-error mt-4">
-                    <span>❌ An error occurred during matching. Please try again.</span>
+                    <span>Error: An error occurred during matching. Please try again.</span>
                     {% if funding_search.matching_error %}
                     <div class="mt-2 text-sm">
                         <strong>Error details:</strong>
@@ -253,7 +253,7 @@
                 </div>
                 {% elif funding_search.matching_status == 'completed' and funding_search.last_matched_at %}
                 <div class="alert alert-success mt-4">
-                    <span>✅ Last matched: {{ funding_search.last_matched_at|date:"F d, Y g:i A" }}</span>
+                    <span>Status: Last matched: {{ funding_search.last_matched_at|date:"F d, Y g:i A" }}</span>
                 </div>
                 {% endif %}
             </div>
@@ -261,7 +261,7 @@
         {% else %}
         <div class="divider"></div>
         <div class="alert alert-warning">
-            <span>⚠️ Please provide a project description or upload a file before running matching.</span>
+            <span>Warning: Please provide a project description or upload a file before running matching.</span>
         </div>
         {% endif %}
         {% else %}
@@ -347,7 +347,7 @@
                     <div class="mt-3">
                         <div class="flex flex-wrap gap-2">
                             {% for concern in match.match_reasons.concerns %}
-                            <span class="badge badge-warning badge-outline">⚠ {{ concern }}</span>
+                            <span class="badge badge-warning badge-outline">Warning: {{ concern }}</span>
                             {% endfor %}
                         </div>
                     </div>
