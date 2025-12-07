@@ -58,8 +58,8 @@
         {% if grant.description %}
         <div class="mb-6">
             <h2 class="text-2xl font-semibold mb-4">Description</h2>
-            {% if grant.source == 'catapult' and sections_list %}
-                {# Render Catapult grants with structured sections #}
+            {% if sections_list %}
+                {# Render grants with structured sections (Catapult, NIHR, etc.) #}
                 <div class="space-y-3">
                     {% for section_key, section_content in sections_list %}
                         <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">

@@ -248,7 +248,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           detail_resp = fetch_with_retry(session, href, referer=listing_url, timeout=30)
           detail_soup = BeautifulSoup(detail_resp.text, "html.parser")
           
-          # Extract description
+          # Extract description and structured sections
           desc_el = (
               detail_soup.select_one("main") or
               detail_soup.select_one(".content") or
@@ -257,9 +257,112 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           )
           description = desc_el.get_text("\n", strip=True) if desc_el else ""
           
-          # Extract summary from meta description or first paragraph
+          # Extract structured sections from detail page
+          sections = {}
+          summary_from_sections = None
+          
+          if desc_el:
+            # Look for headings (h2, h3) to identify sections
+            headings = desc_el.find_all(["h2", "h3"])
+            current_section = None
+            current_content = []
+            
+            # Process all elements in the description area
+            for element in desc_el.descendants:
+              if element.name in ["h2", "h3"]:
+                # Save previous section
+                if current_section and current_content:
+                  sections[current_section] = "\n".join(current_content).strip()
+                # Start new section
+                heading_text = element.get_text(strip=True).lower()
+                current_section = None
+                
+                # Identify section type by heading text
+                if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
+                  current_section = "overview"
+                elif any(word in heading_text for word in ["eligibility", "who can apply", "who is eligible"]):
+                  current_section = "eligibility"
+                elif any(word in heading_text for word in ["funding", "budget", "cost", "financial"]):
+                  current_section = "funding"
+                elif any(word in heading_text for word in ["application", "how to apply", "apply", "submission"]):
+                  current_section = "how_to_apply"
+                elif any(word in heading_text for word in ["deadline", "closing", "dates", "timeline", "schedule"]):
+                  current_section = "dates"
+                elif any(word in heading_text for word in ["assessment", "evaluation", "review", "criteria"]):
+                  current_section = "assessment"
+                elif any(word in heading_text for word in ["contact", "enquiries", "questions"]):
+                  current_section = "contact"
+                elif any(word in heading_text for word in ["terms", "conditions", "requirements"]):
+                  current_section = "terms"
+                else:
+                  # Use heading as section name (normalized)
+                  current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
+                current_content = []
+              elif element.name in ["p", "div", "li", "ul", "ol"] and current_section:
+                text = element.get_text(strip=True)
+                if text and len(text) > 10:  # Skip very short text (likely navigation)
+                  current_content.append(text)
+            
+            # Save last section
+            if current_section and current_content:
+              sections[current_section] = "\n".join(current_content).strip()
+            
+            # If no sections found via headings, try to split by common patterns
+            if not sections and description:
+              # Try to identify sections by common NIHR page patterns
+              # Look for bold text or strong elements that might be section headers
+              strong_elements = desc_el.find_all(["strong", "b"])
+              if strong_elements:
+                current_section = None
+                current_content = []
+                for element in desc_el.descendants:
+                  if element.name in ["strong", "b"]:
+                    strong_text = element.get_text(strip=True).lower()
+                    if len(strong_text) > 5 and len(strong_text) < 50:
+                      # Might be a section header
+                      if current_section and current_content:
+                        sections[current_section] = "\n".join(current_content).strip()
+                      # Check if it matches known section patterns
+                      if any(word in strong_text for word in ["overview", "summary"]):
+                        current_section = "overview"
+                      elif any(word in strong_text for word in ["eligibility"]):
+                        current_section = "eligibility"
+                      elif any(word in strong_text for word in ["funding", "budget"]):
+                        current_section = "funding"
+                      elif any(word in strong_text for word in ["application", "apply"]):
+                        current_section = "how_to_apply"
+                      else:
+                        current_section = strong_text.replace(" ", "_")[:50]
+                      current_content = []
+                  elif element.name in ["p", "div"] and current_section:
+                    text = element.get_text(strip=True)
+                    if text and len(text) > 10:
+                      current_content.append(text)
+                
+                if current_section and current_content:
+                  sections[current_section] = "\n".join(current_content).strip()
+            
+            # If still no sections, use first paragraph as overview
+            if not sections and description:
+              # Split description into paragraphs
+              paragraphs = [p.strip() for p in description.split("\n") if p.strip() and len(p.strip()) > 20]
+              if paragraphs:
+                sections["overview"] = "\n\n".join(paragraphs[:3])  # First 3 paragraphs as overview
+                if len(paragraphs) > 3:
+                  sections["additional_information"] = "\n\n".join(paragraphs[3:])
+                summary_from_sections = paragraphs[0][:200] + "..." if len(paragraphs[0]) > 200 else paragraphs[0]
+          
+          # Extract summary from meta description or first section
           summary_el = detail_soup.select_one("meta[name='description']")
-          summary = summary_el["content"] if summary_el and summary_el.get("content") else (description[:200] + "..." if len(description) > 200 else description)
+          if summary_el and summary_el.get("content"):
+            summary = summary_el["content"]
+          elif summary_from_sections:
+            summary = summary_from_sections
+          elif sections.get("overview"):
+            overview_text = sections["overview"]
+            summary = overview_text[:200] + "..." if len(overview_text) > 200 else overview_text
+          else:
+            summary = description[:200] + "..." if len(description) > 200 else description
           
           # Try to extract deadline
           deadline_raw = None
@@ -290,16 +393,41 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               funding_amount = match.group(0) if not match.groups() else match.group(1)
               break
           
+          # Format description with section headings for better readability
+          formatted_description = description
+          if sections:
+            # Build formatted description with clear section headings
+            formatted_parts = []
+            section_order = ["overview", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
+            
+            for section_key in section_order:
+              if section_key in sections:
+                section_title = section_key.replace("_", " ").title()
+                formatted_parts.append(f"## {section_title}\n\n{sections[section_key]}")
+            
+            # Add any remaining sections not in the standard order
+            for section_key, section_content in sections.items():
+              if section_key not in section_order:
+                section_title = section_key.replace("_", " ").title()
+                formatted_parts.append(f"## {section_title}\n\n{section_content}")
+            
+            if formatted_parts:
+              formatted_description = "\n\n".join(formatted_parts)
+          
           grant: Dict[str, Any] = {
               "source": "nihr",
               "title": title,
               "url": href,
               "summary": summary,
-              "description": description,
+              "description": formatted_description,
               "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
               "funding_amount": funding_amount,
               "status": "open",
-              "raw_data": {"listing_url": listing_url, "scraped_url": href},
+              "raw_data": {
+                  "listing_url": listing_url,
+                  "scraped_url": href,
+                  "sections": sections if sections else None
+              },
           }
           grant["hash_checksum"] = sha256_for_grant(grant)
           grants.append(grant)
@@ -353,6 +481,72 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           )
           description = desc_el.get_text("\n", strip=True) if desc_el else ""
           
+          # Extract structured sections (same logic as above)
+          sections = {}
+          summary_from_sections = None
+          
+          if desc_el:
+            # Look for headings (h2, h3) to identify sections
+            headings = desc_el.find_all(["h2", "h3"])
+            current_section = None
+            current_content = []
+            
+            for element in desc_el.descendants:
+              if element.name in ["h2", "h3"]:
+                if current_section and current_content:
+                  sections[current_section] = "\n".join(current_content).strip()
+                heading_text = element.get_text(strip=True).lower()
+                current_section = None
+                
+                if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
+                  current_section = "overview"
+                elif any(word in heading_text for word in ["eligibility", "who can apply"]):
+                  current_section = "eligibility"
+                elif any(word in heading_text for word in ["funding", "budget", "cost"]):
+                  current_section = "funding"
+                elif any(word in heading_text for word in ["application", "how to apply", "apply"]):
+                  current_section = "how_to_apply"
+                elif any(word in heading_text for word in ["deadline", "closing", "dates"]):
+                  current_section = "dates"
+                elif any(word in heading_text for word in ["assessment", "evaluation"]):
+                  current_section = "assessment"
+                elif any(word in heading_text for word in ["contact", "enquiries"]):
+                  current_section = "contact"
+                else:
+                  current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
+                current_content = []
+              elif element.name in ["p", "div", "li"] and current_section:
+                text = element.get_text(strip=True)
+                if text and len(text) > 10:
+                  current_content.append(text)
+            
+            if current_section and current_content:
+              sections[current_section] = "\n".join(current_content).strip()
+            
+            if not sections and description:
+              paragraphs = [p.strip() for p in description.split("\n") if p.strip() and len(p.strip()) > 20]
+              if paragraphs:
+                sections["overview"] = "\n\n".join(paragraphs[:3])
+                if len(paragraphs) > 3:
+                  sections["additional_information"] = "\n\n".join(paragraphs[3:])
+                summary_from_sections = paragraphs[0][:200] + "..." if len(paragraphs[0]) > 200 else paragraphs[0]
+          
+          # Format description with sections
+          formatted_description = description
+          if sections:
+            formatted_parts = []
+            section_order = ["overview", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact"]
+            for section_key in section_order:
+              if section_key in sections:
+                section_title = section_key.replace("_", " ").title()
+                formatted_parts.append(f"## {section_title}\n\n{sections[section_key]}")
+            for section_key, section_content in sections.items():
+              if section_key not in section_order:
+                section_title = section_key.replace("_", " ").title()
+                formatted_parts.append(f"## {section_title}\n\n{section_content}")
+            if formatted_parts:
+              formatted_description = "\n\n".join(formatted_parts)
+          
           # Extract deadline and funding amount (same logic as above)
           deadline_raw = None
           funding_amount = None
@@ -380,16 +574,23 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               funding_amount = f"£{match.group(1) if match.groups() else match.group(0)}"
               break
           
+          # Get summary from sections or description
+          summary = summary_from_sections if summary_from_sections else (description[:200] + "..." if len(description) > 200 else description)
+          
           grant: Dict[str, Any] = {
               "source": "nihr",
               "title": title,
               "url": url,
-              "summary": description[:200] + "..." if len(description) > 200 else description,
-              "description": description,
+              "summary": summary,
+              "description": formatted_description,
               "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
               "funding_amount": funding_amount,
               "status": "open",
-              "raw_data": {"listing_url": listing_url, "scraped_url": url},
+              "raw_data": {
+                  "listing_url": listing_url,
+                  "scraped_url": url,
+                  "sections": sections if sections else None
+              },
           }
           grant["hash_checksum"] = sha256_for_grant(grant)
           grants.append(grant)
