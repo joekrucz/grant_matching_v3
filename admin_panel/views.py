@@ -37,6 +37,43 @@ def dashboard(request):
     open_grants = Grant.objects.filter(status='open').count()
     last_scrape = ScrapeLog.objects.filter(status='success').order_by('-completed_at').first()
     
+    # Check for recent Companies House refresh task
+    last_refresh_task = None
+    if CELERY_AVAILABLE:
+        try:
+            from celery.result import AsyncResult
+            from django.core.cache import cache
+            
+            # Try to get last task ID from cache or URL
+            task_id = request.GET.get('task_id') or cache.get('last_companies_refresh_task_id')
+            if task_id:
+                task_result = AsyncResult(task_id)
+                if task_result.ready():
+                    if task_result.state == 'SUCCESS':
+                        last_refresh_task = {
+                            'task_id': task_id,
+                            'status': 'completed',
+                            'result': task_result.result,
+                            'completed': True
+                        }
+                    elif task_result.state == 'FAILURE':
+                        last_refresh_task = {
+                            'task_id': task_id,
+                            'status': 'error',
+                            'error': str(task_result.info),
+                            'completed': True
+                        }
+                else:
+                    last_refresh_task = {
+                        'task_id': task_id,
+                        'status': 'running',
+                        'completed': False
+                    }
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error checking refresh task status: {e}")
+    
     # Check Celery worker status
     celery_status = "Unknown"
     celery_details = ""
@@ -64,6 +101,7 @@ def dashboard(request):
         'last_scrape': last_scrape,
         'celery_status': celery_status,
         'celery_details': celery_details,
+        'last_refresh_task': last_refresh_task,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
@@ -294,6 +332,10 @@ def refresh_companies(request):
             result = refresh_companies_house_data.delay()
             logger.info(f"Task queued successfully. Task ID: {result.id}")
             messages.success(request, f'Companies House data refresh started (Task ID: {result.id}).')
+            
+            # Store task ID in cache for later retrieval
+            from django.core.cache import cache
+            cache.set('last_companies_refresh_task_id', result.id, timeout=3600)  # 1 hour
             
             # Return JSON response with task ID for AJAX handling
             from django.http import JsonResponse

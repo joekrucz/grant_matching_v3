@@ -349,6 +349,17 @@
                 <p class="text-sm text-base-content/60">
                     Refresh Companies House data and filing history for all registered companies.
                 </p>
+                {% if last_refresh_task and last_refresh_task.completed %}
+                    {% if last_refresh_task.status == 'completed' %}
+                        <div class="alert alert-success mt-2">
+                            <span>Last refresh completed: {{ last_refresh_task.result.updated|default:0 }} companies updated{% if last_refresh_task.result.errors > 0 %}, {{ last_refresh_task.result.errors }} errors{% endif %}</span>
+                        </div>
+                    {% elif last_refresh_task.status == 'error' %}
+                        <div class="alert alert-error mt-2">
+                            <span>Last refresh failed: {{ last_refresh_task.error|truncatewords:20 }}</span>
+                        </div>
+                    {% endif %}
+                {% endif %}
             </div>
             <form method="post" action="{% url 'admin_panel:refresh_companies' %}" id="refresh-companies-form">
                 {% csrf_token %}
