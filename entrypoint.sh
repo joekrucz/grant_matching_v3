@@ -39,12 +39,25 @@ else
 fi
 
 # Run database migrations on startup
-# Allow migrations to fail gracefully if database is not ready yet
+# Retry migrations up to 5 times with exponential backoff if database is not ready
 echo "Running database migrations..."
-python manage.py migrate --noinput || {
-    echo "WARNING: Migrations failed or database not ready. Will retry on next startup."
-    # Don't exit - allow service to start and retry migrations later
-}
+MAX_MIGRATION_RETRIES=5
+RETRY_DELAY=5
+for i in $(seq 1 $MAX_MIGRATION_RETRIES); do
+    if python manage.py migrate --noinput; then
+        echo "Migrations completed successfully"
+        break
+    else
+        if [ $i -eq $MAX_MIGRATION_RETRIES ]; then
+            echo "WARNING: Migrations failed after $MAX_MIGRATION_RETRIES attempts. Service will start but may have issues."
+            echo "Migrations will be retried on next deployment/restart."
+        else
+            echo "Migrations failed (attempt $i/$MAX_MIGRATION_RETRIES). Retrying in ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+            RETRY_DELAY=$((RETRY_DELAY * 2))  # Exponential backoff
+        fi
+    fi
+done
 
 # Create admin user if it doesn't exist (only if ADMIN_EMAIL is set)
 if [ -n "$ADMIN_EMAIL" ]; then
