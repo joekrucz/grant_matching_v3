@@ -65,9 +65,9 @@ def sign_in(request):
                     user.save(update_fields=['last_login'])
                     
                     # SECURITY: Validate next parameter to prevent open redirect attacks
-                    from django.utils.http import is_safe_url
+                    from django.utils.http import url_has_allowed_host_and_scheme
                     next_url = request.GET.get('next', '/')
-                    if next_url and is_safe_url(next_url, allowed_hosts={request.get_host()}):
+                    if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
                         return redirect(next_url)
                     return redirect('/')
                 else:
