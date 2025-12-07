@@ -10,30 +10,7 @@ from .models import Grant
 
 def index(request):
     """Dashboard/landing page."""
-    # Get some stats for the dashboard
-    # Handle case where migrations haven't been run yet
-    try:
-        total_grants = Grant.objects.count()
-        open_grants = Grant.objects.filter(status='open').count()
-        
-        # Get last scrape time
-        from .models import ScrapeLog
-        last_scrape = ScrapeLog.objects.filter(status='success').order_by('-completed_at').first()
-    except Exception as e:
-        # If tables don't exist (migrations not run), show empty stats
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Database tables may not exist yet: {e}. Run migrations: python manage.py migrate")
-        total_grants = 0
-        open_grants = 0
-        last_scrape = None
-    
-    context = {
-        'total_grants': total_grants,
-        'open_grants': open_grants,
-        'last_scrape': last_scrape,
-    }
-    return render(request, 'grants/index.html', context)
+    return render(request, 'grants/index.html')
 
 
 @login_required
