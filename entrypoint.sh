@@ -32,6 +32,23 @@ echo "PORT=$PORT (from environment or default)"
 echo "Gunicorn will bind to: 0.0.0.0:$PORT"
 echo "Health check should connect to: http://localhost:$PORT/health/"
 echo "=========================================="
+
+# Validate critical environment variables
+if [ -z "$SECRET_KEY" ]; then
+    echo "ERROR: SECRET_KEY environment variable is not set!"
+    echo "Please set SECRET_KEY in Railway dashboard -> Variables"
+    echo "Service will use insecure default, but this should be fixed."
+    echo "Generate a key with: python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+else
+    echo "SECRET_KEY is set (length: ${#SECRET_KEY})"
+fi
+
+if [ -z "$DATABASE_URL" ]; then
+    echo "WARNING: DATABASE_URL is not set. Database operations will fail."
+else
+    echo "DATABASE_URL is set"
+fi
+
 if [ -n "$REDIS_URL" ]; then
     echo "REDIS_URL is set (length: ${#REDIS_URL})"
 else
