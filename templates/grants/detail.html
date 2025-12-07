@@ -58,21 +58,19 @@
         {% if grant.description %}
         <div class="mb-6">
             <h2 class="text-2xl font-semibold mb-4">Description</h2>
-            {% if grant.source == 'catapult' and grant.raw_data.sections %}
-                {# Render Catapult grants with structured sections from raw_data #}
+            {% if grant.source == 'catapult' and sections_list %}
+                {# Render Catapult grants with structured sections #}
                 <div class="space-y-3">
-                    {% for section_key, section_content in grant.raw_data.sections.items %}
-                        {% if section_content %}
+                    {% for section_key, section_content in sections_list %}
                         <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
-                            <input type="checkbox" />
+                            <input type="checkbox" {% if section_key == 'overview' %}checked{% endif %} />
                             <div class="collapse-title text-lg font-semibold text-primary">
-                                {{ section_key|title }} {% if section_key == 'overview' %}<span class="text-sm font-normal text-base-content/60">(Click to expand)</span>{% endif %}
+                                {{ section_key|title|replace:"_":" " }}
                             </div>
                             <div class="collapse-content">
                                 <div class="whitespace-pre-wrap text-base-content/90 leading-relaxed pt-2">{{ section_content }}</div>
                             </div>
                         </div>
-                        {% endif %}
                     {% endfor %}
                 </div>
             {% elif '##' in grant.description %}

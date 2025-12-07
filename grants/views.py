@@ -56,5 +56,20 @@ def grants_list(request):
 def grant_detail(request, slug):
     """Grant detail page (public)."""
     grant = get_object_or_404(Grant, slug=slug)
-    return render(request, 'grants/detail.html', {'grant': grant})
+    
+    # Prepare sections for Catapult grants if available
+    sections_list = []
+    if grant.source == 'catapult' and grant.raw_data and grant.raw_data.get('sections'):
+        sections_dict = grant.raw_data.get('sections', {})
+        # Convert dict to list of tuples for template iteration
+        sections_list = [(key, value) for key, value in sections_dict.items() if value]
+        # Sort sections by preferred order
+        section_order = ["overview", "challenge", "eligibility", "ipec", "funding", "dates", "how_to_apply"]
+        sections_list.sort(key=lambda x: (section_order.index(x[0]) if x[0] in section_order else 999, x[0]))
+    
+    context = {
+        'grant': grant,
+        'sections_list': sections_list,
+    }
+    return render(request, 'grants/detail.html', context)
 
