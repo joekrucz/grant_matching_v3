@@ -1,0 +1,3 @@
+# Railway configuration to prevent Rails detection
+# This file helps Railway understand this is a Django project
+

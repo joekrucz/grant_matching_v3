@@ -63,7 +63,13 @@ def sign_in(request):
                     login(request, user)
                     user.last_login = timezone.now()
                     user.save(update_fields=['last_login'])
-                    return redirect(request.GET.get('next', '/'))
+                    
+                    # SECURITY: Validate next parameter to prevent open redirect attacks
+                    from django.utils.http import is_safe_url
+                    next_url = request.GET.get('next', '/')
+                    if next_url and is_safe_url(next_url, allowed_hosts={request.get_host()}):
+                        return redirect(next_url)
+                    return redirect('/')
                 else:
                     # SECURITY: Same error message to prevent user enumeration
                     messages.error(request, 'Invalid email or password.')

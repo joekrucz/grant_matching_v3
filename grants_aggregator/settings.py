@@ -250,6 +250,30 @@ CORS_ALLOW_CREDENTIALS = True if CORS_ALLOWED_ORIGINS else False
 # Explicitly deny all origins if not configured
 CORS_ALLOW_ALL_ORIGINS = False
 
+# Security Headers (only in production)
+if not DEBUG:
+    # Force HTTPS redirects
+    SECURE_SSL_REDIRECT = True
+    
+    # HSTS (HTTP Strict Transport Security) - 1 year
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # Prevent clickjacking
+    X_FRAME_OPTIONS = 'DENY'
+    
+    # XSS Protection
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    
+    # Referrer Policy
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+else:
+    # In development, disable strict security for easier debugging
+    SECURE_SSL_REDIRECT = False
+    X_FRAME_OPTIONS = 'SAMEORIGIN'
+
 # Login URLs
 LOGIN_URL = '/users/sign_in'
 LOGIN_REDIRECT_URL = '/'

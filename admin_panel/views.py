@@ -1,7 +1,7 @@
 """
 Admin panel views.
 """
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -234,7 +234,8 @@ def users_list(request):
 @admin_required
 def user_detail(request, id):
     """User detail page."""
-    user = User.objects.get(id=id)
+    # SECURITY: get_object_or_404 provides better error handling
+    user = get_object_or_404(User, id=id)
     
     if request.method == 'POST':
         user.name = request.POST.get('name', user.name)
@@ -255,7 +256,8 @@ def user_detail(request, id):
 @admin_required
 def user_delete(request, id):
     """Delete user (admin only)."""
-    user = User.objects.get(id=id)
+    # SECURITY: get_object_or_404 provides better error handling
+    user = get_object_or_404(User, id=id)
     
     if request.method == 'POST':
         if user == request.user:

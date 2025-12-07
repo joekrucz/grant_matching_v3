@@ -44,7 +44,14 @@ def company_detail(request, id):
     """Company detail page."""
     from .models import TRL_LEVELS
     
+    # SECURITY: Check authorization before loading data
     company = get_object_or_404(Company, id=id)
+    
+    # Check if user has permission to view (owner or admin)
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to view this company.')
+        return redirect('companies:list')
+    
     funding_searches = company.funding_searches.all().order_by('-created_at')
     
     # Check if user can edit (owner or admin)
@@ -165,6 +172,7 @@ def company_create(request):
 @login_required
 def company_delete(request, id):
     """Delete company (owner or admin only)."""
+    # SECURITY: Check authorization before loading data
     company = get_object_or_404(Company, id=id)
     
     if request.user != company.user and not request.user.admin:
@@ -183,7 +191,13 @@ def company_delete(request, id):
 @login_required
 def funding_search_create(request, company_id):
     """Create funding search for a company."""
+    # SECURITY: Check authorization before loading data
     company = get_object_or_404(Company, id=company_id)
+    
+    # Check if user has permission to create funding search for this company
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to create funding searches for this company.')
+        return redirect('companies:detail', id=company_id)
     
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -210,7 +224,14 @@ def funding_search_detail(request, id):
     """Funding search detail page."""
     from .models import TRL_LEVELS
     
+    # SECURITY: Check authorization before loading data
     funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to view (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to view this funding search.')
+        return redirect('companies:list')
+    
     can_edit = request.user == funding_search.user or request.user.admin
     
     if request.method == 'POST':
@@ -245,6 +266,7 @@ def funding_search_detail(request, id):
 @login_required
 def funding_search_delete(request, id):
     """Delete funding search (owner or admin only)."""
+    # SECURITY: Check authorization before loading data
     funding_search = get_object_or_404(FundingSearch, id=id)
     
     if request.user != funding_search.user and not request.user.admin:
@@ -302,8 +324,15 @@ def extract_text_from_file(file, file_type):
 @login_required
 def funding_search_upload(request, id):
     """Handle file upload and text extraction."""
+    # SECURITY: Check authorization before loading data
     funding_search = get_object_or_404(FundingSearch, id=id)
-    can_edit = request.user == funding_search.user or request.user.admin
+    
+    # Check if user has permission to edit (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to upload files for this funding search.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    can_edit = True  # If we got here, user can edit
     
     if not can_edit:
         messages.error(request, 'You do not have permission to edit this funding search.')
@@ -391,12 +420,11 @@ def funding_search_match(request, id):
     import logging
     logger = logging.getLogger(__name__)
     
+    # SECURITY: Check authorization before loading data
     funding_search = get_object_or_404(FundingSearch, id=id)
-    can_edit = request.user == funding_search.user or request.user.admin
     
-    logger.info(f"Funding search match requested for ID: {id}, user: {request.user.email}, can_edit: {can_edit}")
-    
-    if not can_edit:
+    # Check if user has permission to run matching (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
         messages.error(request, 'You do not have permission to run matching for this funding search.')
         return redirect('companies:funding_search_detail', id=id)
     
