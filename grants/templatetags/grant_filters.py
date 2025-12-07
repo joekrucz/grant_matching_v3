@@ -26,17 +26,18 @@ def split_lines(value, delimiter="\n\n"):
 def replace(value, arg):
     """Replace occurrences of a substring in a string.
     
-    Usage: {{ value|replace:"old":"new" }}
-    Note: Django template filters can only take one argument, so this uses a colon-separated format.
+    Usage: {{ value|replace:"old|new" }}
+    Note: Django template filters can only take one argument, so this uses a pipe-separated format.
+    Example: {{ section_key|replace:"_| " }} replaces underscores with spaces
     """
     if not value:
         return value
     
-    if not arg or ':' not in arg:
+    if not arg or '|' not in arg:
         return value
     
     try:
-        old, new = arg.split(':', 1)
+        old, new = arg.split('|', 1)
         return str(value).replace(old, new)
     except ValueError:
         return value

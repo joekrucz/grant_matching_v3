@@ -65,7 +65,7 @@
                         <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
                             <input type="checkbox" {% if section_key == 'overview' %}checked{% endif %} />
                             <div class="collapse-title text-lg font-semibold text-primary">
-                                {{ section_key|title|replace:"_":" " }}
+                                {{ section_key|title|replace:"_| " }}
                             </div>
                             <div class="collapse-content">
                                 <div class="whitespace-pre-wrap text-base-content/90 leading-relaxed pt-2">{{ section_content }}</div>
