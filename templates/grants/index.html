@@ -21,24 +21,5 @@
         </div>
     </div>
 </div>
-
-{% if total_grants %}
-<div class="stats shadow w-full max-w-4xl mx-auto">
-    <div class="stat">
-        <div class="stat-title">Total Grants</div>
-        <div class="stat-value text-primary">{{ total_grants }}</div>
-    </div>
-    <div class="stat">
-        <div class="stat-title">Open Grants</div>
-        <div class="stat-value text-secondary">{{ open_grants }}</div>
-    </div>
-    <div class="stat">
-        <div class="stat-title">Last Scraped</div>
-        <div class="stat-value text-accent">
-            {% if last_scrape %}{{ last_scrape.completed_at|date:"M d, Y" }}{% else %}Never{% endif %}
-        </div>
-    </div>
-</div>
-{% endif %}
 {% endblock %}
 
