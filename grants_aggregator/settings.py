@@ -236,8 +236,23 @@ COMPANIES_HOUSE_API_KEY = env('COMPANIES_HOUSE_API_KEY', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 
 # Scraper Service
-PYTHON_SCRAPER_URL = env('PYTHON_SCRAPER_URL', default='http://python-scraper:8000')
+# On Railway, services are accessible via {service-name}.railway.internal
+# The port is dynamic, so PYTHON_SCRAPER_URL must be set explicitly in Railway
+# Default is for Docker Compose (python-scraper:8000) or local development
+if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PROJECT_ID'):
+    # On Railway, default to scraper.railway.internal with port 8080 (common Railway port)
+    # But this should be overridden with the actual port via PYTHON_SCRAPER_URL env var
+    default_scraper_url = 'http://scraper.railway.internal:8080'
+else:
+    # Docker Compose or local development
+    default_scraper_url = 'http://python-scraper:8000'
+
+PYTHON_SCRAPER_URL = env('PYTHON_SCRAPER_URL', default=default_scraper_url)
 SCRAPER_API_KEY = env('SCRAPER_API_KEY', default='')
+
+# Log scraper URL for debugging (mask any credentials)
+if PYTHON_SCRAPER_URL:
+    logger.info(f"PYTHON_SCRAPER_URL configured: {PYTHON_SCRAPER_URL}")
 
 # Django API URL (for scraper service)
 DJANGO_API_URL = env('DJANGO_API_URL', default='http://web:8000')

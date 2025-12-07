@@ -21,11 +21,18 @@ except Exception as e:
 def _safe_scraper_request(url, log_id, timeout=300):
     """Make HTTP request to scraper service with error handling."""
     logger.info(f"Attempting to connect to scraper service at: {url}")
+    logger.info(f"PYTHON_SCRAPER_URL from settings: {settings.PYTHON_SCRAPER_URL}")
+    
+    # Check if URL matches settings
+    if url != settings.PYTHON_SCRAPER_URL:
+        logger.warning(f"URL mismatch: requested {url} but settings has {settings.PYTHON_SCRAPER_URL}")
+    
     try:
         response = requests.post(
             url,
             json={'log_id': log_id},
             timeout=timeout,
+            headers={'Content-Type': 'application/json'},
         )
         response.raise_for_status()
         logger.info(f"Successfully connected to scraper service: {url}")
@@ -34,6 +41,11 @@ def _safe_scraper_request(url, log_id, timeout=300):
         logger.error(f"Scraper service connection error: {e}")
         logger.error(f"Failed to connect to: {url}")
         logger.error(f"PYTHON_SCRAPER_URL setting: {settings.PYTHON_SCRAPER_URL}")
+        logger.error("Troubleshooting tips:")
+        logger.error("1. Check if scraper service is running on Railway")
+        logger.error("2. Verify PYTHON_SCRAPER_URL matches the scraper service's actual port")
+        logger.error("3. Check scraper service logs to see what port it's using")
+        logger.error("4. Ensure PYTHON_SCRAPER_URL is set in both web and Celery services")
         raise Exception(f"Scraper service is not available: {str(e)}")
     except requests.exceptions.Timeout as e:
         logger.error(f"Scraper service timeout: {e}")
