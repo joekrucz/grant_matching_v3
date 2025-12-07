@@ -148,13 +148,24 @@ def company_create(request):
             
             # Fetch from Companies House API
             api_data = CompaniesHouseService.fetch_company(company_number)
-            normalized_data = CompaniesHouseService.normalize_company_data(api_data)
             
-                # Create company with registered status
+            # Fetch filing history
+            try:
+                filing_history = CompaniesHouseService.fetch_filing_history(company_number)
+            except CompaniesHouseError as e:
+                # Log but don't fail if filing history can't be fetched
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Could not fetch filing history for company {company_number}: {e}")
+                filing_history = None
+            
+            normalized_data = CompaniesHouseService.normalize_company_data(api_data, filing_history)
+            
+            # Create company with registered status
             company = Company.objects.create(
                 user=request.user,
-                    is_registered=True,
-                    registration_status='registered',
+                is_registered=True,
+                registration_status='registered',
                 **normalized_data
             )
             

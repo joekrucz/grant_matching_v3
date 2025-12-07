@@ -60,13 +60,82 @@ class CompaniesHouseService:
         except requests.exceptions.RequestException as e:
             raise CompaniesHouseError(f"Request failed: {str(e)}")
     
+    @classmethod
+    def fetch_filing_history(cls, company_number, items_per_page=100):
+        """
+        Fetch filing history from Companies House API.
+        
+        Args:
+            company_number: Companies House company number
+            items_per_page: Number of items per page (max 100, default 100)
+            
+        Returns:
+            dict: Filing history data from API with 'items' list and pagination info
+            
+        Raises:
+            CompaniesHouseError: If API request fails
+        """
+        api_key = settings.COMPANIES_HOUSE_API_KEY
+        if not api_key:
+            raise CompaniesHouseError("COMPANIES_HOUSE_API_KEY not configured")
+        
+        url = f"{cls.BASE_URL}/company/{company_number}/filing-history"
+        from requests.auth import HTTPBasicAuth
+        
+        all_items = []
+        start_index = 0
+        items_per_page = min(items_per_page, 100)  # API max is 100
+        
+        try:
+            while True:
+                params = {
+                    'items_per_page': items_per_page,
+                    'start_index': start_index
+                }
+                response = requests.get(
+                    url, 
+                    auth=HTTPBasicAuth(api_key, ''), 
+                    params=params,
+                    timeout=10
+                )
+                
+                if response.status_code == 404:
+                    # Company not found or no filing history
+                    break
+                elif response.status_code == 401:
+                    raise CompaniesHouseError("Invalid API key")
+                elif response.status_code != 200:
+                    raise CompaniesHouseError(f"API error: {response.status_code} - {response.text}")
+                
+                data = response.json()
+                items = data.get('items', [])
+                all_items.extend(items)
+                
+                # Check if there are more pages
+                total_count = data.get('total_count', 0)
+                if start_index + len(items) >= total_count or len(items) < items_per_page:
+                    break
+                
+                start_index += items_per_page
+                # Small delay to respect rate limits
+                time.sleep(0.5)
+            
+            return {
+                'items': all_items,
+                'total_count': len(all_items),
+                'fetched_at': time.strftime('%Y-%m-%dT%H:%M:%S')
+            }
+        except requests.exceptions.RequestException as e:
+            raise CompaniesHouseError(f"Filing history request failed: {str(e)}")
+    
     @staticmethod
-    def normalize_company_data(api_response):
+    def normalize_company_data(api_response, filing_history=None):
         """
         Normalize Companies House API response to model fields.
         
         Args:
             api_response: Raw API response dict
+            filing_history: Optional filing history data dict
             
         Returns:
             dict: Normalized company data
@@ -85,7 +154,7 @@ class CompaniesHouseService:
         sic_codes = api_response.get('sic_codes', [])
         sic_codes_str = ', '.join(sic_codes) if sic_codes else ''
         
-        return {
+        normalized = {
             'company_number': api_response.get('company_number', ''),
             'name': api_response.get('company_name', ''),
             'company_type': api_response.get('company_type', ''),
@@ -95,6 +164,12 @@ class CompaniesHouseService:
             'date_of_creation': api_response.get('date_of_creation', ''),
             'raw_data': api_response,
         }
+        
+        # Add filing history if provided
+        if filing_history:
+            normalized['filing_history'] = filing_history
+        
+        return normalized
 
 
 class ChatGPTMatchingService:
