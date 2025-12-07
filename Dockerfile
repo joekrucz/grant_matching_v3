@@ -23,11 +23,8 @@ COPY entrypoint.sh /app/entrypoint.sh
 COPY celery_entrypoint.sh /app/celery_entrypoint.sh
 RUN chmod +x /app/entrypoint.sh /app/celery_entrypoint.sh
 
-# Expose port (Railway will set PORT env var, typically 8080)
-EXPOSE 8080
-
-# Set default PORT environment variable (Railway will override this with actual port)
-ENV PORT=8080
+# Expose port
+EXPOSE 8000
 
 # Use a wrapper script to detect service type
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh

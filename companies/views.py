@@ -26,7 +26,7 @@ def companies_list(request):
     # SECURITY: Only show companies owned by the current user (unless admin)
     if request.user.admin:
         # Admins can see all companies
-        companies = Company.objects.all().select_related('user').order_by('-created_at')
+    companies = Company.objects.all().select_related('user').order_by('-created_at')
     else:
         # Regular users only see their own companies
         companies = Company.objects.filter(user=request.user).select_related('user').order_by('-created_at')
@@ -135,36 +135,36 @@ def company_create(request):
         else:
             # Companies House API lookup (existing flow)
             company_number = request.POST.get('company_number', '').strip()
-            
-            if not company_number:
-                messages.error(request, 'Company number is required.')
+        
+        if not company_number:
+            messages.error(request, 'Company number is required.')
+            return render(request, 'companies/create.html')
+        
+        try:
+            # Check if company already exists
+            if Company.objects.filter(company_number=company_number).exists():
+                messages.error(request, f'Company {company_number} already exists.')
                 return render(request, 'companies/create.html')
             
-            try:
-                # Check if company already exists
-                if Company.objects.filter(company_number=company_number).exists():
-                    messages.error(request, f'Company {company_number} already exists.')
-                    return render(request, 'companies/create.html')
-                
-                # Fetch from Companies House API
-                api_data = CompaniesHouseService.fetch_company(company_number)
-                normalized_data = CompaniesHouseService.normalize_company_data(api_data)
-                
+            # Fetch from Companies House API
+            api_data = CompaniesHouseService.fetch_company(company_number)
+            normalized_data = CompaniesHouseService.normalize_company_data(api_data)
+            
                 # Create company with registered status
-                company = Company.objects.create(
-                    user=request.user,
+            company = Company.objects.create(
+                user=request.user,
                     is_registered=True,
                     registration_status='registered',
-                    **normalized_data
-                )
-                
-                messages.success(request, f'Company {company.name} created successfully.')
-                return redirect('companies:detail', id=company.id)
+                **normalized_data
+            )
             
-            except CompaniesHouseError as e:
-                messages.error(request, str(e))
-            except Exception as e:
-                messages.error(request, f'Error creating company: {str(e)}')
+            messages.success(request, f'Company {company.name} created successfully.')
+            return redirect('companies:detail', id=company.id)
+        
+        except CompaniesHouseError as e:
+            messages.error(request, str(e))
+        except Exception as e:
+            messages.error(request, f'Error creating company: {str(e)}')
     
     return render(request, 'companies/create.html')
 
