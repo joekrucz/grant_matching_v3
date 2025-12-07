@@ -82,6 +82,8 @@ if [ -n "$ADMIN_EMAIL" ]; then
     python create_admin_user.py || echo "WARNING: Failed to create admin user"
 fi
 
-# Start Gunicorn
-exec gunicorn --bind 0.0.0.0:$PORT --workers 3 --timeout 120 grants_aggregator.wsgi:application
+# Start Gunicorn with logging to help diagnose issues
+echo "Starting Gunicorn server..."
+echo "If Gunicorn fails to start, check the logs above for errors."
+exec gunicorn --bind 0.0.0.0:$PORT --workers 3 --timeout 120 --access-logfile - --error-logfile - --log-level info grants_aggregator.wsgi:application
 
