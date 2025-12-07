@@ -33,12 +33,6 @@ else
     exit 1
 fi
 
-# Create admin user if it doesn't exist (only if ADMIN_EMAIL is set)
-if [ -n "$ADMIN_EMAIL" ]; then
-    echo "Creating/updating admin user: $ADMIN_EMAIL"
-    python create_admin_user.py || echo "WARNING: Failed to create admin user"
-fi
-
 # Start Gunicorn
 exec gunicorn --bind 0.0.0.0:$PORT --workers 3 --timeout 120 grants_aggregator.wsgi:application
 
