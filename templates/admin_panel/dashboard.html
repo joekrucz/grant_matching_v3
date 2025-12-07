@@ -111,32 +111,9 @@
     let companiesRefreshPollInterval = null;
     let companiesRefreshTaskId = null;
     
-    function startCompaniesRefreshPolling() {
-        // Get task ID from form submission response or store it
-        // For now, we'll get it from the response after form submission
-        const form = document.getElementById('refresh-companies-form');
-        if (form) {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(form);
-                fetch(form.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.task_id) {
-                        companiesRefreshTaskId = data.task_id;
-                        startCompaniesRefreshPolling();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error starting refresh:', error);
-                });
-            });
+    function startCompaniesRefreshPolling(taskId) {
+        if (taskId) {
+            companiesRefreshTaskId = taskId;
         }
         
         if (!companiesRefreshTaskId) {
@@ -243,8 +220,48 @@
         }
     }
     
-    // Check for existing refresh on page load
+    // Handle form submission for Companies House refresh
     document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('refresh-companies-form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(form);
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.task_id) {
+                        startCompaniesRefreshPolling(data.task_id);
+                    } else {
+                        // If not JSON, redirect happened - check URL for task_id
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const taskId = urlParams.get('task_id');
+                        if (taskId) {
+                            startCompaniesRefreshPolling(taskId);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error starting refresh:', error);
+                    // Fallback: try to get task_id from URL after redirect
+                    setTimeout(() => {
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const taskId = urlParams.get('task_id');
+                        if (taskId) {
+                            startCompaniesRefreshPolling(taskId);
+                        }
+                    }, 500);
+                });
+            });
+        }
+        
+        // Check for existing refresh on page load
         const taskId = localStorage.getItem('companiesRefreshTaskId');
         if (taskId) {
             companiesRefreshTaskId = taskId;
@@ -252,7 +269,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'running') {
-                        startCompaniesRefreshPolling();
+                        startCompaniesRefreshPolling(taskId);
                         updateCompaniesRefreshProgress(data);
                     } else {
                         localStorage.removeItem('companiesRefreshTaskId');
@@ -335,7 +352,7 @@
             </div>
             <form method="post" action="{% url 'admin_panel:refresh_companies' %}" id="refresh-companies-form">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-secondary" id="refresh-companies-btn" onclick="startCompaniesRefreshPolling(); return true;">
+                <button type="submit" class="btn btn-secondary" id="refresh-companies-btn">
                     Refresh Companies House Data
                 </button>
             </form>
