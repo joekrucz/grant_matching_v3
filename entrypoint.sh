@@ -12,7 +12,18 @@ if [ "$RAILWAY_SERVICE_NAME" = "celery" ] || [ "$CELERY_WORKER" = "true" ]; then
 fi
 
 # Get PORT from environment variable, default to 8000 if not set
-PORT=${PORT:-8000}
+# Railway automatically sets PORT, but we provide a fallback
+if [ -z "$PORT" ]; then
+    PORT=8000
+    echo "WARNING: PORT environment variable not set, using default: $PORT"
+else
+    # Validate PORT is a number
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: PORT must be a number, got: '$PORT'"
+        exit 1
+    fi
+    echo "Using PORT from environment: $PORT"
+fi
 
 # Debug: Log environment variables (without sensitive data)
 echo "WEB ENTRYPOINT - Starting Gunicorn"
