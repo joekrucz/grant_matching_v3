@@ -26,8 +26,12 @@ else
 fi
 
 # Debug: Log environment variables (without sensitive data)
+echo "=========================================="
 echo "WEB ENTRYPOINT - Starting Gunicorn"
-echo "Starting with PORT=$PORT"
+echo "PORT=$PORT (from environment or default)"
+echo "Gunicorn will bind to: 0.0.0.0:$PORT"
+echo "Health check should connect to: http://localhost:$PORT/health/"
+echo "=========================================="
 if [ -n "$REDIS_URL" ]; then
     echo "REDIS_URL is set (length: ${#REDIS_URL})"
 else
