@@ -61,7 +61,7 @@ class Company(models.Model):
     
     def __str__(self):
         if self.company_number:
-            return f"{self.name} ({self.company_number})"
+        return f"{self.name} ({self.company_number})"
         return f"{self.name} (Unregistered)"
     
     def sic_codes_array(self):
@@ -133,15 +133,19 @@ class Company(models.Model):
                 description = desc_values.get('description', '')
             
             # Extract "made up to" date - check description_values first (Companies House API structure)
+            # According to Companies House API docs, the field is 'made_up_date' in description_values
             made_up_to_date = None
             
-            # Method 1: Check if made_up_to_date is directly in description_values
-            if desc_values and 'made_up_to_date' in desc_values:
+            # Method 1: Check if made_up_date is directly in description_values (Companies House API standard)
+            if desc_values and 'made_up_date' in desc_values:
+                made_up_to_date = desc_values.get('made_up_date')
+            # Method 2: Check for made_up_to_date (alternative field name)
+            elif desc_values and 'made_up_to_date' in desc_values:
                 made_up_to_date = desc_values.get('made_up_to_date')
-            # Method 2: Check for period_end_on (alternative field name)
+            # Method 3: Check for period_end_on (alternative field name)
             elif desc_values and 'period_end_on' in desc_values:
                 made_up_to_date = desc_values.get('period_end_on')
-            # Method 3: Extract from description text using regex
+            # Method 4: Extract from description text using regex (fallback)
             elif description:
                 # Pattern: "made up to 31 December 2024" or "made-up to 31/12/2024" etc.
                 patterns = [
