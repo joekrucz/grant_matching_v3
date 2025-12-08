@@ -126,18 +126,30 @@ class Company(models.Model):
             
             # Extract description
             description = filing.get('description', '')
-            if not description and filing.get('description_values'):
-                desc_values = filing.get('description_values', {})
+            desc_values = filing.get('description_values', {})
+            
+            # Get description from description_values if not in main description field
+            if not description and desc_values:
                 description = desc_values.get('description', '')
             
-            # Extract "made up to" date from description
+            # Extract "made up to" date - check description_values first (Companies House API structure)
             made_up_to_date = None
-            if description:
+            
+            # Method 1: Check if made_up_to_date is directly in description_values
+            if desc_values and 'made_up_to_date' in desc_values:
+                made_up_to_date = desc_values.get('made_up_to_date')
+            # Method 2: Check for period_end_on (alternative field name)
+            elif desc_values and 'period_end_on' in desc_values:
+                made_up_to_date = desc_values.get('period_end_on')
+            # Method 3: Extract from description text using regex
+            elif description:
                 # Pattern: "made up to 31 December 2024" or "made-up to 31/12/2024" etc.
                 patterns = [
-                    r'made[\s-]up to[\s:]+(\d{1,2}[\s/]+(?:January|February|March|April|May|June|July|August|September|October|November|December|\d{1,2})[\s/]+\d{2,4})',
+                    r'made[\s-]up to[\s:]+(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})',
                     r'made[\s-]up to[\s:]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
-                    r'period ending[\s:]+(\d{1,2}[\s/]+(?:January|February|March|April|May|June|July|August|September|October|November|December|\d{1,2})[\s/]+\d{2,4})',
+                    r'period ending[\s:]+(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})',
+                    r'accounts? for[\s]+(?:the\s+)?(?:period\s+)?(?:ending|to)[\s:]+(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})',
+                    r'(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})',  # Generic date pattern
                 ]
                 
                 for pattern in patterns:
