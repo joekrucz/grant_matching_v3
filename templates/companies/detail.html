@@ -141,19 +141,21 @@
             <table class="table table-zebra">
                 <thead>
                     <tr>
-                        <th>Filing Date</th>
+                        <th>Financial Year</th>
                         <th>Accounts Made Up To</th>
-                        <th>Type</th>
+                        <th>Account Type</th>
+                        <th>Filing Status</th>
+                        <th>View Document</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for filing in account_filings %}
                     <tr>
                         <td>
-                            {% if filing.filing_date %}
-                                {{ filing.filing_date|date:"M d, Y" }}
+                            {% if filing.financial_year %}
+                                <span class="font-semibold">{{ filing.financial_year }}</span>
                             {% else %}
-                                N/A
+                                <span class="text-base-content/60">-</span>
                             {% endif %}
                         </td>
                         <td>
@@ -164,12 +166,45 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if filing.type %}
-                                <span class="badge badge-outline">{{ filing.type }}</span>
-                            {% elif filing.subcategory %}
-                                <span class="badge badge-ghost">{{ filing.subcategory }}</span>
+                            {% if filing.account_type and filing.account_type != 'Unknown' %}
+                                <span class="badge badge-primary">{{ filing.account_type }}</span>
                             {% else %}
                                 <span class="badge badge-ghost">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if filing.filing_status %}
+                                {% if filing.filing_status == 'On Time' %}
+                                    <span class="badge badge-success">
+                                        On Time
+                                        {% if filing.filing_status_days and filing.filing_status_days > 0 %}
+                                            ({{ filing.filing_status_days }} day{{ filing.filing_status_days|pluralize }} early)
+                                        {% endif %}
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-error">
+                                        Late
+                                        {% if filing.filing_status_days %}
+                                            ({{ filing.filing_status_days }} day{{ filing.filing_status_days|pluralize }})
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-base-content/60">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if filing.document_link %}
+                                <a 
+                                    href="{{ filing.document_link }}" 
+                                    target="_blank" 
+                                    class="btn btn-sm btn-outline"
+                                    rel="noopener noreferrer"
+                                >
+                                    View PDF
+                                </a>
+                            {% else %}
+                                <span class="text-base-content/60">-</span>
                             {% endif %}
                         </td>
                     </tr>

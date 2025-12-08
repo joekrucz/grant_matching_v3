@@ -104,15 +104,22 @@ class Company(models.Model):
     
     def get_account_filings(self):
         """
-        Extract and return only account filings with made up to dates.
+        Extract and return only account filings with enhanced information.
         
         Returns:
-            list: List of dicts with account filing info including made_up_to date
+            list: List of dicts with account filing info including:
+                - financial_year: Derived from made_up_date
+                - made_up_to_date: Date accounts made up to
+                - account_type: Type of accounts (micro-entity, small, medium, large, full)
+                - filing_status: On time/late with days
+                - document_link: Link to view document
         """
         if not self.filing_history or not self.filing_history.get('items'):
             return []
         
+        from datetime import datetime, timedelta
         import re
+        
         account_filings = []
         
         for filing in self.filing_history['items']:
@@ -127,6 +134,7 @@ class Company(models.Model):
             # Extract description
             description = filing.get('description', '')
             desc_values = filing.get('description_values', {})
+            links = filing.get('links', {})
             
             # Get description from description_values if not in main description field
             if not description and desc_values:
@@ -135,6 +143,7 @@ class Company(models.Model):
             # Extract "made up to" date - check description_values first (Companies House API structure)
             # According to Companies House API docs, the field is 'made_up_date' in description_values
             made_up_to_date = None
+            made_up_date_obj = None
             
             # Method 1: Check if made_up_date is directly in description_values (Companies House API standard)
             if desc_values and 'made_up_date' in desc_values:
@@ -162,16 +171,105 @@ class Company(models.Model):
                         made_up_to_date = match.group(1).strip()
                         break
             
+            # Parse made_up_date for calculations
+            made_up_date_obj = None
+            made_up_to_date_formatted = made_up_to_date
+            
+            if made_up_to_date:
+                try:
+                    # Try parsing ISO format (YYYY-MM-DD)
+                    if '-' in made_up_to_date and len(made_up_to_date) == 10:
+                        made_up_date_obj = datetime.strptime(made_up_to_date, '%Y-%m-%d').date()
+                        # Format as "Mar 31, 2024"
+                        made_up_to_date_formatted = made_up_date_obj.strftime('%b %d, %Y')
+                    # Try parsing other formats
+                    else:
+                        # Try common date formats
+                        for fmt in ['%d %B %Y', '%d/%m/%Y', '%d-%m-%Y', '%B %d, %Y']:
+                            try:
+                                made_up_date_obj = datetime.strptime(made_up_to_date, fmt).date()
+                                made_up_to_date_formatted = made_up_date_obj.strftime('%b %d, %Y')
+                                break
+                            except ValueError:
+                                continue
+                except (ValueError, AttributeError):
+                    made_up_date_obj = None
+            
+            # Calculate financial year (e.g., "2023-24" or "FY 2024")
+            financial_year = None
+            if made_up_date_obj:
+                year = made_up_date_obj.year
+                # UK financial year typically runs April to March
+                # If date is Jan-Mar, it's the end of previous financial year
+                if made_up_date_obj.month <= 3:
+                    financial_year = f"{year - 1}-{str(year)[2:]}"
+                else:
+                    financial_year = f"{year}-{str(year + 1)[2:]}"
+            
+            # Extract account type
+            account_type = desc_values.get('account_type', '').title() if desc_values else None
+            if not account_type:
+                # Try to extract from description
+                if 'micro-entity' in description.lower() or 'microentity' in description.lower():
+                    account_type = 'Micro-entity'
+                elif 'small' in description.lower():
+                    account_type = 'Small'
+                elif 'medium' in description.lower():
+                    account_type = 'Medium'
+                elif 'large' in description.lower():
+                    account_type = 'Large'
+                elif 'full' in description.lower():
+                    account_type = 'Full'
+            
+            # Calculate filing status (due date is typically made_up_date + 9 months for UK companies)
+            filing_status = None
+            filing_status_days = None
+            if made_up_date_obj and filing_date:
+                try:
+                    # Parse filing date
+                    filing_date_obj = datetime.strptime(filing_date, '%Y-%m-%d').date()
+                    
+                    # Calculate due date (9 months after made_up_date)
+                    due_date = made_up_date_obj + timedelta(days=273)  # ~9 months
+                    
+                    # Calculate days difference
+                    days_diff = (filing_date_obj - due_date).days
+                    
+                    if days_diff <= 0:
+                        filing_status = 'On Time'
+                        filing_status_days = abs(days_diff)
+                    else:
+                        filing_status = 'Late'
+                        filing_status_days = days_diff
+                except (ValueError, AttributeError):
+                    filing_status = None
+                    filing_status_days = None
+            
+            # Extract document link
+            document_link = links.get('document_metadata') or links.get('self')
+            
             account_filings.append({
                 'filing_date': filing_date,
                 'description': description,
-                'made_up_to_date': made_up_to_date,
+                'made_up_to_date': made_up_to_date_formatted,  # Formatted date string
+                'made_up_date_obj': made_up_date_obj,  # For sorting
+                'financial_year': financial_year,
+                'account_type': account_type or 'Unknown',
+                'filing_status': filing_status,
+                'filing_status_days': filing_status_days,
+                'document_link': document_link,
                 'type': filing.get('type', ''),
                 'subcategory': filing.get('subcategory', ''),
             })
         
-        # Sort by filing date (most recent first)
-        account_filings.sort(key=lambda x: x['filing_date'] or '', reverse=True)
+        # Sort by made_up_date (most recent first), fallback to filing_date
+        account_filings.sort(
+            key=lambda x: (
+                x['made_up_date_obj'] if x['made_up_date_obj'] else datetime.min.date(),
+                x['filing_date'] or ''
+            ),
+            reverse=True
+        )
         
         return account_filings
 
