@@ -126,65 +126,48 @@
 </div>
 
 {% if company.filing_history and company.filing_history.items %}
+{% with account_filings=company.get_account_filings %}
+{% if account_filings %}
 <div class="card bg-base-200 shadow-xl mb-6">
     <div class="card-body">
-        <h2 class="card-title text-2xl mb-4">Filing History</h2>
+        <h2 class="card-title text-2xl mb-4">Account Filings</h2>
         {% if company.filing_history.fetched_at %}
         <div class="text-sm text-base-content/60 mb-4">
             Last updated: {{ company.filing_history.fetched_at }}
         </div>
         {% endif %}
-        <div class="text-sm text-base-content/60 mb-4">
-            Total filings: {{ company.filing_history.total_count|default:company.filing_history.items|length }}
-        </div>
         
         <div class="overflow-x-auto">
             <table class="table table-zebra">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Category</th>
+                        <th>Filing Date</th>
+                        <th>Accounts Made Up To</th>
                         <th>Type</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for filing in company.filing_history.items|slice:":50" %}
+                    {% for filing in account_filings %}
                     <tr>
                         <td>
-                            {% if filing.date %}
-                                {{ filing.date|date:"M d, Y" }}
-                            {% elif filing.filing_date %}
+                            {% if filing.filing_date %}
                                 {{ filing.filing_date|date:"M d, Y" }}
                             {% else %}
                                 N/A
                             {% endif %}
                         </td>
                         <td>
-                            {% if filing.description %}
-                                {{ filing.description }}
-                            {% elif filing.description_values %}
-                                {% if filing.description_values.description %}
-                                    {{ filing.description_values.description }}
-                                {% else %}
-                                    Filing
-                                {% endif %}
+                            {% if filing.made_up_to_date %}
+                                <span class="font-semibold">{{ filing.made_up_to_date }}</span>
                             {% else %}
-                                Filing
+                                <span class="text-base-content/60">Not specified</span>
                             {% endif %}
                         </td>
                         <td>
-                            {% if filing.category %}
-                                <span class="badge badge-outline">{{ filing.category }}</span>
-                            {% else %}
-                                <span class="badge badge-ghost">N/A</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if filing.subcategory %}
+                            {% if filing.type %}
+                                <span class="badge badge-outline">{{ filing.type }}</span>
+                            {% elif filing.subcategory %}
                                 <span class="badge badge-ghost">{{ filing.subcategory }}</span>
-                            {% elif filing.type %}
-                                <span class="badge badge-ghost">{{ filing.type }}</span>
                             {% else %}
                                 <span class="badge badge-ghost">-</span>
                             {% endif %}
@@ -194,12 +177,6 @@
                 </tbody>
             </table>
         </div>
-        
-        {% if company.filing_history.items|length > 50 %}
-        <div class="alert alert-info mt-4">
-            <span>Showing first 50 of {{ company.filing_history.items|length }} filings. View full history on Companies House website.</span>
-        </div>
-        {% endif %}
         
         {% if company.company_number %}
         <div class="mt-4">
@@ -214,6 +191,8 @@
         {% endif %}
     </div>
 </div>
+{% endif %}
+{% endwith %}
 {% endif %}
 
 <div class="card bg-base-200 shadow-xl">

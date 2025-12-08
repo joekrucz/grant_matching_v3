@@ -101,6 +101,63 @@ class Company(models.Model):
             parts.append(self.address['country'])
         
         return ', '.join(parts)
+    
+    def get_account_filings(self):
+        """
+        Extract and return only account filings with made up to dates.
+        
+        Returns:
+            list: List of dicts with account filing info including made_up_to date
+        """
+        if not self.filing_history or not self.filing_history.get('items'):
+            return []
+        
+        import re
+        account_filings = []
+        
+        for filing in self.filing_history['items']:
+            # Filter for account filings
+            category = filing.get('category', '').lower()
+            if category != 'accounts':
+                continue
+            
+            # Extract filing date
+            filing_date = filing.get('date') or filing.get('filing_date')
+            
+            # Extract description
+            description = filing.get('description', '')
+            if not description and filing.get('description_values'):
+                desc_values = filing.get('description_values', {})
+                description = desc_values.get('description', '')
+            
+            # Extract "made up to" date from description
+            made_up_to_date = None
+            if description:
+                # Pattern: "made up to 31 December 2024" or "made-up to 31/12/2024" etc.
+                patterns = [
+                    r'made[\s-]up to[\s:]+(\d{1,2}[\s/]+(?:January|February|March|April|May|June|July|August|September|October|November|December|\d{1,2})[\s/]+\d{2,4})',
+                    r'made[\s-]up to[\s:]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+                    r'period ending[\s:]+(\d{1,2}[\s/]+(?:January|February|March|April|May|June|July|August|September|October|November|December|\d{1,2})[\s/]+\d{2,4})',
+                ]
+                
+                for pattern in patterns:
+                    match = re.search(pattern, description, re.IGNORECASE)
+                    if match:
+                        made_up_to_date = match.group(1).strip()
+                        break
+            
+            account_filings.append({
+                'filing_date': filing_date,
+                'description': description,
+                'made_up_to_date': made_up_to_date,
+                'type': filing.get('type', ''),
+                'subcategory': filing.get('subcategory', ''),
+            })
+        
+        # Sort by filing date (most recent first)
+        account_filings.sort(key=lambda x: x['filing_date'] or '', reverse=True)
+        
+        return account_filings
 
 
 class FundingSearch(models.Model):
