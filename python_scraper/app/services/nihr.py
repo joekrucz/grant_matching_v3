@@ -36,6 +36,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
     # Look for links that point to specific funding opportunities
     seen_urls = set()
     all_opportunity_urls = []
+    last_listing_error = None
     
     # Collect all opportunity URLs from all pages
     page = 1
@@ -220,11 +221,20 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         time.sleep(1)  # Throttle between pages
         
       except Exception as e:
+        last_listing_error = str(e)
         print(f"Error fetching page {page} ({url_to_fetch}): {e}")
-        # If an error occurs fetching a page, assume it's the end of pagination or a temporary issue
         break
     
-    print(f"Found {len(all_opportunity_urls)} total NIHR opportunities across {page - 1} page(s)")
+    pages_fetched = max(page - 1, 0)
+    print(f"Found {len(all_opportunity_urls)} total NIHR opportunities across {pages_fetched} page(s)")
+    
+    # If no opportunities were found, exit early with context to avoid undefined variables
+    if not all_opportunity_urls:
+      if last_listing_error:
+        print(f"NIHR listing fetch failed: {last_listing_error}")
+      else:
+        print("NIHR listing returned no opportunities.")
+      return grants
     
     # Process the funding opportunity URLs we found
     if all_opportunity_urls:
