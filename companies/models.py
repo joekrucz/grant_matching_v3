@@ -61,7 +61,7 @@ class Company(models.Model):
     
     def __str__(self):
         if self.company_number:
-        return f"{self.name} ({self.company_number})"
+            return f"{self.name} ({self.company_number})"
         return f"{self.name} (Unregistered)"
     
     def sic_codes_array(self):
