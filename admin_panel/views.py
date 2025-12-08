@@ -125,8 +125,18 @@ def run_scrapers(request):
         try:
             # Trigger the scraper chain
             logger.info("Calling trigger_ukri_scrape.delay()...")
+            logger.info(f"trigger_ukri_scrape function: {trigger_ukri_scrape}")
+            logger.info(f"Has delay method: {hasattr(trigger_ukri_scrape, 'delay')}")
+            
+            if not hasattr(trigger_ukri_scrape, 'delay'):
+                error_msg = 'trigger_ukri_scrape is not a Celery task. Check Celery configuration.'
+                logger.error(error_msg)
+                messages.error(request, error_msg)
+                return redirect('admin_panel:dashboard')
+            
             result = trigger_ukri_scrape.delay()
             logger.info(f"Task queued successfully. Task ID: {result.id}")
+            logger.info(f"Task state: {result.state}")
             messages.success(request, f'Scrapers triggered (Task ID: {result.id}). Check scrape logs for progress.')
         except Exception as e:
             error_msg = f'Failed to trigger scrapers: {str(e)}'
