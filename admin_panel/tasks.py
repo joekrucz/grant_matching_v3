@@ -10,12 +10,18 @@ from grants.models import ScrapeLog
 
 logger = logging.getLogger(__name__)
 
-# Import Celery app safely
+# Import Celery safely - use shared_task for better task discovery
 try:
-    from grants_aggregator.celery import app
+    from celery import shared_task
+    CELERY_TASKS_AVAILABLE = True
 except Exception as e:
-    logger.error(f"Failed to import Celery app: {e}")
-    app = None
+    logger.warning(f"Celery tasks not available: {e}")
+    CELERY_TASKS_AVAILABLE = False
+    # Create a dummy decorator
+    def shared_task(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 
 def _safe_scraper_request(url, log_id, timeout=300):
@@ -58,8 +64,8 @@ def _safe_scraper_request(url, log_id, timeout=300):
         raise
 
 
-if app is not None:
-    @app.task
+if CELERY_TASKS_AVAILABLE:
+    @shared_task
     def trigger_ukri_scrape():
         """Trigger UKRI scraper and chain to NIHR."""
         logger.info("trigger_ukri_scrape task started")
@@ -93,7 +99,7 @@ if app is not None:
             raise
 
 
-    @app.task
+    @shared_task
     def trigger_nihr_scrape(chain_started_at_str=None):
         """Trigger NIHR scraper and chain to Catapult."""
         from datetime import datetime
@@ -126,7 +132,7 @@ if app is not None:
             raise
 
 
-    @app.task
+    @shared_task
     def trigger_catapult_scrape(chain_started_at_str=None):
         """Trigger Catapult scraper (last in chain)."""
         from datetime import datetime
@@ -166,8 +172,8 @@ else:
         raise Exception("Celery is not available")
 
 
-if app is not None:
-    @app.task(bind=True)
+if CELERY_TASKS_AVAILABLE:
+    @shared_task(bind=True)
     def refresh_companies_house_data(self):
         """
         Refresh Companies House data for all registered companies.
