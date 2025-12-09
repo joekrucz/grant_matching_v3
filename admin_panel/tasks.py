@@ -41,8 +41,9 @@ def _safe_scraper_request(url, log_id, timeout=300):
             headers={'Content-Type': 'application/json'},
         )
         response.raise_for_status()
+        data = response.json() if response.content else {}
         logger.info(f"Successfully connected to scraper service: {url}")
-        return True
+        return {"success": True, "data": data}
     except requests.exceptions.ConnectionError as e:
         logger.error(f"Scraper service connection error: {e}")
         logger.error(f"Failed to connect to: {url}")
@@ -52,16 +53,28 @@ def _safe_scraper_request(url, log_id, timeout=300):
         logger.error("2. Verify PYTHON_SCRAPER_URL matches the scraper service's actual port")
         logger.error("3. Check scraper service logs to see what port it's using")
         logger.error("4. Ensure PYTHON_SCRAPER_URL is set in both web and Celery services")
-        raise Exception(f"Scraper service is not available: {str(e)}")
+        return {"success": False, "error": f"Scraper service is not available: {str(e)}"}
     except requests.exceptions.Timeout as e:
         logger.error(f"Scraper service timeout: {e}")
-        raise Exception(f"Scraper service request timed out: {str(e)}")
+        return {"success": False, "error": f"Scraper service request timed out: {str(e)}"}
     except requests.exceptions.RequestException as e:
         logger.error(f"Scraper service request error: {e}")
-        raise Exception(f"Scraper service error: {str(e)}")
+        return {"success": False, "error": f"Scraper service error: {str(e)}"}
     except Exception as e:
-        logger.error(f"Unexpected error calling scraper: {e}")
-        raise
+        logger.error(f"Unexpected error calling scraper: {e}", exc_info=True)
+        return {"success": False, "error": f"Unexpected scraper error: {str(e)}"}
+
+
+def _extract_counts(data):
+    """Extract common count fields from scraper responses."""
+    if not isinstance(data, dict):
+        return {"created": 0, "updated": 0, "skipped": 0, "message": None}
+    return {
+        "created": data.get("created", 0),
+        "updated": data.get("updated", 0),
+        "skipped": data.get("skipped", 0),
+        "message": data.get("message"),
+    }
 
 
 if CELERY_TASKS_AVAILABLE:
@@ -79,16 +92,25 @@ if CELERY_TASKS_AVAILABLE:
         logger.info(f"Created ScrapeLog with ID: {scrape_log.id}")
         
         try:
-            _safe_scraper_request(
+            result = _safe_scraper_request(
                 f"{settings.PYTHON_SCRAPER_URL}/run/ukri",
                 scrape_log.id,
                 timeout=300
             )
             
-            # Chain to NIHR scraper
-            trigger_nihr_scrape.delay(chain_started_at.isoformat())
-            
-            scrape_log.status = 'success'
+            counts = _extract_counts(result.get("data"))
+            scrape_log.metadata = {
+                **(scrape_log.metadata or {}),
+                "counts": counts,
+                "chain_started_at": chain_started_at.isoformat(),
+                "chain_position": 1,
+                "chain_total": 3,
+            }
+            if result.get("success"):
+                scrape_log.status = 'success'
+            else:
+                scrape_log.status = 'error'
+                scrape_log.error_message = result.get("error")
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         except Exception as e:
@@ -96,7 +118,9 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
-            raise
+        finally:
+            # Always trigger next scraper even if this one failed
+            trigger_nihr_scrape.delay(chain_started_at.isoformat())
 
 
     @shared_task
@@ -112,16 +136,25 @@ if CELERY_TASKS_AVAILABLE:
         )
         
         try:
-            _safe_scraper_request(
+            result = _safe_scraper_request(
                 f"{settings.PYTHON_SCRAPER_URL}/run/nihr",
                 scrape_log.id,
                 timeout=300
             )
             
-            # Chain to Catapult scraper
-            trigger_catapult_scrape.delay(chain_started_at_str)
-            
-            scrape_log.status = 'success'
+            counts = _extract_counts(result.get("data"))
+            scrape_log.metadata = {
+                **(scrape_log.metadata or {}),
+                "counts": counts,
+                "chain_started_at": chain_started_at.isoformat(),
+                "chain_position": 2,
+                "chain_total": 3,
+            }
+            if result.get("success"):
+                scrape_log.status = 'success'
+            else:
+                scrape_log.status = 'error'
+                scrape_log.error_message = result.get("error")
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         except Exception as e:
@@ -129,7 +162,9 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
-            raise
+        finally:
+            # Always trigger next scraper even if this one failed
+            trigger_catapult_scrape.delay(chain_started_at_str)
 
 
     @shared_task
@@ -145,13 +180,25 @@ if CELERY_TASKS_AVAILABLE:
         )
         
         try:
-            _safe_scraper_request(
+            result = _safe_scraper_request(
                 f"{settings.PYTHON_SCRAPER_URL}/run/catapult",
                 scrape_log.id,
                 timeout=300
             )
             
-            scrape_log.status = 'success'
+            counts = _extract_counts(result.get("data"))
+            scrape_log.metadata = {
+                **(scrape_log.metadata or {}),
+                "counts": counts,
+                "chain_started_at": chain_started_at.isoformat(),
+                "chain_position": 3,
+                "chain_total": 3,
+            }
+            if result.get("success"):
+                scrape_log.status = 'success'
+            else:
+                scrape_log.status = 'error'
+                scrape_log.error_message = result.get("error")
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         except Exception as e:
@@ -159,7 +206,6 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
-            raise
 else:
     # Dummy functions if Celery is not available
     def trigger_ukri_scrape():
