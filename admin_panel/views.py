@@ -233,6 +233,7 @@ def scraper_status(request):
         scrapers.append({
             'source': log.source,
             'status': scraper_status,
+            'grants_found': log.grants_found,
             'grants_created': log.grants_created,
             'grants_updated': log.grants_updated,
             'grants_skipped': log.grants_skipped,

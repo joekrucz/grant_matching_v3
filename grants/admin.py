@@ -13,7 +13,7 @@ class GrantAdmin(admin.ModelAdmin):
 
 @admin.register(ScrapeLog)
 class ScrapeLogAdmin(admin.ModelAdmin):
-    list_display = ('source', 'status', 'started_at', 'completed_at', 'grants_created', 'grants_updated', 'grants_skipped')
+    list_display = ('source', 'status', 'started_at', 'completed_at', 'grants_found', 'grants_created', 'grants_updated', 'grants_skipped')
     list_filter = ('source', 'status', 'started_at')
     readonly_fields = ('started_at', 'completed_at', 'created_at', 'updated_at')
     date_hierarchy = 'started_at'

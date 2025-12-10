@@ -17,6 +17,7 @@
                 <th>Started At</th>
                 <th>Completed At</th>
                 <th>Duration</th>
+                <th>Found</th>
                 <th>Created</th>
                 <th>Updated</th>
                 <th>Skipped</th>
@@ -35,6 +36,7 @@
                 <td>{{ log.started_at|date:"M d, Y H:i" }}</td>
                 <td>{% if log.completed_at %}{{ log.completed_at|date:"M d, Y H:i" }}{% else %}-{% endif %}</td>
                 <td>{% if log.duration_seconds %}{{ log.duration_seconds|floatformat:0 }}s{% else %}-{% endif %}</td>
+                <td>{{ log.grants_found }}</td>
                 <td>{{ log.grants_created }}</td>
                 <td>{{ log.grants_updated }}</td>
                 <td>{{ log.grants_skipped }}</td>
@@ -44,7 +46,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="9" class="text-center">No scrape logs found.</td>
+                <td colspan="10" class="text-center">No scrape logs found.</td>
             </tr>
             {% endfor %}
         </tbody>

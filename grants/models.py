@@ -179,10 +179,12 @@ class Grant(models.Model):
                 # Import here to avoid circular dependency
                 from grants.models import ScrapeLog
                 scrape_log = ScrapeLog.objects.get(id=log_id)
+                grants_found = len(grants_data)  # Total grants found before upserting
+                scrape_log.grants_found = grants_found
                 scrape_log.grants_created = created
                 scrape_log.grants_updated = updated
                 scrape_log.grants_skipped = skipped
-                scrape_log.save(update_fields=['grants_created', 'grants_updated', 'grants_skipped'])
+                scrape_log.save(update_fields=['grants_found', 'grants_created', 'grants_updated', 'grants_skipped'])
             except Exception:
                 # Silently fail if log doesn't exist or other error
                 pass
@@ -202,6 +204,7 @@ class ScrapeLog(models.Model):
     started_at = models.DateTimeField(default=timezone.now, db_index=True)
     completed_at = models.DateTimeField(blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
+    grants_found = models.IntegerField(default=0)
     grants_created = models.IntegerField(default=0)
     grants_updated = models.IntegerField(default=0)
     grants_skipped = models.IntegerField(default=0)
