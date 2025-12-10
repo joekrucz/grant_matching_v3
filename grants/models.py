@@ -12,6 +12,7 @@ GRANT_SOURCES = [
     ('ukri', 'UKRI'),
     ('nihr', 'NIHR'),
     ('catapult', 'Catapult'),
+    ('innovate_uk', 'Innovate UK'),
 ]
 
 GRANT_STATUSES = [

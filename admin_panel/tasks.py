@@ -87,7 +87,7 @@ if CELERY_TASKS_AVAILABLE:
             source='ukri',
             status='running',
             started_at=chain_started_at,
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 1, 'chain_total': 3}
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 1, 'chain_total': 4}
         )
         logger.info(f"Created ScrapeLog with ID: {scrape_log.id}")
         
@@ -104,7 +104,7 @@ if CELERY_TASKS_AVAILABLE:
                 "counts": counts,
                 "chain_started_at": chain_started_at.isoformat(),
                 "chain_position": 1,
-                "chain_total": 3,
+                "chain_total": 4,
             }
             if result.get("success"):
                 scrape_log.status = 'success'
@@ -132,7 +132,7 @@ if CELERY_TASKS_AVAILABLE:
             source='nihr',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 2, 'chain_total': 3}
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 2, 'chain_total': 4}
         )
         
         try:
@@ -148,7 +148,7 @@ if CELERY_TASKS_AVAILABLE:
                 "counts": counts,
                 "chain_started_at": chain_started_at.isoformat(),
                 "chain_position": 2,
-                "chain_total": 3,
+                "chain_total": 4,
             }
             if result.get("success"):
                 scrape_log.status = 'success'
@@ -169,14 +169,14 @@ if CELERY_TASKS_AVAILABLE:
 
     @shared_task
     def trigger_catapult_scrape(chain_started_at_str=None):
-        """Trigger Catapult scraper (last in chain)."""
+        """Trigger Catapult scraper and chain to Innovate UK."""
         from datetime import datetime
         chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
         scrape_log = ScrapeLog.objects.create(
             source='catapult',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 3, 'chain_total': 3}
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 3, 'chain_total': 4}
         )
         
         try:
@@ -192,7 +192,51 @@ if CELERY_TASKS_AVAILABLE:
                 "counts": counts,
                 "chain_started_at": chain_started_at.isoformat(),
                 "chain_position": 3,
-                "chain_total": 3,
+                "chain_total": 4,
+            }
+            if result.get("success"):
+                scrape_log.status = 'success'
+            else:
+                scrape_log.status = 'error'
+                scrape_log.error_message = result.get("error")
+            scrape_log.completed_at = timezone.now()
+            scrape_log.save()
+        except Exception as e:
+            scrape_log.status = 'error'
+            scrape_log.error_message = str(e)
+            scrape_log.completed_at = timezone.now()
+            scrape_log.save()
+        finally:
+            # Always trigger next scraper even if this one failed
+            trigger_innovate_uk_scrape.delay(chain_started_at_str)
+
+
+    @shared_task
+    def trigger_innovate_uk_scrape(chain_started_at_str=None):
+        """Trigger Innovate UK scraper (last in chain)."""
+        from datetime import datetime
+        chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
+        scrape_log = ScrapeLog.objects.create(
+            source='innovate_uk',
+            status='running',
+            started_at=timezone.now(),
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 4, 'chain_total': 4}
+        )
+        
+        try:
+            result = _safe_scraper_request(
+                f"{settings.PYTHON_SCRAPER_URL}/run/innovate_uk",
+                scrape_log.id,
+                timeout=300
+            )
+            
+            counts = _extract_counts(result.get("data"))
+            scrape_log.metadata = {
+                **(scrape_log.metadata or {}),
+                "counts": counts,
+                "chain_started_at": chain_started_at.isoformat(),
+                "chain_position": 4,
+                "chain_total": 4,
             }
             if result.get("success"):
                 scrape_log.status = 'success'
@@ -215,6 +259,9 @@ else:
         raise Exception("Celery is not available")
     
     def trigger_catapult_scrape():
+        raise Exception("Celery is not available")
+    
+    def trigger_innovate_uk_scrape():
         raise Exception("Celery is not available")
 
 

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.services.ukri import scrape_ukri
 from app.services.nihr import scrape_nihr
 from app.services.catapult import scrape_catapult
+from app.services.innovate_uk import scrape_innovate_uk
 
 
 app = FastAPI(title="Grant Scraper Service")
@@ -102,6 +103,22 @@ def run_catapult_job(log_id: Optional[int] = None) -> Dict[str, Any]:
     raise HTTPException(status_code=500, detail=f"Catapult scraper failed: {str(e)}\n\nTraceback:\n{error_traceback}")
 
 
+def run_innovate_uk_job(log_id: Optional[int] = None) -> Dict[str, Any]:
+  try:
+    # Fetch existing grants to help optimize
+    existing_grants = _get_existing_grants("innovate_uk")
+    grants = scrape_innovate_uk(existing_grants=existing_grants)
+    if not grants:
+      return {"message": "No grants found", "created": 0, "updated": 0, "skipped": 0}
+    return _post_to_django(grants, log_id=log_id)
+  except Exception as e:
+    import traceback
+    error_traceback = traceback.format_exc()
+    print(f"Error in run_innovate_uk_job: {e}")
+    print(f"Full traceback:\n{error_traceback}")
+    raise HTTPException(status_code=500, detail=f"Innovate UK scraper failed: {str(e)}\n\nTraceback:\n{error_traceback}")
+
+
 @app.get("/health")
 def health():
   return {"status": "ok"}
@@ -137,4 +154,15 @@ async def run_catapult(request: Request):
   except:
     log_id = None
   result = run_catapult_job(log_id=log_id)
+  return JSONResponse(result)
+
+
+@app.post("/run/innovate_uk")
+async def run_innovate_uk(request: Request):
+  try:
+    body = await request.json()
+    log_id = body.get("log_id") if isinstance(body, dict) else None
+  except:
+    log_id = None
+  result = run_innovate_uk_job(log_id=log_id)
   return JSONResponse(result)
