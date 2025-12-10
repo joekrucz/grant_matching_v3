@@ -178,7 +178,7 @@ class Grant(models.Model):
                 created += 1
         
         # Update ScrapeLog if log_id provided
-        # Note: Using string reference to avoid circular import
+        # Note: Using string reference to avoid circular dependency
         if log_id:
             try:
                 # Import here to avoid circular dependency
@@ -186,14 +186,28 @@ class Grant(models.Model):
                 scrape_log = ScrapeLog.objects.get(id=log_id)
                 # Use provided grants_found, or fall back to len(grants_data)
                 grants_found_count = grants_found if grants_found is not None else len(grants_data)
+                
+                # Debug logging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"Updating ScrapeLog {log_id}: grants_found={grants_found_count} (provided={grants_found}, fallback={len(grants_data)})")
+                
                 scrape_log.grants_found = grants_found_count
                 scrape_log.grants_created = created
                 scrape_log.grants_updated = updated
                 scrape_log.grants_skipped = skipped
                 scrape_log.save(update_fields=['grants_found', 'grants_created', 'grants_updated', 'grants_skipped'])
-            except Exception:
-                # Silently fail if log doesn't exist or other error
-                pass
+                logger.info(f"Successfully updated ScrapeLog {log_id}: grants_found={scrape_log.grants_found}")
+            except ScrapeLog.DoesNotExist:
+                # Log if log doesn't exist
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"ScrapeLog with id {log_id} does not exist")
+            except Exception as e:
+                # Log other errors instead of silently failing
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error updating ScrapeLog {log_id}: {e}", exc_info=True)
         
         return {
             'created': created,

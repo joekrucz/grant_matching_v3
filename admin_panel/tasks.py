@@ -106,6 +106,8 @@ if CELERY_TASKS_AVAILABLE:
                 "chain_position": 1,
                 "chain_total": 4,
             }
+            # Refresh from DB to get grants_found and other counts set by Django API
+            scrape_log.refresh_from_db()
             if result.get("success"):
                 scrape_log.status = 'success'
             else:
@@ -114,6 +116,7 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         except Exception as e:
+            scrape_log.refresh_from_db()
             scrape_log.status = 'error'
             scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
@@ -150,6 +153,8 @@ if CELERY_TASKS_AVAILABLE:
                 "chain_position": 2,
                 "chain_total": 4,
             }
+            # Refresh from DB to get grants_found and other counts set by Django API
+            scrape_log.refresh_from_db()
             if result.get("success"):
                 scrape_log.status = 'success'
             else:
@@ -158,6 +163,7 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         except Exception as e:
+            scrape_log.refresh_from_db()
             scrape_log.status = 'error'
             scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
@@ -194,6 +200,8 @@ if CELERY_TASKS_AVAILABLE:
                 "chain_position": 3,
                 "chain_total": 4,
             }
+            # Refresh from DB to get grants_found and other counts set by Django API
+            scrape_log.refresh_from_db()
             if result.get("success"):
                 scrape_log.status = 'success'
             else:
@@ -202,6 +210,7 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         except Exception as e:
+            scrape_log.refresh_from_db()
             scrape_log.status = 'error'
             scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
@@ -238,6 +247,8 @@ if CELERY_TASKS_AVAILABLE:
                 "chain_position": 4,
                 "chain_total": 4,
             }
+            # Refresh from DB to get grants_found and other counts set by Django API
+            scrape_log.refresh_from_db()
             if result.get("success"):
                 scrape_log.status = 'success'
             else:
@@ -246,6 +257,7 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         except Exception as e:
+            scrape_log.refresh_from_db()
             scrape_log.status = 'error'
             scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()

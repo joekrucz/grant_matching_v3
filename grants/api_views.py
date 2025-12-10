@@ -51,6 +51,11 @@ def upsert_grants(request):
         log_id = data.get('log_id')
         grants_found = data.get('grants_found')  # Get grants_found from payload
         
+        # Debug logging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"upsert_grants: log_id={log_id}, grants_found={grants_found}, grants_data_length={len(grants_data)}")
+        
         if not grants_data:
             return JsonResponse({'error': 'grants array required'}, status=400)
         
