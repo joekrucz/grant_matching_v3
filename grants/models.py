@@ -90,9 +90,14 @@ class Grant(models.Model):
         return hashlib.sha256(hash_string.encode()).hexdigest()
     
     @classmethod
-    def upsert_from_payload(cls, grants_data, log_id=None):
+    def upsert_from_payload(cls, grants_data, log_id=None, grants_found=None):
         """
         Upsert grants from a list of grant dictionaries.
+        
+        Args:
+            grants_data: List of grant dictionaries to upsert
+            log_id: Optional ScrapeLog ID to update
+            grants_found: Optional number of grants found (if not provided, uses len(grants_data))
         
         Returns dict with 'created', 'updated', 'skipped' counts.
         """
@@ -179,8 +184,9 @@ class Grant(models.Model):
                 # Import here to avoid circular dependency
                 from grants.models import ScrapeLog
                 scrape_log = ScrapeLog.objects.get(id=log_id)
-                grants_found = len(grants_data)  # Total grants found before upserting
-                scrape_log.grants_found = grants_found
+                # Use provided grants_found, or fall back to len(grants_data)
+                grants_found_count = grants_found if grants_found is not None else len(grants_data)
+                scrape_log.grants_found = grants_found_count
                 scrape_log.grants_created = created
                 scrape_log.grants_updated = updated
                 scrape_log.grants_skipped = skipped

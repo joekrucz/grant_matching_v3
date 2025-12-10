@@ -49,11 +49,12 @@ def upsert_grants(request):
         data = json.loads(request.body)
         grants_data = data.get('grants', [])
         log_id = data.get('log_id')
+        grants_found = data.get('grants_found')  # Get grants_found from payload
         
         if not grants_data:
             return JsonResponse({'error': 'grants array required'}, status=400)
         
-        result = Grant.upsert_from_payload(grants_data, log_id=log_id)
+        result = Grant.upsert_from_payload(grants_data, log_id=log_id, grants_found=grants_found)
         
         return JsonResponse({
             'success': True,

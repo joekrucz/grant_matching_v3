@@ -48,7 +48,7 @@ def _post_to_django(grants: List[Dict[str, Any]], log_id: Optional[int] = None) 
       "Content-Type": "application/json",
   }
 
-  payload = {"grants": grants}
+  payload = {"grants": grants, "grants_found": len(grants)}
   if log_id:
     payload["log_id"] = log_id
 
