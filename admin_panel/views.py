@@ -13,9 +13,18 @@ from grants_aggregator import CELERY_AVAILABLE
 
 # Import tasks only if Celery is available
 if CELERY_AVAILABLE:
-    from .tasks import trigger_ukri_scrape, refresh_companies_house_data
+    from .tasks import (
+        trigger_ukri_scrape,
+        trigger_nihr_scrape,
+        trigger_catapult_scrape,
+        trigger_innovate_uk_scrape,
+        refresh_companies_house_data,
+    )
 else:
     trigger_ukri_scrape = None
+    trigger_nihr_scrape = None
+    trigger_catapult_scrape = None
+    trigger_innovate_uk_scrape = None
     refresh_companies_house_data = None
 
 
@@ -145,6 +154,48 @@ def run_scrapers(request):
         return redirect('admin_panel:scrape_logs')
     
     return redirect('admin_panel:dashboard')
+
+
+def _queue_single_scraper(request, task, source_label):
+    """Helper to enqueue a single scraper task with messaging."""
+    import logging
+    logger = logging.getLogger(__name__)
+    if request.method != 'POST':
+        return redirect('admin_panel:dashboard')
+    if not CELERY_AVAILABLE or task is None or not hasattr(task, 'delay'):
+        messages.error(request, f'Celery not available or task missing for {source_label}.')
+        return redirect('admin_panel:dashboard')
+    try:
+        result = task.delay()
+        messages.success(request, f'{source_label} scraper triggered (Task ID: {result.id}).')
+    except Exception as e:
+        logger.error(f"Error triggering {source_label} scraper: {e}", exc_info=True)
+        messages.error(request, f'Failed to trigger {source_label} scraper: {e}')
+    return redirect('admin_panel:scrape_logs')
+
+
+@login_required
+@admin_required
+def run_ukri_scraper(request):
+    return _queue_single_scraper(request, trigger_ukri_scrape, "UKRI")
+
+
+@login_required
+@admin_required
+def run_nihr_scraper(request):
+    return _queue_single_scraper(request, trigger_nihr_scrape, "NIHR")
+
+
+@login_required
+@admin_required
+def run_catapult_scraper(request):
+    return _queue_single_scraper(request, trigger_catapult_scrape, "Catapult")
+
+
+@login_required
+@admin_required
+def run_innovate_uk_scraper(request):
+    return _queue_single_scraper(request, trigger_innovate_uk_scrape, "Innovate UK")
 
 
 @login_required

@@ -321,6 +321,24 @@
             <p class="text-sm text-base-content/60 mt-2">
                 Triggers sequential scraper chain: UKRI → NIHR → Catapult → Innovate UK
             </p>
+            <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+                <form method="post" action="{% url 'admin_panel:run_ukri_scraper' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline btn-primary w-full">Run UKRI</button>
+                </form>
+                <form method="post" action="{% url 'admin_panel:run_nihr_scraper' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline btn-primary w-full">Run NIHR</button>
+                </form>
+                <form method="post" action="{% url 'admin_panel:run_catapult_scraper' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline btn-primary w-full">Run Catapult</button>
+                </form>
+                <form method="post" action="{% url 'admin_panel:run_innovate_uk_scraper' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline btn-primary w-full">Run Innovate UK</button>
+                </form>
+            </div>
             
             <!-- Progress indicator (hidden by default) -->
             <div id="scraper-status-alert" class="alert alert-info mt-4 hidden">
