@@ -93,6 +93,17 @@
     
     // Start polling if page loads and scrapers might be running
     document.addEventListener('DOMContentLoaded', function() {
+        // Confirmation dialog for Wipe All Grants button
+        const wipeGrantsForm = document.getElementById('wipe-grants-form');
+        if (wipeGrantsForm) {
+            wipeGrantsForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (confirm('⚠️ WARNING: This will permanently delete ALL grants from the database.\n\nThis action cannot be undone. Are you absolutely sure you want to continue?')) {
+                    this.submit();
+                }
+            });
+        }
+        
         // Check initial status
         fetch('/admin-panel/scraper_status')
             .then(response => response.json())
@@ -340,9 +351,9 @@
                 </form>
             </div>
             <div class="mt-4 max-w-xs">
-                <form method="post" action="{% url 'admin_panel:wipe_grants' %}">
+                <form method="post" action="{% url 'admin_panel:wipe_grants' %}" id="wipe-grants-form">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-error btn-outline w-full">
+                    <button type="submit" class="btn btn-error btn-outline w-full" id="wipe-grants-btn">
                         Wipe All Grants
                     </button>
                 </form>

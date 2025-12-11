@@ -36,6 +36,9 @@ db.sqlite3-journal
 .env
 .env.local
 
+# Backups (contain production data)
+backups/
+
 # IDE
 .vscode/
 .idea/

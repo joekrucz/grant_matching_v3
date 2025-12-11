@@ -22,7 +22,7 @@ DEBUG = env('DEBUG', default=False)
 
 # ALLOWED_HOSTS: Allow Railway domains by default
 # Railway provides RAILWAY_PUBLIC_DOMAIN or you can set ALLOWED_HOSTS manually
-default_hosts = ['localhost', '127.0.0.1']
+default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', 'web']
 
 # Check for Railway environment variables
 if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
