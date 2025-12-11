@@ -88,8 +88,25 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
               new_urls_on_page += 1
         
         # Detect explicit "next" pagination even if no new URLs were added (e.g., duplicates filtered)
-        next_link = soup.select_one("a[rel='next'], a[href*='page='][aria-label*='Next'], .pagination a.next")
-        has_next = next_link is not None
+        def has_next_page(soup: BeautifulSoup) -> bool:
+          selectors = [
+              "a[rel='next']",
+              "a[href*='page='][aria-label*='Next']",
+              ".pagination a.next",
+              ".govuk-pagination__link--next",
+              ".moj-pagination__link--next",
+          ]
+          for sel in selectors:
+            if soup.select_one(sel):
+              return True
+          # Fallback: any link whose text contains "next" (case-insensitive)
+          for link in soup.find_all("a"):
+            text = link.get_text(strip=True).lower()
+            if "next" in text:
+              return True
+          return False
+
+        has_next = has_next_page(soup)
         
         if new_urls_on_page > 0 or has_next:
           print(f"  Page {page}: Found {new_urls_on_page} new competitions (total: {len(all_competition_urls)})")
