@@ -32,15 +32,12 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
     # Collect all competition URLs
     seen_urls = set()
     all_competition_urls = []
-    page = 1
+    # Pagination: first page is base URL, second page is ?page=1 (0-based index in param)
+    page = 0
     max_pages = 50  # Safety limit
     
-    while page <= max_pages:
-      # The search page uses pagination - check if there's a page parameter
-      if page == 1:
-        url = base_url
-      else:
-        url = f"{base_url}?page={page}"
+    while page < max_pages:
+      url = base_url if page == 0 else f"{base_url}?page={page}"
       
       try:
         print(f"Fetching Innovate UK competitions page {page} from {url}...")
