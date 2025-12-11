@@ -166,7 +166,7 @@ def _queue_single_scraper(request, task, source_label):
         messages.error(request, f'Celery not available or task missing for {source_label}.')
         return redirect('admin_panel:dashboard')
     try:
-        result = task.delay()
+        result = task.delay(None, False)  # chain_started_at_str=None, continue_chain=False
         messages.success(request, f'{source_label} scraper triggered (Task ID: {result.id}).')
     except Exception as e:
         logger.error(f"Error triggering {source_label} scraper: {e}", exc_info=True)

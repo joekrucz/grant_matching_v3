@@ -79,15 +79,16 @@ def _extract_counts(data):
 
 if CELERY_TASKS_AVAILABLE:
     @shared_task
-    def trigger_ukri_scrape():
-        """Trigger UKRI scraper and chain to NIHR."""
+    def trigger_ukri_scrape(chain_started_at_str=None, continue_chain=True):
+        """Trigger UKRI scraper and optionally chain to NIHR."""
         logger.info("trigger_ukri_scrape task started")
-        chain_started_at = timezone.now()
+        chain_started_at = timezone.now() if chain_started_at_str is None else timezone.datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00'))
+        chain_total = 4 if continue_chain else 1
         scrape_log = ScrapeLog.objects.create(
             source='ukri',
             status='running',
             started_at=chain_started_at,
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 1, 'chain_total': 4}
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 1, 'chain_total': chain_total}
         )
         logger.info(f"Created ScrapeLog with ID: {scrape_log.id}")
         
@@ -104,7 +105,7 @@ if CELERY_TASKS_AVAILABLE:
                 "counts": counts,
                 "chain_started_at": chain_started_at.isoformat(),
                 "chain_position": 1,
-                "chain_total": 4,
+                "chain_total": chain_total,
             }
             # Refresh from DB to get grants_found and other counts set by Django API
             scrape_log.refresh_from_db()
@@ -122,20 +123,22 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         finally:
-            # Always trigger next scraper even if this one failed
-            trigger_nihr_scrape.delay(chain_started_at.isoformat())
+            # Always trigger next scraper if chaining
+            if continue_chain:
+                trigger_nihr_scrape.delay(chain_started_at.isoformat(), continue_chain=True)
 
 
     @shared_task
-    def trigger_nihr_scrape(chain_started_at_str=None):
-        """Trigger NIHR scraper and chain to Catapult."""
+    def trigger_nihr_scrape(chain_started_at_str=None, continue_chain=True):
+        """Trigger NIHR scraper and optionally chain to Catapult."""
         from datetime import datetime
         chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
+        chain_total = 4 if continue_chain else 1
         scrape_log = ScrapeLog.objects.create(
             source='nihr',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 2, 'chain_total': 4}
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 2, 'chain_total': chain_total}
         )
         
         try:
@@ -151,7 +154,7 @@ if CELERY_TASKS_AVAILABLE:
                 "counts": counts,
                 "chain_started_at": chain_started_at.isoformat(),
                 "chain_position": 2,
-                "chain_total": 4,
+                "chain_total": chain_total,
             }
             # Refresh from DB to get grants_found and other counts set by Django API
             scrape_log.refresh_from_db()
@@ -169,20 +172,22 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         finally:
-            # Always trigger next scraper even if this one failed
-            trigger_catapult_scrape.delay(chain_started_at_str)
+            # Always trigger next scraper if chaining
+            if continue_chain:
+                trigger_catapult_scrape.delay(chain_started_at_str, continue_chain=True)
 
 
     @shared_task
-    def trigger_catapult_scrape(chain_started_at_str=None):
-        """Trigger Catapult scraper and chain to Innovate UK."""
+    def trigger_catapult_scrape(chain_started_at_str=None, continue_chain=True):
+        """Trigger Catapult scraper and optionally chain to Innovate UK."""
         from datetime import datetime
         chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
+        chain_total = 4 if continue_chain else 1
         scrape_log = ScrapeLog.objects.create(
             source='catapult',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 3, 'chain_total': 4}
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 3, 'chain_total': chain_total}
         )
         
         try:
@@ -198,7 +203,7 @@ if CELERY_TASKS_AVAILABLE:
                 "counts": counts,
                 "chain_started_at": chain_started_at.isoformat(),
                 "chain_position": 3,
-                "chain_total": 4,
+                "chain_total": chain_total,
             }
             # Refresh from DB to get grants_found and other counts set by Django API
             scrape_log.refresh_from_db()
@@ -216,20 +221,22 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
         finally:
-            # Always trigger next scraper even if this one failed
-            trigger_innovate_uk_scrape.delay(chain_started_at_str)
+            # Always trigger next scraper if chaining
+            if continue_chain:
+                trigger_innovate_uk_scrape.delay(chain_started_at_str, continue_chain=True)
 
 
     @shared_task
-    def trigger_innovate_uk_scrape(chain_started_at_str=None):
-        """Trigger Innovate UK scraper (last in chain)."""
+    def trigger_innovate_uk_scrape(chain_started_at_str=None, continue_chain=True):
+        """Trigger Innovate UK scraper (last in chain or standalone)."""
         from datetime import datetime
         chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
+        chain_total = 4 if continue_chain else 1
         scrape_log = ScrapeLog.objects.create(
             source='innovate_uk',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 4, 'chain_total': 4}
+            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 4, 'chain_total': chain_total}
         )
         
         try:
