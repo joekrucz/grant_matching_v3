@@ -56,11 +56,20 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
       
       print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
       try:
-        resp = fetch_with_retry(session, url_to_fetch, timeout=30)
+        # Use browser-like headers to avoid 405
+        headers = {
+            "User-Agent": session.headers.get("User-Agent"),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": session.headers.get("Accept-Language", "en-GB,en;q=0.9"),
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Referer": listing_url,
+        }
+        resp = fetch_with_retry(session, url_to_fetch, timeout=30, headers=headers)
       except Exception as e:
         # Some NIHR pages return 405 to default clients; retry with direct session GET
         print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
-        resp = session.get(url_to_fetch, timeout=30)
+        resp = session.get(url_to_fetch, timeout=30, headers=headers)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         
