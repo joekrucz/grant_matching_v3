@@ -54,16 +54,15 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
       else:
         url_to_fetch = f"{listing_url}?page={page - 1}"
       
+      print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
       try:
-        print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
-        try:
-          resp = fetch_with_retry(session, url_to_fetch, timeout=30)
-        except Exception as e:
-          # Some NIHR pages return 405 to default clients; retry with direct session GET
-          print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
-          resp = session.get(url_to_fetch, timeout=30)
-          resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
+        resp = fetch_with_retry(session, url_to_fetch, timeout=30)
+      except Exception as e:
+        # Some NIHR pages return 405 to default clients; retry with direct session GET
+        print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
+        resp = session.get(url_to_fetch, timeout=30)
+        resp.raise_for_status()
+      soup = BeautifulSoup(resp.text, "html.parser")
         
         # Method 1: Find links with /funding/ in the URL, or /node/ pages that might be grants
         funding_links = soup.select("a[href*='/funding/'], a[href*='/node/']")
