@@ -87,13 +87,17 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
               all_competition_urls.append((title, href))
               new_urls_on_page += 1
         
-        if new_urls_on_page > 0:
+        # Detect explicit "next" pagination even if no new URLs were added (e.g., duplicates filtered)
+        next_link = soup.select_one("a[rel='next'], a[href*='page='][aria-label*='Next'], .pagination a.next")
+        has_next = next_link is not None
+        
+        if new_urls_on_page > 0 or has_next:
           print(f"  Page {page}: Found {new_urls_on_page} new competitions (total: {len(all_competition_urls)})")
           page += 1
           time.sleep(1)  # Throttle between pages
         else:
-          # No competitions found on this page, we've reached the end
-          print(f"  Page {page}: No competitions found, reached end of pagination")
+          # No competitions found on this page and no next link, end pagination
+          print(f"  Page {page}: No competitions found and no next link, reached end of pagination")
           break
       except Exception as e:
         print(f"Error fetching page {page} ({url}): {e}")

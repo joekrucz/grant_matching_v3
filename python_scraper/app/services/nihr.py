@@ -26,6 +26,11 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
   listing_url = "https://www.nihr.ac.uk/researchers/funding-opportunities/"
   
   session = create_session()
+  # NIHR blocks some default clients; use a realistic browser User-Agent
+  session.headers.update({
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept-Language": "en-GB,en;q=0.9",
+  })
   
   existing_count = len(existing_grants)
   if existing_count > 0:
@@ -51,7 +56,13 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
       
       try:
         print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
-        resp = fetch_with_retry(session, url_to_fetch, timeout=30)
+        try:
+          resp = fetch_with_retry(session, url_to_fetch, timeout=30)
+        except Exception as e:
+          # Some NIHR pages return 405 to default clients; retry with direct session GET
+          print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
+          resp = session.get(url_to_fetch, timeout=30)
+          resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         
         # Method 1: Find links with /funding/ in the URL, or /node/ pages that might be grants
