@@ -136,71 +136,122 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
         )
         description = desc_el.get_text("\n", strip=True) if desc_el else ""
         
-        # Extract structured sections from detail page
-        sections = {}
+        # Extract structured sections prioritizing the known tab structure
+        sections: Dict[str, str] = {}
         summary_from_sections = None
         
-        if desc_el:
-          # Look for headings (h2, h3) to identify sections
+        def normalize_key(text: str) -> str:
+          return text.lower().strip().replace(" ", "_")
+        
+        desired_tabs = [
+            ("summary", ["summary", "overview"]),
+            ("eligibility", ["eligibility", "who_can_apply", "who_can_apply?"]),
+            ("scope", ["scope"]),
+            ("dates", ["dates", "key_dates", "timeline"]),
+            ("how_to_apply", ["how_to_apply", "how_to_apply?", "apply"]),
+            ("supporting_information", ["supporting_information", "supporting_info"]),
+        ]
+        
+        def extract_tabs_from_panels(soup: BeautifulSoup) -> Dict[str, str]:
+          tab_sections: Dict[str, str] = {}
+          # Common tab panel selectors used on GOV.UK/IFS pages
+          panels = soup.select("[role='tabpanel'], .govuk-tabs__panel, .ifs-tabs__panel, .tabs__panel")
+          if not panels:
+            return tab_sections
+          
+          for panel in panels:
+            # Try heading first
+            heading_el = panel.find(["h2", "h3"])
+            heading_text = heading_el.get_text(strip=True) if heading_el else ""
+            key = None
+            norm_heading = normalize_key(heading_text)
+            for desired_key, aliases in desired_tabs:
+              if norm_heading in aliases:
+                key = desired_key
+                break
+            # If no heading match, try aria-labelledby or id lookup via tab anchors
+            if not key:
+              labelled_by = panel.get("aria-labelledby")
+              if labelled_by:
+                label_el = soup.select_one(f"#{labelled_by}")
+                if label_el:
+                  label_text = label_el.get_text(strip=True)
+                  norm_label = normalize_key(label_text)
+                  for desired_key, aliases in desired_tabs:
+                    if norm_label in aliases:
+                      key = desired_key
+                      break
+            # Fallback: look for data attributes
+            if not key:
+              data_tab = panel.get("data-tab") or panel.get("data-title")
+              if data_tab:
+                norm_tab = normalize_key(data_tab)
+                for desired_key, aliases in desired_tabs:
+                  if norm_tab in aliases:
+                    key = desired_key
+                    break
+            if not key:
+              continue
+            content_text = panel.get_text("\n", strip=True)
+            if content_text:
+              tab_sections[key] = content_text
+          return tab_sections
+        
+        # 1) Try to extract using explicit tab panels
+        sections = extract_tabs_from_panels(detail_soup)
+        
+        # 2) Fallback to heading-based parsing if tabs weren't found
+        if not sections and desc_el:
           headings = desc_el.find_all(["h2", "h3"])
           current_section = None
           current_content = []
           
-          # Process all elements in the description area
           for element in desc_el.descendants:
             if element.name in ["h2", "h3"]:
-              # Save previous section
               if current_section and current_content:
                 sections[current_section] = "\n".join(current_content).strip()
-              # Start new section
               heading_text = element.get_text(strip=True).lower()
               current_section = None
               
-              # Identify section type by heading text
-              if any(word in heading_text for word in ["overview", "summary", "introduction", "about", "background"]):
-                current_section = "overview"
+              if any(word in heading_text for word in ["summary", "overview", "introduction", "about", "background"]):
+                current_section = "summary"
               elif any(word in heading_text for word in ["eligibility", "who can apply", "who is eligible", "who should apply"]):
                 current_section = "eligibility"
+              elif any(word in heading_text for word in ["scope", "aims", "objectives"]):
+                current_section = "scope"
               elif any(word in heading_text for word in ["funding", "budget", "cost", "financial", "value"]):
                 current_section = "funding"
               elif any(word in heading_text for word in ["application", "how to apply", "apply", "submission", "submitting"]):
                 current_section = "how_to_apply"
               elif any(word in heading_text for word in ["deadline", "closing", "dates", "timeline", "schedule", "key dates", "opens", "closes"]):
                 current_section = "dates"
-              elif any(word in heading_text for word in ["assessment", "evaluation", "review", "criteria", "selection"]):
-                current_section = "assessment"
-              elif any(word in heading_text for word in ["contact", "enquiries", "questions", "further information"]):
-                current_section = "contact"
-              elif any(word in heading_text for word in ["terms", "conditions", "requirements", "guidance"]):
-                current_section = "terms"
-              elif any(word in heading_text for word in ["scope", "aims", "objectives"]):
-                current_section = "scope"
+              elif any(word in heading_text for word in ["supporting information", "supporting", "guidance"]):
+                current_section = "supporting_information"
               else:
-                # Use heading as section name (normalized)
                 current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
               current_content = []
             elif element.name in ["p", "div", "li", "ul", "ol"] and current_section:
               text = element.get_text(strip=True)
-              if text and len(text) > 10:  # Skip very short text
+              if text and len(text) > 10:
                 current_content.append(text)
           
-          # Save last section
           if current_section and current_content:
             sections[current_section] = "\n".join(current_content).strip()
           
-          # If no sections found via headings, try to split by common patterns
           if not sections and description:
             paragraphs = [p.strip() for p in description.split("\n") if p.strip() and len(p.strip()) > 20]
             if paragraphs:
-              sections["overview"] = "\n\n".join(paragraphs[:3])  # First 3 paragraphs as overview
+              sections["summary"] = "\n\n".join(paragraphs[:3])
               if len(paragraphs) > 3:
-                sections["additional_information"] = "\n\n".join(paragraphs[3:])
+                sections["supporting_information"] = "\n\n".join(paragraphs[3:])
               summary_from_sections = paragraphs[0][:200] + "..." if len(paragraphs[0]) > 200 else paragraphs[0]
         
         # Extract summary from meta description or first section
         summary_el = detail_soup.select_one("meta[name='description']")
         if summary_el and summary_el.get("content"):
           summary = summary_el["content"]
+        elif sections.get("summary"):
+          summary = sections["summary"][:200] + "..." if len(sections["summary"]) > 200 else sections["summary"]
         elif summary_from_sections:
           summary = summary_from_sections
         elif sections.get("overview"):
@@ -270,7 +321,18 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
         if sections:
           # Build formatted description with clear section headings
           formatted_parts = []
-          section_order = ["overview", "scope", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
+          section_order = [
+              "summary",
+              "eligibility",
+              "scope",
+              "dates",
+              "how_to_apply",
+              "supporting_information",
+              "funding",
+              "assessment",
+              "contact",
+              "terms",
+          ]
           
           for section_key in section_order:
             if section_key in sections:
