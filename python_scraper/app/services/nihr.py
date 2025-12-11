@@ -62,101 +62,101 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
         resp = session.get(url_to_fetch, timeout=30)
         resp.raise_for_status()
-      soup = BeautifulSoup(resp.text, "html.parser")
-      
-      # Method 1: Find links with /funding/ in the URL, or /node/ pages that might be grants
-      funding_links = soup.select("a[href*='/funding/'], a[href*='/node/']")
-      
-      new_urls_on_page = 0
-      for link in funding_links:
-        href = link.get("href", "")
-        if not href:
-          continue
-        if href.startswith("/"):
-          href = f"https://www.nihr.ac.uk{href}"
-        elif not href.startswith("http"):
-          continue
+        soup = BeautifulSoup(resp.text, "html.parser")
         
-        # Skip if it's the main funding opportunities page or pagination links
-        if href == listing_url or "/funding-opportunities" in href or "?page=" in href:
-          continue
+        # Method 1: Find links with /funding/ in the URL, or /node/ pages that might be grants
+        funding_links = soup.select("a[href*='/funding/'], a[href*='/node/']")
         
-        # For /node/ links, include them if they have numeric IDs (likely grant pages)
-        # and are on the funding opportunities page
-        if "/node/" in href and "/funding/" not in href:
-          # Check if it's a numeric node ID (like /node/74786)
-          node_match = re.search(r'/node/(\d+)', href)
-          if node_match:
-            # It's a numeric node ID, likely a grant page - include it
-            # Try to get title from nearby heading or link context
+        new_urls_on_page = 0
+        for link in funding_links:
+          href = link.get("href", "")
+          if not href:
+            continue
+          if href.startswith("/"):
+            href = f"https://www.nihr.ac.uk{href}"
+          elif not href.startswith("http"):
+            continue
+          
+          # Skip if it's the main funding opportunities page or pagination links
+          if href == listing_url or "/funding-opportunities" in href or "?page=" in href:
+            continue
+          
+          # For /node/ links, include them if they have numeric IDs (likely grant pages)
+          # and are on the funding opportunities page
+          if "/node/" in href and "/funding/" not in href:
+            # Check if it's a numeric node ID (like /node/74786)
+            node_match = re.search(r'/node/(\d+)', href)
+            if node_match:
+              # It's a numeric node ID, likely a grant page - include it
+              # Try to get title from nearby heading or link context
+              parent = link.find_parent(["article", "div", "li", "section", "main"])
+              if parent:
+                heading = parent.select_one("h2, h3, h4")
+                if heading:
+                  heading_text = heading.get_text(strip=True)
+                  # Use heading if it looks like a grant title
+                  if len(heading_text) > 15 and "filter" not in heading_text.lower():
+                    # We'll use this heading text as the title
+                    pass
+            else:
+              # Not a numeric node ID, skip it
+              continue
+          
+          # Skip if we've seen this URL
+          if href in seen_urls:
+            continue
+          seen_urls.add(href)
+          
+          # Get title from link text or nearby heading
+          title = link.get_text(strip=True)
+          
+          # For /node/ links, the link text is often empty, so look for nearby heading
+          if not title or len(title) < 10 or ("/node/" in href and "/funding/" not in href):
+            # Try to find a nearby heading
             parent = link.find_parent(["article", "div", "li", "section", "main"])
             if parent:
               heading = parent.select_one("h2, h3, h4")
               if heading:
                 heading_text = heading.get_text(strip=True)
-                # Use heading if it looks like a grant title
-                if len(heading_text) > 15 and "filter" not in heading_text.lower():
-                  # We'll use this heading text as the title
-                  pass
-          else:
-            # Not a numeric node ID, skip it
-            continue
-        
-        # Skip if we've seen this URL
-        if href in seen_urls:
-          continue
-        seen_urls.add(href)
-        
-        # Get title from link text or nearby heading
-        title = link.get_text(strip=True)
-        
-        # For /node/ links, the link text is often empty, so look for nearby heading
-        if not title or len(title) < 10 or ("/node/" in href and "/funding/" not in href):
-          # Try to find a nearby heading
-          parent = link.find_parent(["article", "div", "li", "section", "main"])
-          if parent:
-            heading = parent.select_one("h2, h3, h4")
-            if heading:
-              heading_text = heading.get_text(strip=True)
-              if len(heading_text) > 10:
-                title = heading_text
-            # If still no title, check siblings
-            if (not title or len(title) < 10) and parent:
-              # Look for headings in the same parent
-              all_headings = parent.select("h2, h3, h4")
-              for h in all_headings:
-                h_text = h.get_text(strip=True)
-                if len(h_text) > 15 and "filter" not in h_text.lower() and "funding opportunities" not in h_text.lower():
-                  title = h_text
-                  break
-        
-        if title and len(title) > 10 and title.lower() not in ["find a funding opportunity", "our funding programmes", "funding opportunities", "next page", "current page"]:
-          # Check if this grant has "Open" status by looking at the parent element
-          parent = link.find_parent(["article", "div", "li", "section", "main"])
-          status = "unknown"
-          if parent:
-            # Look for status indicators in the parent element
-            parent_text = parent.get_text()
-            # Check for status: open, status:closed, or status badges
-            if re.search(r"status[:\s]*open", parent_text, re.IGNORECASE):
-              status = "open"
-            elif re.search(r"status[:\s]*closed", parent_text, re.IGNORECASE):
-              status = "closed"
-            else:
-              # Look for status badge elements
-              status_badge = parent.select_one('[class*="status"], [class*="badge"]')
-              if status_badge:
-                badge_text = status_badge.get_text(strip=True).lower()
-                if "open" in badge_text:
-                  status = "open"
-                elif "closed" in badge_text:
-                  status = "closed"
+                if len(heading_text) > 10:
+                  title = heading_text
+              # If still no title, check siblings
+              if (not title or len(title) < 10) and parent:
+                # Look for headings in the same parent
+                all_headings = parent.select("h2, h3, h4")
+                for h in all_headings:
+                  h_text = h.get_text(strip=True)
+                  if len(h_text) > 15 and "filter" not in h_text.lower() and "funding opportunities" not in h_text.lower():
+                    title = h_text
+                    break
           
-          # Only include grants with "Open" status
-          if status == "open":
-            all_opportunity_urls.append((title, href))
-            new_urls_on_page += 1
-      
+          if title and len(title) > 10 and title.lower() not in ["find a funding opportunity", "our funding programmes", "funding opportunities", "next page", "current page"]:
+            # Check if this grant has "Open" status by looking at the parent element
+            parent = link.find_parent(["article", "div", "li", "section", "main"])
+            status = "unknown"
+            if parent:
+              # Look for status indicators in the parent element
+              parent_text = parent.get_text()
+              # Check for status: open, status:closed, or status badges
+              if re.search(r"status[:\s]*open", parent_text, re.IGNORECASE):
+                status = "open"
+              elif re.search(r"status[:\s]*closed", parent_text, re.IGNORECASE):
+                status = "closed"
+              else:
+                # Look for status badge elements
+                status_badge = parent.select_one('[class*="status"], [class*="badge"]')
+                if status_badge:
+                  badge_text = status_badge.get_text(strip=True).lower()
+                  if "open" in badge_text:
+                    status = "open"
+                  elif "closed" in badge_text:
+                    status = "closed"
+            
+            # Only include grants with "Open" status
+            if status == "open":
+              all_opportunity_urls.append((title, href))
+              new_urls_on_page += 1
+        
         # Method 2: Find headings that might be funding opportunities and look for associated links
         headings = soup.select("h2, h3")
         for heading in headings:
@@ -229,7 +229,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         
         page += 1
         time.sleep(1)  # Throttle between pages
-    
+        
     
     pages_fetched = max(page - 1, 0)
     print(f"Found {len(all_opportunity_urls)} total NIHR opportunities across {pages_fetched} page(s)")
