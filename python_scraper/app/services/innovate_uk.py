@@ -141,26 +141,45 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
         summary_from_sections = None
         
         def normalize_key(text: str) -> str:
-          return text.lower().strip().replace(" ", "_")
+          return text.lower().strip().replace(" ", "_").replace("-", "_")
         
         desired_tabs = [
             ("summary", ["summary", "overview"]),
             ("eligibility", ["eligibility", "who_can_apply", "who_can_apply?"]),
             ("scope", ["scope"]),
             ("dates", ["dates", "key_dates", "timeline"]),
-            ("how_to_apply", ["how_to_apply", "how_to_apply?", "apply"]),
+            ("how_to_apply", ["how_to_apply", "how_to_apply?", "apply", "how-to-apply"]),
             ("supporting_information", ["supporting_information", "supporting_info"]),
         ]
+        tab_ids = ["summary", "eligibility", "scope", "dates", "how-to-apply", "supporting-information"]
+        
+        def extract_by_anchor_ids(soup: BeautifulSoup) -> Dict[str, str]:
+          tab_sections: Dict[str, str] = {}
+          for tab_id in tab_ids:
+            anchor = soup.select_one(f"*[id='{tab_id}']")
+            if not anchor:
+              continue
+            content_parts = []
+            for sibling in anchor.next_siblings:
+              if getattr(sibling, "name", None) in ["h2", "h3"] and sibling.get("id") in tab_ids:
+                break
+              if getattr(sibling, "name", None) in ["h2", "h3"] and normalize_key(sibling.get_text(strip=True)) in [i.replace("-", "_") for i in tab_ids]:
+                break
+              text = getattr(sibling, "get_text", lambda *a, **k: "")("\n", strip=True)
+              if text and len(text) > 3:
+                content_parts.append(text)
+            key = normalize_key(tab_id)
+            if content_parts:
+              tab_sections[key] = "\n".join(content_parts).strip()
+          return tab_sections
         
         def extract_tabs_from_panels(soup: BeautifulSoup) -> Dict[str, str]:
           tab_sections: Dict[str, str] = {}
-          # Common tab panel selectors used on GOV.UK/IFS pages
           panels = soup.select("[role='tabpanel'], .govuk-tabs__panel, .ifs-tabs__panel, .tabs__panel")
           if not panels:
             return tab_sections
           
           for panel in panels:
-            # Try heading first
             heading_el = panel.find(["h2", "h3"])
             heading_text = heading_el.get_text(strip=True) if heading_el else ""
             key = None
@@ -169,7 +188,6 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
               if norm_heading in aliases:
                 key = desired_key
                 break
-            # If no heading match, try aria-labelledby or id lookup via tab anchors
             if not key:
               labelled_by = panel.get("aria-labelledby")
               if labelled_by:
@@ -181,7 +199,6 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
                     if norm_label in aliases:
                       key = desired_key
                       break
-            # Fallback: look for data attributes
             if not key:
               data_tab = panel.get("data-tab") or panel.get("data-title")
               if data_tab:
@@ -197,10 +214,14 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
               tab_sections[key] = content_text
           return tab_sections
         
-        # 1) Try to extract using explicit tab panels
-        sections = extract_tabs_from_panels(detail_soup)
+        # 1) Try to extract using anchor IDs (tabs with hash links)
+        sections = extract_by_anchor_ids(detail_soup)
         
-        # 2) Fallback to heading-based parsing if tabs weren't found
+        # 2) If still empty, try explicit tab panels
+        if not sections:
+          sections = extract_tabs_from_panels(detail_soup)
+        
+        # 3) Fallback to heading-based parsing if nothing found
         if not sections and desc_el:
           headings = desc_el.find_all(["h2", "h3"])
           current_section = None
