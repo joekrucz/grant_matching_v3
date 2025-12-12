@@ -47,17 +47,8 @@
             </div>
             {% endif %}
         </div>
-        
-        {% if grant.summary %}
-        <div class="mb-6">
-            <h2 class="text-2xl font-semibold mb-2">Summary</h2>
-            <p class="whitespace-pre-wrap">{{ grant.summary }}</p>
-        </div>
-        {% endif %}
-        
         {% if grant.description %}
-        <div class="mb-6">
-            <h2 class="text-2xl font-semibold mb-4">Description</h2>
+        <div class="mb-6 space-y-3">
             {% if sections_list %}
                 {# Render grants with structured sections (Catapult, NIHR, etc.) #}
                 <div class="space-y-3">
