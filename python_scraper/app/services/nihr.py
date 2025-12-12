@@ -54,7 +54,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
       else:
         url_to_fetch = f"{listing_url}?page={page - 1}"
       
-      print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
+        print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
       try:
         # Use browser-like headers to avoid 405
         headers = {

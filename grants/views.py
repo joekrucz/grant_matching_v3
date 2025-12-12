@@ -71,6 +71,9 @@ def grant_detail(request, slug):
             section_order = ["overview", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
         elif grant.source == 'ukri':
             section_order = ["overview", "scope", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
+        elif grant.source == 'innovate_uk':
+            # Matches Innovate UK site tab order
+            section_order = ["summary", "eligibility", "scope", "dates", "how_to_apply", "supporting_information", "funding", "assessment", "contact", "terms"]
         else:
             section_order = ["overview"]  # Default order
         
