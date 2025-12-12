@@ -110,7 +110,7 @@ if CELERY_TASKS_AVAILABLE:
             # Refresh from DB to get grants_found and other counts set by Django API
             scrape_log.refresh_from_db()
             if result.get("success"):
-            scrape_log.status = 'success'
+                scrape_log.status = 'success'
             else:
                 scrape_log.status = 'error'
                 scrape_log.error_message = result.get("error")
@@ -159,7 +159,7 @@ if CELERY_TASKS_AVAILABLE:
             # Refresh from DB to get grants_found and other counts set by Django API
             scrape_log.refresh_from_db()
             if result.get("success"):
-            scrape_log.status = 'success'
+                scrape_log.status = 'success'
             else:
                 scrape_log.status = 'error'
                 scrape_log.error_message = result.get("error")
@@ -257,7 +257,7 @@ if CELERY_TASKS_AVAILABLE:
             # Refresh from DB to get grants_found and other counts set by Django API
             scrape_log.refresh_from_db()
             if result.get("success"):
-            scrape_log.status = 'success'
+                scrape_log.status = 'success'
             else:
                 scrape_log.status = 'error'
                 scrape_log.error_message = result.get("error")
