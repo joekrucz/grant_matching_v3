@@ -68,7 +68,8 @@ def grant_detail(request, slug):
         if grant.source == 'catapult':
             section_order = ["overview", "challenge", "eligibility", "ipec", "funding", "dates", "how_to_apply"]
         elif grant.source == 'nihr':
-            section_order = ["overview", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
+            # Matches NIHR site tab order
+            section_order = ["overview", "research_specification", "application_guidance", "application_process", "contact"]
         elif grant.source == 'ukri':
             section_order = ["overview", "scope", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
         elif grant.source == 'innovate_uk':

@@ -273,119 +273,179 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           detail_resp = fetch_with_retry(session, href, referer=listing_url, timeout=30)
           detail_soup = BeautifulSoup(detail_resp.text, "html.parser")
           
-          # Extract description and structured sections
-          desc_el = (
-              detail_soup.select_one("main") or
-              detail_soup.select_one(".content") or
-              detail_soup.select_one("article") or
-              detail_soup.select_one("div[class*='description']")
-          )
-          description = desc_el.get_text("\n", strip=True) if desc_el else ""
-          
-          # Extract structured sections from detail page
+          # Extract structured sections from tabbed content
+          # NIHR uses tabs with IDs like: tab-overview, tab-research-specification, etc.
           sections = {}
           summary_from_sections = None
           
-          if desc_el:
-            # Look for headings (h2, h3) to identify sections
-            headings = desc_el.find_all(["h2", "h3"])
-            current_section = None
-            current_content = []
+          # Map tab IDs to section keys
+          tab_mapping = {
+              "tab-overview": "overview",
+              "tab-research-specification": "research_specification",
+              "tab-application-guidance": "application_guidance",
+              "tab-application-process": "application_process",
+              "tab-contact-details": "contact"
+          }
+          
+          # Extract content from each tab using a single method: heading-based parsing
+          tabs_found = []
+          for tab_id, section_key in tab_mapping.items():
+            # Find the actual tab content div, not the tab link
+            # Tab content is typically in a div with id="tab-overview" etc.
+            tab_el = detail_soup.select_one(f"div#{tab_id}, div[id='{tab_id}'], section#{tab_id}, [id='{tab_id}'].tab-pane")
+            # Also try finding by class if ID doesn't work
+            if not tab_el:
+              tab_el = detail_soup.select_one(f".tab-pane[id='{tab_id}'], .tab-content #{tab_id}")
+            # Last resort: find any element with this ID that's not a link
+            if not tab_el:
+              all_with_id = detail_soup.select(f"[id='{tab_id}']")
+              for el in all_with_id:
+                if el.name != 'a':  # Skip tab links
+                  tab_el = el
+                  break
             
-            # Process all elements in the description area
-            for element in desc_el.descendants:
-              if element.name in ["h2", "h3"]:
-                # Save previous section
-                if current_section and current_content:
-                  sections[current_section] = "\n".join(current_content).strip()
-                # Start new section
-                heading_text = element.get_text(strip=True).lower()
-                current_section = None
+            if tab_el:
+              tabs_found.append(tab_id)
+              
+              # Extract all content from the tab div
+              # Work directly with the found element
+              # Remove navigation and UI elements first
+              tab_work = BeautifulSoup(str(tab_el), "html.parser")
+              tab_div = tab_work.find(id=tab_id) or tab_work.find("div") or tab_work
+              
+              if tab_div:
+                # Remove navigation and UI elements
+                for nav in tab_div.select("nav, .pagerer, button.btn, script, style, .social-share"):
+                  nav.decompose()
                 
-                # Identify section type by heading text
-                if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
-                  current_section = "overview"
-                elif any(word in heading_text for word in ["eligibility", "who can apply", "who is eligible"]):
-                  current_section = "eligibility"
-                elif any(word in heading_text for word in ["funding", "budget", "cost", "financial"]):
-                  current_section = "funding"
-                elif any(word in heading_text for word in ["application", "how to apply", "apply", "submission"]):
-                  current_section = "how_to_apply"
-                elif any(word in heading_text for word in ["deadline", "closing", "dates", "timeline", "schedule"]):
-                  current_section = "dates"
-                elif any(word in heading_text for word in ["assessment", "evaluation", "review", "criteria"]):
-                  current_section = "assessment"
-                elif any(word in heading_text for word in ["contact", "enquiries", "questions"]):
-                  current_section = "contact"
-                elif any(word in heading_text for word in ["terms", "conditions", "requirements"]):
-                  current_section = "terms"
-                else:
-                  # Use heading as section name (normalized)
-                  current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
-                current_content = []
-              elif element.name in ["p", "div", "li", "ul", "ol"] and current_section:
-                text = element.get_text(strip=True)
-                if text and len(text) > 10:  # Skip very short text (likely navigation)
-                  current_content.append(text)
-            
-            # Save last section
-            if current_section and current_content:
-              sections[current_section] = "\n".join(current_content).strip()
-            
-            # If no sections found via headings, try to split by common patterns
-            if not sections and description:
-              # Try to identify sections by common NIHR page patterns
-              # Look for bold text or strong elements that might be section headers
-              strong_elements = desc_el.find_all(["strong", "b"])
-              if strong_elements:
-                current_section = None
-                current_content = []
-                for element in desc_el.descendants:
-                  if element.name in ["strong", "b"]:
-                    strong_text = element.get_text(strip=True).lower()
-                    if len(strong_text) > 5 and len(strong_text) < 50:
-                      # Might be a section header
-                      if current_section and current_content:
-                        sections[current_section] = "\n".join(current_content).strip()
-                      # Check if it matches known section patterns
-                      if any(word in strong_text for word in ["overview", "summary"]):
-                        current_section = "overview"
-                      elif any(word in strong_text for word in ["eligibility"]):
-                        current_section = "eligibility"
-                      elif any(word in strong_text for word in ["funding", "budget"]):
-                        current_section = "funding"
-                      elif any(word in strong_text for word in ["application", "apply"]):
-                        current_section = "how_to_apply"
-                      else:
-                        current_section = strong_text.replace(" ", "_")[:50]
-                      current_content = []
-                  elif element.name in ["p", "div"] and current_section:
-                    text = element.get_text(strip=True)
-                    if text and len(text) > 10:
-                      current_content.append(text)
+                # Get ALL text content from the tab div - simple approach
+                # This gets everything including nested content
+                combined_text = tab_div.get_text(separator="\n", strip=True)
                 
-                if current_section and current_content:
-                  sections[current_section] = "\n".join(current_content).strip()
+                # Fallback: try getting text without separator if separator version failed
+                if not combined_text or len(combined_text) < 10:
+                  raw_text = tab_div.get_text(strip=False)
+                  if raw_text and len(raw_text) > 10:
+                    # Use raw text if separator version failed
+                    combined_text = raw_text
+                
+                # Clean up: remove navigation text and excessive whitespace
+                if combined_text:
+                  lines = []
+                  skip_patterns = ["share", "download", "print", "previous section", "next section", "back to"]
+                  for line in combined_text.split("\n"):
+                    line = line.strip()
+                    # Keep meaningful lines, skip navigation
+                    if (len(line) > 2 and 
+                        not any(pattern in line.lower() for pattern in skip_patterns)):
+                      lines.append(line)
+                  
+                  combined_text = "\n".join(lines).strip()
+                  # Remove excessive blank lines
+                  combined_text = re.sub(r'\n{3,}', '\n\n', combined_text).strip()
+                
+                # Save the entire tab content as one section
+                if combined_text and len(combined_text) > 10:
+                  sections[section_key] = combined_text
+          
+          # Debug: Print what tabs were found
+          if tabs_found:
+            print(f"  Found {len(tabs_found)} tabs: {tabs_found} for {href}")
+          else:
+            print(f"  No tabs found for {href}, falling back to main content parsing")
+          
+          # Only use fallback if NO tabs were found at all
+          # If we found any tabs, only use those sections (some pages may only have 2-3 tabs)
+          if not tabs_found and not sections:
+            desc_el = (
+                detail_soup.select_one("main") or
+                detail_soup.select_one(".content") or
+                detail_soup.select_one("article") or
+                detail_soup.select_one("div[class*='description']")
+            )
             
-            # If still no sections, use first paragraph as overview
-            if not sections and description:
-              # Split description into paragraphs
-              paragraphs = [p.strip() for p in description.split("\n") if p.strip() and len(p.strip()) > 20]
-              if paragraphs:
-                sections["overview"] = "\n\n".join(paragraphs[:3])  # First 3 paragraphs as overview
-                if len(paragraphs) > 3:
-                  sections["additional_information"] = "\n\n".join(paragraphs[3:])
-                summary_from_sections = paragraphs[0][:200] + "..." if len(paragraphs[0]) > 200 else paragraphs[0]
+            if desc_el:
+              current_section = None
+              current_content = []
+              
+              # Process all elements using heading-based parsing only
+              for element in desc_el.descendants:
+                if element.name in ["h2", "h3"]:
+                  # Save previous section
+                  if current_section and current_content:
+                    sections[current_section] = "\n".join(current_content).strip()
+                    
+                  # Start new section
+                  heading_text = element.get_text(strip=True).lower()
+                  current_section = None
+                  
+                  # Identify section type by heading text
+                  if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
+                    current_section = "overview"
+                  elif any(word in heading_text for word in ["eligibility", "who can apply", "who is eligible"]):
+                    current_section = "eligibility"
+                  elif any(word in heading_text for word in ["funding", "budget", "cost", "financial"]):
+                    current_section = "funding"
+                  elif any(word in heading_text for word in ["application", "how to apply", "apply", "submission"]):
+                    current_section = "how_to_apply"
+                  elif any(word in heading_text for word in ["deadline", "closing", "dates", "timeline", "schedule"]):
+                    current_section = "dates"
+                  elif any(word in heading_text for word in ["assessment", "evaluation", "review", "criteria"]):
+                    current_section = "assessment"
+                  elif any(word in heading_text for word in ["contact", "enquiries", "questions"]):
+                    current_section = "contact"
+                  elif any(word in heading_text for word in ["terms", "conditions", "requirements"]):
+                    current_section = "terms"
+                  else:
+                    # Use heading as section name (normalized)
+                    current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
+                  current_content = []
+                elif element.name in ["p", "div", "li", "ul", "ol"] and current_section:
+                  text = element.get_text(strip=True)
+                  if text and len(text) > 10:  # Skip very short text (likely navigation)
+                    current_content.append(text)
+              
+              # Save last section
+              if current_section and current_content:
+                sections[current_section] = "\n".join(current_content).strip()
+            
+          # Build description from sections with proper ordering
+          description = ""
+          if sections:
+            formatted_parts = []
+            # Order matches NIHR site tab order
+            section_order = ["overview", "research_specification", "application_guidance", "application_process", "contact"]
+            
+            for section_key in section_order:
+              if section_key in sections and sections[section_key]:
+                section_title = section_key.replace("_", " ").title()
+                formatted_parts.append(f"## {section_title}\n\n{sections[section_key]}")
+            
+            # Add any remaining sections not in the standard order
+            for section_key, section_content in sections.items():
+              if section_key not in section_order and section_content:
+                section_title = section_key.replace("_", " ").title()
+                formatted_parts.append(f"## {section_title}\n\n{section_content}")
+            
+            description = "\n\n".join(formatted_parts)
+          else:
+            # Fallback: get all text from main content area
+            desc_el = (
+                detail_soup.select_one("main") or
+                detail_soup.select_one(".content") or
+                detail_soup.select_one("article")
+            )
+            description = desc_el.get_text("\n", strip=True) if desc_el else ""
           
           # Extract summary from meta description or first section
           summary_el = detail_soup.select_one("meta[name='description']")
           if summary_el and summary_el.get("content"):
             summary = summary_el["content"]
-          elif summary_from_sections:
-            summary = summary_from_sections
           elif sections.get("overview"):
             overview_text = sections["overview"]
-            summary = overview_text[:200] + "..." if len(overview_text) > 200 else overview_text
+            # Remove markdown headings from summary
+            summary = re.sub(r'^#+\s+', '', overview_text, flags=re.MULTILINE)
+            summary = summary[:200] + "..." if len(summary) > 200 else summary
           else:
             summary = description[:200] + "..." if len(description) > 200 else description
           
@@ -418,12 +478,12 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               funding_amount = match.group(0) if not match.groups() else match.group(1)
               break
           
-          # Format description with section headings for better readability
+          # Description is already formatted from sections above, but ensure proper ordering
           formatted_description = description
-          if sections:
-            # Build formatted description with clear section headings
+          if sections and not description:
+            # Fallback: format description from sections if not already built
             formatted_parts = []
-            section_order = ["overview", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
+            section_order = ["overview", "research_specification", "application_guidance", "application_process", "contact"]
             
             for section_key in section_order:
               if section_key in sections:
@@ -451,7 +511,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               "raw_data": {
                   "listing_url": listing_url,
                   "scraped_url": href,
-                  "sections": sections if sections else None
+                  "sections": sections if sections else {}
               },
           }
           grant["hash_checksum"] = sha256_for_grant(grant)
@@ -499,20 +559,98 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           detail_resp = fetch_with_retry(session, url, referer=listing_url, timeout=30)
           detail_soup = BeautifulSoup(detail_resp.text, "html.parser")
           
-          desc_el = (
-              detail_soup.select_one("main") or
-              detail_soup.select_one(".content") or
-              detail_soup.select_one("article")
-          )
-          description = desc_el.get_text("\n", strip=True) if desc_el else ""
-          
-          # Extract structured sections (same logic as above)
+          # Extract structured sections from tabbed content (same method as main flow)
           sections = {}
-          summary_from_sections = None
+          
+          # Map tab IDs to section keys
+          tab_mapping = {
+              "tab-overview": "overview",
+              "tab-research-specification": "research_specification",
+              "tab-application-guidance": "application_guidance",
+              "tab-application-process": "application_process",
+              "tab-contact-details": "contact"
+          }
+          
+          # Extract content from each tab using heading-based parsing only
+          for tab_id, section_key in tab_mapping.items():
+            tab_el = detail_soup.select_one(f"#{tab_id}, [id*='{tab_id}'], [class*='{tab_id}']")
+            if not tab_el:
+              tab_el = detail_soup.select_one(f"div[id='{tab_id}'], section[id='{tab_id}']")
+            
+            if tab_el:
+              # Create a copy to avoid modifying the original
+              tab_copy = BeautifulSoup(str(tab_el), "html.parser")
+              
+              # Remove navigation and non-content elements
+              for nav in tab_copy.select("nav, .pagerer, .social-share, button, .btn, script, style, .documents"):
+                nav.decompose()
+              
+              # Find the main content area
+              content_area = tab_copy
+              main_content = tab_copy.select_one(".container, .content, .field--name-field-rich-text")
+              if main_content:
+                content_area = main_content
+              
+              # Extract text with structure preservation
+              text_parts = []
+              
+              # Process headings first
+              for heading in content_area.find_all(["h2", "h3", "h4", "h5"]):
+                heading_text = heading.get_text(strip=True)
+                if heading_text and len(heading_text) > 2:
+                  text_parts.append(f"\n## {heading_text}\n")
+              
+              # Get paragraphs and list items
+              for p in content_area.find_all(["p", "li"]):
+                p_text = p.get_text(strip=True)
+                if p_text and len(p_text) > 5:
+                  if not any(p_text[:20] in part for part in text_parts):
+                    text_parts.append(p_text)
+              
+              # Use structured content or fallback to all text
+              if text_parts and len("\n\n".join(text_parts)) > 50:
+                combined_text = "\n\n".join(text_parts).strip()
+              else:
+                combined_text = content_area.get_text(separator="\n", strip=True)
+              
+              # Clean up
+              if combined_text:
+                lines = []
+                for line in combined_text.split("\n"):
+                  line = line.strip()
+                  if (len(line) > 5 and 
+                      not line.lower().startswith("share") and 
+                      "cookie" not in line.lower() and
+                      "previous section" not in line.lower() and
+                      "next section" not in line.lower() and
+                      not line.startswith("Download") and
+                      not line.startswith("Print")):
+                    lines.append(line)
+                combined_text = "\n\n".join(lines).strip()
+              
+              # Remove duplicates
+              if combined_text:
+                final_lines = []
+                prev_line = None
+                for line in combined_text.split("\n"):
+                  line_stripped = line.strip()
+                  if line_stripped and line_stripped != prev_line:
+                    final_lines.append(line_stripped)
+                    prev_line = line_stripped
+                combined_text = "\n\n".join(final_lines).strip()
+              
+              if combined_text and len(combined_text) > 20:
+                sections[section_key] = combined_text
+          
+          # If no tabs found, fall back to main content area with heading-based parsing
+          if not sections:
+            desc_el = (
+                detail_soup.select_one("main") or
+                detail_soup.select_one(".content") or
+                detail_soup.select_one("article")
+            )
           
           if desc_el:
-            # Look for headings (h2, h3) to identify sections
-            headings = desc_el.find_all(["h2", "h3"])
             current_section = None
             current_content = []
             
@@ -520,6 +658,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               if element.name in ["h2", "h3"]:
                 if current_section and current_content:
                   sections[current_section] = "\n".join(current_content).strip()
+                  
                 heading_text = element.get_text(strip=True).lower()
                 current_section = None
                 
@@ -548,29 +687,43 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
             if current_section and current_content:
               sections[current_section] = "\n".join(current_content).strip()
             
-            if not sections and description:
-              paragraphs = [p.strip() for p in description.split("\n") if p.strip() and len(p.strip()) > 20]
-              if paragraphs:
-                sections["overview"] = "\n\n".join(paragraphs[:3])
-                if len(paragraphs) > 3:
-                  sections["additional_information"] = "\n\n".join(paragraphs[3:])
-                summary_from_sections = paragraphs[0][:200] + "..." if len(paragraphs[0]) > 200 else paragraphs[0]
-          
-          # Format description with sections
-          formatted_description = description
+          # Build description from sections with proper ordering
+          description = ""
           if sections:
             formatted_parts = []
-            section_order = ["overview", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact"]
+            section_order = ["overview", "research_specification", "application_guidance", "application_process", "contact"]
+            
             for section_key in section_order:
-              if section_key in sections:
+              if section_key in sections and sections[section_key]:
                 section_title = section_key.replace("_", " ").title()
                 formatted_parts.append(f"## {section_title}\n\n{sections[section_key]}")
+            
             for section_key, section_content in sections.items():
-              if section_key not in section_order:
+              if section_key not in section_order and section_content:
                 section_title = section_key.replace("_", " ").title()
                 formatted_parts.append(f"## {section_title}\n\n{section_content}")
-            if formatted_parts:
-              formatted_description = "\n\n".join(formatted_parts)
+            
+            description = "\n\n".join(formatted_parts)
+          else:
+            desc_el = (
+                detail_soup.select_one("main") or
+                detail_soup.select_one(".content") or
+                detail_soup.select_one("article")
+            )
+            description = desc_el.get_text("\n", strip=True) if desc_el else ""
+          
+          formatted_description = description
+          
+          # Extract summary
+          summary_el = detail_soup.select_one("meta[name='description']")
+          if summary_el and summary_el.get("content"):
+            summary = summary_el["content"]
+          elif sections.get("overview"):
+            overview_text = sections["overview"]
+            summary = re.sub(r'^#+\s+', '', overview_text, flags=re.MULTILINE)
+            summary = summary[:200] + "..." if len(summary) > 200 else summary
+          else:
+            summary = description[:200] + "..." if len(description) > 200 else description
           
           # Extract deadline and funding amount (same logic as above)
           deadline_raw = None
@@ -599,9 +752,6 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               funding_amount = f"£{match.group(1) if match.groups() else match.group(0)}"
               break
           
-          # Get summary from sections or description
-          summary = summary_from_sections if summary_from_sections else (description[:200] + "..." if len(description) > 200 else description)
-          
           grant: Dict[str, Any] = {
               "source": "nihr",
               "title": title,
@@ -614,7 +764,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               "raw_data": {
                   "listing_url": listing_url,
                   "scraped_url": url,
-                  "sections": sections if sections else None
+                  "sections": sections if sections else {}
               },
           }
           grant["hash_checksum"] = sha256_for_grant(grant)
