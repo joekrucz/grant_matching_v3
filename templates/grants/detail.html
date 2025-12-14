@@ -52,16 +52,53 @@
             {% if sections_list %}
                 {# Render grants with structured sections (Catapult, NIHR, etc.) #}
                 <div class="space-y-3">
-                    {% for section_key, section_content in sections_list %}
+                    {% for section in sections_list %}
+                        {% if section.is_tab and section.sections %}
+                            {# This is a tab with nested sections #}
                         <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
-                            <input type="checkbox" {% if section_key == 'overview' %}checked{% endif %} />
+                                <input type="checkbox" {% if section.key == 'overview' or section.key == 'summary' or forloop.first %}checked{% endif %} />
                             <div class="collapse-title text-lg font-semibold text-primary">
-                                {{ section_key|title|replace:"_| " }}
+                                    {% if section.title %}{{ section.title }}{% else %}{{ section.key|title|replace:"_| " }}{% endif %}
+                                </div>
+                                <div class="collapse-content">
+                                    <div class="space-y-3 pt-2">
+                                        {% for nested_section in section.sections %}
+                                            <div class="collapse collapse-arrow bg-base-200 border border-base-300 shadow-sm">
+                                                <input type="checkbox" {% if forloop.first %}checked{% endif %} />
+                                                <div class="collapse-title text-base font-semibold text-primary">
+                                                    {% if nested_section.title %}{{ nested_section.title }}{% else %}Section{% endif %}
+                                                </div>
+                                                <div class="collapse-content">
+                                                    {% if nested_section.content and nested_section.content.strip %}
+                                                        <div class="text-base-content/90 leading-relaxed pt-2">{{ nested_section.content|markdown_headers }}</div>
+                                                    {% else %}
+                                                        <div class="text-base-content/60 italic pt-2">No content available for this section.</div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                        {% if not section.sections %}
+                                            <div class="text-base-content/60 italic pt-2">No sections available in this tab.</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            {# Regular section (not a tab) #}
+                            <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
+                                <input type="checkbox" {% if section.key == 'overview' or section.key == 'summary' or forloop.first %}checked{% endif %} />
+                                <div class="collapse-title text-lg font-semibold text-primary">
+                                    {% if section.title %}{{ section.title }}{% else %}{{ section.key|title|replace:"_| " }}{% endif %}
                             </div>
                             <div class="collapse-content">
-                                <div class="text-base-content/90 leading-relaxed pt-2">{{ section_content|markdown_headers }}</div>
+                                    {% if section.content and section.content.strip %}
+                                        <div class="text-base-content/90 leading-relaxed pt-2">{{ section.content|markdown_headers }}</div>
+                                    {% else %}
+                                        <div class="text-base-content/60 italic pt-2">No content available for this section.</div>
+                                    {% endif %}
+                                </div>
                             </div>
-                        </div>
+                        {% endif %}
                     {% endfor %}
                 </div>
             {% elif '##' in grant.description %}

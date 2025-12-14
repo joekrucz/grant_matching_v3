@@ -317,31 +317,31 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
               full_text = "\n\n".join(text_parts).strip()
             else:
               # Fallback: get all text if structured extraction didn't work
-              full_text = section_copy.get_text("\n", strip=True)
+            full_text = section_copy.get_text("\n", strip=True)
             
             # Clean up: remove duplicates while preserving order
             if full_text:
-              lines = []
+            lines = []
               seen = set()
-              for line in full_text.split("\n"):
-                line = line.strip()
-                if line and len(line) > 5:
-                  # Skip if it's just the section title
-                  line_lower = line.lower()
-                  section_title_variants = [
-                    tab_id.replace("-", " "),
-                    normalize_key(tab_id).replace("_", " ")
-                  ]
+            for line in full_text.split("\n"):
+              line = line.strip()
+              if line and len(line) > 5:
+                # Skip if it's just the section title
+                line_lower = line.lower()
+                section_title_variants = [
+                  tab_id.replace("-", " "),
+                  normalize_key(tab_id).replace("_", " ")
+                ]
                   is_title = any(line_lower == variant or line_lower.startswith(variant + " ") for variant in section_title_variants)
-                  if not is_title:
+                if not is_title:
                     # Check for duplicates (case-insensitive, but preserve markdown headers)
                     if line.startswith('#'):
                       # Always include markdown headers
                       lines.append(line)
                     elif line_lower not in seen:
                       seen.add(line_lower)
-                      lines.append(line)
-              
+                  lines.append(line)
+            
               # Remove excessive blank lines
               cleaned_text = "\n".join(lines).strip()
               cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text).strip()

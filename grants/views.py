@@ -61,12 +61,45 @@ def grant_detail(request, slug):
     sections_list = []
     if grant.raw_data and grant.raw_data.get('sections'):
         sections_dict = grant.raw_data.get('sections', {})
-        # Convert dict to list of tuples for template iteration
-        sections_list = [(key, value) for key, value in sections_dict.items() if value]
+        # Convert dict to list of dicts for template iteration
+        # Handle nested structure (tabs with sections) and flat structure
+        for key, value in sections_dict.items():
+            if isinstance(value, dict):
+                # Check if this is a tab with nested sections (Catapult)
+                if value.get('is_tab') and 'sections' in value:
+                    # This is a tab containing multiple sections
+                    tab_title = value.get('title', key.replace('_', ' ').title())
+                    nested_sections = value.get('sections', [])
+                    sections_list.append({
+                        'key': key,
+                        'content': '',  # Tab itself has no content
+                        'title': tab_title,
+                        'is_tab': True,
+                        'sections': nested_sections  # Nested sections within this tab
+                    })
+                else:
+                    # Regular section with title and content
+                    section_title = value.get('title', key.replace('_', ' ').title())
+                    section_content = value.get('content', '')
+                    sections_list.append({
+                        'key': key,
+                        'content': section_content,
+                        'title': section_title,
+                        'is_tab': False
+                    })
+            else:
+                # Old format: just a string
+                sections_list.append({
+                    'key': key,
+                    'content': value or "",
+                    'title': None,
+                    'is_tab': False
+                })
         
         # Sort sections by preferred order (different for each source)
         if grant.source == 'catapult':
-            section_order = ["overview", "challenge", "eligibility", "ipec", "funding", "dates", "how_to_apply"]
+            # For Catapult, prioritize tabs in order, then general sections
+            section_order = ["summary", "overview", "eligibility", "how_to_apply", "supporting_information", "general"]
         elif grant.source == 'nihr':
             # Matches NIHR site tab order
             section_order = ["overview", "research_specification", "application_guidance", "application_process", "contact"]
@@ -78,7 +111,8 @@ def grant_detail(request, slug):
         else:
             section_order = ["overview"]  # Default order
         
-        sections_list.sort(key=lambda x: (section_order.index(x[0]) if x[0] in section_order else 999, x[0]))
+        # Sort: sections in order first, then others alphabetically
+        sections_list.sort(key=lambda x: (section_order.index(x['key']) if x['key'] in section_order else 999, x['key']))
     
     context = {
         'grant': grant,
