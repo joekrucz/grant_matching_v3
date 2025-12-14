@@ -213,8 +213,8 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
             
             print(f"    ✓ Found section element (tag={section.name}, id={section.get('id')})")
             
-            # Step 3b: Extract text content from this section
-            # Strategy: Get all text from the section, but exclude tab navigation elements
+            # Step 3b: Extract text content from this section with markdown formatting
+            # Strategy: Process the grid layout structure (govuk-grid-row) to extract headings and content
             # Remove any tab-related elements first
             section_copy = BeautifulSoup(str(section), "html.parser")
             
@@ -222,37 +222,136 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
             for nav in section_copy.find_all(class_=lambda x: x and ("govuk-tabs__list" in " ".join(x) or "govuk-tabs__title" in " ".join(x))):
               nav.decompose()
             
-            # Get all text from the cleaned section
-            full_text = section_copy.get_text("\n", strip=True)
+            # Remove navigation and UI elements
+            for nav in section_copy.select("nav, button, script, style, .govuk-tabs__list"):
+              nav.decompose()
             
-            # Split into lines and clean
-            lines = []
-            for line in full_text.split("\n"):
-              line = line.strip()
-              if line and len(line) > 5:
-                # Skip if it's just the section title
-                line_lower = line.lower()
-                section_title_variants = [
-                  tab_id.replace("-", " "),
-                  normalize_key(tab_id).replace("_", " ")
-                ]
-                is_title = any(line_lower == variant or line_lower.startswith(variant + "\n") for variant in section_title_variants)
-                if not is_title:
-                  lines.append(line)
+            # Extract content with markdown formatting
+            # Innovate UK uses a grid layout: each row has a heading (left column) and content (right column)
+            text_parts = []
+            processed_elements = set()
             
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_lines = []
-            for line in lines:
-              line_lower = line.lower()
-              if line_lower not in seen:
-                seen.add(line_lower)
-                unique_lines.append(line)
+            # Find all grid rows in the section
+            grid_rows = section_copy.select(".govuk-grid-row")
+            
+            for row in grid_rows:
+              # Get the heading from the left column (govuk-grid-column-one-third)
+              heading_col = row.select_one(".govuk-grid-column-one-third")
+              heading_text = None
+              if heading_col:
+                heading_el = heading_col.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                if heading_el:
+                  heading_text = heading_el.get_text(strip=True)
+                  # Skip generic section titles
+                  line_lower = heading_text.lower()
+                  section_title_variants = [
+                    tab_id.replace("-", " "),
+                    normalize_key(tab_id).replace("_", " ")
+                  ]
+                  if not any(line_lower == variant or line_lower.startswith(variant + " ") for variant in section_title_variants):
+                    # Convert to markdown header (h2 -> ##)
+                    level = int(heading_el.name[1])
+                    markdown_header = '#' * level + ' ' + heading_text
+                    text_parts.append(markdown_header)
+              
+              # Get the content from the right column (govuk-grid-column-two-thirds)
+              content_col = row.select_one(".govuk-grid-column-two-thirds")
+              if content_col:
+                # Find the wysiwyg-styles div which contains the actual content
+                content_div = content_col.select_one(".wysiwyg-styles, .govuk-body")
+                if not content_div:
+                  content_div = content_col
+                
+                # Process content elements in order
+                for element in content_div.children:
+                  if not hasattr(element, 'name') or id(element) in processed_elements:
+                    continue
+                  
+                  if element.name == 'p':
+                    para_text = element.get_text(strip=True)
+                    if para_text and len(para_text) > 5:
+                      text_parts.append(para_text)
+                      processed_elements.add(id(element))
+                  elif element.name in ['ul', 'ol']:
+                    # Process list items
+                    for li in element.find_all('li', recursive=False):
+                      li_text = li.get_text(strip=True)
+                      if li_text and len(li_text) > 2:
+                        text_parts.append('• ' + li_text)
+                        processed_elements.add(id(li))
+                    processed_elements.add(id(element))
+                  elif element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                    # Additional headings within content
+                    header_text = element.get_text(strip=True)
+                    if header_text:
+                      level = int(element.name[1])
+                      markdown_header = '#' * level + ' ' + header_text
+                      text_parts.append(markdown_header)
+                      processed_elements.add(id(element))
+                  elif element.name == 'div':
+                    # Check if div has direct content (not already processed via children)
+                    direct_text = element.get_text(strip=True)
+                    if direct_text and len(direct_text) > 10:
+                      # Check if children were already processed
+                      children_tags = element.find_all(['p', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+                      children_processed = any(id(child) in processed_elements for child in children_tags)
+                      if not children_processed:
+                        # Process this div's content recursively
+                        for child in element.children:
+                          if hasattr(child, 'name'):
+                            if child.name == 'p':
+                              para_text = child.get_text(strip=True)
+                              if para_text and len(para_text) > 5:
+                                text_parts.append(para_text)
+                                processed_elements.add(id(child))
+                            elif child.name in ['ul', 'ol']:
+                              for li in child.find_all('li', recursive=False):
+                                li_text = li.get_text(strip=True)
+                                if li_text and len(li_text) > 2:
+                                  text_parts.append('• ' + li_text)
+                                  processed_elements.add(id(li))
+                              processed_elements.add(id(child))
+            
+            # Combine all parts
+            if text_parts:
+              full_text = "\n\n".join(text_parts).strip()
+            else:
+              # Fallback: get all text if structured extraction didn't work
+              full_text = section_copy.get_text("\n", strip=True)
+            
+            # Clean up: remove duplicates while preserving order
+            if full_text:
+              lines = []
+              seen = set()
+              for line in full_text.split("\n"):
+                line = line.strip()
+                if line and len(line) > 5:
+                  # Skip if it's just the section title
+                  line_lower = line.lower()
+                  section_title_variants = [
+                    tab_id.replace("-", " "),
+                    normalize_key(tab_id).replace("_", " ")
+                  ]
+                  is_title = any(line_lower == variant or line_lower.startswith(variant + " ") for variant in section_title_variants)
+                  if not is_title:
+                    # Check for duplicates (case-insensitive, but preserve markdown headers)
+                    if line.startswith('#'):
+                      # Always include markdown headers
+                      lines.append(line)
+                    elif line_lower not in seen:
+                      seen.add(line_lower)
+                      lines.append(line)
+              
+              # Remove excessive blank lines
+              cleaned_text = "\n".join(lines).strip()
+              cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text).strip()
+            else:
+              cleaned_text = ""
             
             key = normalize_key(tab_id)
-            if unique_lines:
-              tab_sections[key] = "\n".join(unique_lines).strip()
-              print(f"    ✓ Extracted '{tab_id}': {len(tab_sections[key])} chars, {len(unique_lines)} lines")
+            if cleaned_text:
+              tab_sections[key] = cleaned_text
+              print(f"    ✓ Extracted '{tab_id}': {len(tab_sections[key])} chars")
               print(f"      Preview: {tab_sections[key][:100]}...")
             else:
               print(f"    ✗ No content extracted for section '{tab_id}'")
