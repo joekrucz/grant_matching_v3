@@ -59,7 +59,7 @@
                                 {{ section_key|title|replace:"_| " }}
                             </div>
                             <div class="collapse-content">
-                                <div class="whitespace-pre-wrap text-base-content/90 leading-relaxed pt-2">{{ section_content }}</div>
+                                <div class="text-base-content/90 leading-relaxed pt-2">{{ section_content|markdown_headers }}</div>
                             </div>
                         </div>
                     {% endfor %}

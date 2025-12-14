@@ -1,7 +1,10 @@
 """
 Template filters for grant formatting.
 """
+import re
 from django import template
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 
 register = template.Library()
 
@@ -41,4 +44,92 @@ def replace(value, arg):
         return str(value).replace(old, new)
     except ValueError:
         return value
+
+
+@register.filter
+def markdown_headers(value):
+    """Convert markdown-style headers to HTML headers with Tailwind styling.
+    
+    Converts:
+    - # Header -> <h1>
+    - ## Header -> <h2>
+    - ### Header -> <h3>
+    - #### Header -> <h4>
+    - • List item -> <li>
+    
+    Preserves other text and line breaks.
+    """
+    if not value:
+        return value
+    
+    text = str(value)
+    
+    # Split into lines to process line by line
+    lines = text.split('\n')
+    output_lines = []
+    in_list = False
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Skip empty lines (will be handled by paragraph spacing)
+        if not stripped:
+            if in_list:
+                output_lines.append('</ul>')
+                in_list = False
+            output_lines.append('')
+            continue
+        
+        # Check for markdown headers (must be at start of line)
+        if stripped.startswith('#### '):
+            if in_list:
+                output_lines.append('</ul>')
+                in_list = False
+            header_text = escape(stripped[5:].strip())
+            output_lines.append(f'<h4 class="text-lg font-semibold mt-4 mb-2 text-primary">{header_text}</h4>')
+        elif stripped.startswith('### '):
+            if in_list:
+                output_lines.append('</ul>')
+                in_list = False
+            header_text = escape(stripped[4:].strip())
+            output_lines.append(f'<h3 class="text-xl font-semibold mt-4 mb-2 text-primary">{header_text}</h3>')
+        elif stripped.startswith('## '):
+            if in_list:
+                output_lines.append('</ul>')
+                in_list = False
+            header_text = escape(stripped[3:].strip())
+            output_lines.append(f'<h2 class="text-2xl font-semibold mt-6 mb-3 text-primary">{header_text}</h2>')
+        elif stripped.startswith('# '):
+            if in_list:
+                output_lines.append('</ul>')
+                in_list = False
+            header_text = escape(stripped[2:].strip())
+            output_lines.append(f'<h1 class="text-3xl font-bold mt-8 mb-4 text-primary">{header_text}</h1>')
+        # Check for list items (bullet points)
+        elif stripped.startswith('• ') or stripped.startswith('- ') or stripped.startswith('* '):
+            if not in_list:
+                output_lines.append('<ul class="list-disc list-inside space-y-1 my-3 ml-4">')
+                in_list = True
+            list_text = escape(stripped[2:].strip())
+            output_lines.append(f'<li class="ml-2">{list_text}</li>')
+        else:
+            # Regular text - close list if open, then add as paragraph
+            if in_list:
+                output_lines.append('</ul>')
+                in_list = False
+            # Escape HTML in regular text for security, but preserve line breaks
+            escaped = escape(line)
+            output_lines.append(f'<p class="mb-3">{escaped}</p>')
+    
+    # Close any open list
+    if in_list:
+        output_lines.append('</ul>')
+    
+    # Join all lines
+    html = '\n'.join(output_lines)
+    
+    # Clean up multiple consecutive empty paragraphs
+    html = re.sub(r'(<p class="mb-3"></p>\n?)+', '<p class="mb-3"></p>\n', html)
+    
+    return mark_safe(html)
 

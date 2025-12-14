@@ -57,19 +57,26 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
       try:
         # Use browser-like headers to avoid 405
-        headers = {
-            "User-Agent": session.headers.get("User-Agent"),
+        # Update session headers for this request
+        original_headers = session.headers.copy()
+        custom_headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": session.headers.get("Accept-Language", "en-GB,en;q=0.9"),
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Referer": listing_url,
         }
-        resp = fetch_with_retry(session, url_to_fetch, timeout=30, headers=headers)
-      except Exception as e:
-        # Some NIHR pages return 405 to default clients; retry with direct session GET
-        print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
-        resp = session.get(url_to_fetch, timeout=30, headers=headers)
+        session.headers.update(custom_headers)
+        try:
+          resp = fetch_with_retry(session, url_to_fetch, referer=listing_url, timeout=30)
+        except Exception as e:
+          # Some NIHR pages return 405 to default clients; retry with direct session GET
+          print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
+          resp = session.get(url_to_fetch, timeout=30, headers=custom_headers)
+        finally:
+          # Restore original headers
+          session.headers.clear()
+          session.headers.update(original_headers)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         
@@ -239,6 +246,15 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         page += 1
         time.sleep(1)  # Throttle between pages
         
+      except Exception as e:
+        # Handle errors for this page
+        print(f"  Error fetching page {page}: {e}")
+        last_listing_error = str(e)
+        # Continue to next page or break if it's the first page
+        if page == 1:
+          break
+        page += 1
+        continue
     
     pages_fetched = max(page - 1, 0)
     print(f"Found {len(all_opportunity_urls)} total NIHR opportunities across {pages_fetched} page(s)")
@@ -318,30 +334,79 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
                 for nav in tab_div.select("nav, .pagerer, button.btn, script, style, .social-share"):
                   nav.decompose()
                 
-                # Get ALL text content from the tab div - simple approach
-                # This gets everything including nested content
-                combined_text = tab_div.get_text(separator="\n", strip=True)
+                # Extract content with markdown formatting for headers
+                # Process elements to convert HTML headers to markdown
+                text_parts = []
                 
-                # Fallback: try getting text without separator if separator version failed
-                if not combined_text or len(combined_text) < 10:
-                  raw_text = tab_div.get_text(strip=False)
-                  if raw_text and len(raw_text) > 10:
-                    # Use raw text if separator version failed
-                    combined_text = raw_text
+                # Process all elements, converting headers to markdown
+                for element in tab_div.descendants:
+                  if hasattr(element, 'name'):
+                    if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                      header_text = element.get_text(strip=True)
+                      if header_text:
+                        # Convert HTML headers to markdown
+                        level = int(element.name[1])  # h1 -> 1, h2 -> 2, etc.
+                        markdown_header = '#' * level + ' ' + header_text
+                        text_parts.append(markdown_header)
+                    elif element.name == 'p':
+                      para_text = element.get_text(strip=True)
+                      if para_text and len(para_text) > 2:
+                        text_parts.append(para_text)
+                    elif element.name in ['li']:
+                      # Only process if parent is ul/ol (to avoid duplicates)
+                      parent = element.parent
+                      if parent and parent.name in ['ul', 'ol']:
+                        li_text = element.get_text(strip=True)
+                        if li_text and len(li_text) > 2:
+                          text_parts.append('• ' + li_text)
+                    elif element.name in ['ul', 'ol']:
+                      # Process list items (already handled above via li)
+                      pass
                 
-                # Clean up: remove navigation text and excessive whitespace
+                # If structured extraction didn't yield much, fall back to simple text extraction
+                if not text_parts or sum(len(p) for p in text_parts) < 50:
+                  # Fallback: get all text and try to preserve structure
+                  combined_text = tab_div.get_text(separator="\n", strip=True)
+                  
+                  # Try to detect and convert headers in plain text
+                  if combined_text:
+                    lines = []
+                    for line in combined_text.split("\n"):
+                      line = line.strip()
+                      if not line:
+                        continue
+                      # Skip navigation patterns
+                      skip_patterns = ["share", "download", "print", "previous section", "next section", "back to"]
+                      if any(pattern in line.lower() for pattern in skip_patterns):
+                        continue
+                      # Check if line looks like a header (short, all caps, or ends with colon)
+                      if (len(line) < 80 and 
+                          (line.isupper() or line.endswith(':') or 
+                           (len(line.split()) < 8 and line[0].isupper()))):
+                        # Might be a header - convert to markdown
+                        lines.append('## ' + line)
+                      else:
+                        lines.append(line)
+                    combined_text = "\n".join(lines)
+                else:
+                  # Use structured extraction
+                  combined_text = "\n\n".join(text_parts)
+                
+                # Clean up: remove excessive whitespace
                 if combined_text:
+                  # Remove excessive blank lines
+                  combined_text = re.sub(r'\n{3,}', '\n\n', combined_text).strip()
+                  
+                  # Remove navigation text patterns
                   lines = []
                   skip_patterns = ["share", "download", "print", "previous section", "next section", "back to"]
                   for line in combined_text.split("\n"):
                     line = line.strip()
-                    # Keep meaningful lines, skip navigation
                     if (len(line) > 2 and 
                         not any(pattern in line.lower() for pattern in skip_patterns)):
                       lines.append(line)
                   
                   combined_text = "\n".join(lines).strip()
-                  # Remove excessive blank lines
                   combined_text = re.sub(r'\n{3,}', '\n\n', combined_text).strip()
                 
                 # Save the entire tab content as one section
@@ -370,11 +435,11 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               
               # Process all elements using heading-based parsing only
               for element in desc_el.descendants:
-                if element.name in ["h2", "h3"]:
+                if hasattr(element, 'name') and element.name in ["h2", "h3"]:
                   # Save previous section
                   if current_section and current_content:
                     sections[current_section] = "\n".join(current_content).strip()
-                    
+                      
                   # Start new section
                   heading_text = element.get_text(strip=True).lower()
                   current_section = None
@@ -400,7 +465,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
                     # Use heading as section name (normalized)
                     current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
                   current_content = []
-                elif element.name in ["p", "div", "li", "ul", "ol"] and current_section:
+                elif hasattr(element, 'name') and element.name in ["p", "div", "li", "ul", "ol"] and current_section:
                   text = element.get_text(strip=True)
                   if text and len(text) > 10:  # Skip very short text (likely navigation)
                     current_content.append(text)
@@ -649,43 +714,43 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
                 detail_soup.select_one(".content") or
                 detail_soup.select_one("article")
             )
-          
-          if desc_el:
-            current_section = None
-            current_content = []
             
-            for element in desc_el.descendants:
-              if element.name in ["h2", "h3"]:
-                if current_section and current_content:
-                  sections[current_section] = "\n".join(current_content).strip()
+            if desc_el:
+              current_section = None
+              current_content = []
+              
+              for element in desc_el.descendants:
+                if hasattr(element, 'name') and element.name in ["h2", "h3"]:
+                  if current_section and current_content:
+                    sections[current_section] = "\n".join(current_content).strip()
+                    
+                  heading_text = element.get_text(strip=True).lower()
+                  current_section = None
                   
-                heading_text = element.get_text(strip=True).lower()
-                current_section = None
-                
-                if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
-                  current_section = "overview"
-                elif any(word in heading_text for word in ["eligibility", "who can apply"]):
-                  current_section = "eligibility"
-                elif any(word in heading_text for word in ["funding", "budget", "cost"]):
-                  current_section = "funding"
-                elif any(word in heading_text for word in ["application", "how to apply", "apply"]):
-                  current_section = "how_to_apply"
-                elif any(word in heading_text for word in ["deadline", "closing", "dates"]):
-                  current_section = "dates"
-                elif any(word in heading_text for word in ["assessment", "evaluation"]):
-                  current_section = "assessment"
-                elif any(word in heading_text for word in ["contact", "enquiries"]):
-                  current_section = "contact"
-                else:
-                  current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
-                current_content = []
-              elif element.name in ["p", "div", "li"] and current_section:
-                text = element.get_text(strip=True)
-                if text and len(text) > 10:
-                  current_content.append(text)
-            
-            if current_section and current_content:
-              sections[current_section] = "\n".join(current_content).strip()
+                  if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
+                    current_section = "overview"
+                  elif any(word in heading_text for word in ["eligibility", "who can apply"]):
+                    current_section = "eligibility"
+                  elif any(word in heading_text for word in ["funding", "budget", "cost"]):
+                    current_section = "funding"
+                  elif any(word in heading_text for word in ["application", "how to apply", "apply"]):
+                    current_section = "how_to_apply"
+                  elif any(word in heading_text for word in ["deadline", "closing", "dates"]):
+                    current_section = "dates"
+                  elif any(word in heading_text for word in ["assessment", "evaluation"]):
+                    current_section = "assessment"
+                  elif any(word in heading_text for word in ["contact", "enquiries"]):
+                    current_section = "contact"
+                  else:
+                    current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
+                  current_content = []
+                elif hasattr(element, 'name') and element.name in ["p", "div", "li"] and current_section:
+                  text = element.get_text(strip=True)
+                  if text and len(text) > 10:
+                    current_content.append(text)
+              
+              if current_section and current_content:
+                sections[current_section] = "\n".join(current_content).strip()
             
           # Build description from sections with proper ordering
           description = ""
