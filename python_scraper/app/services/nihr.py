@@ -26,11 +26,17 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
   listing_url = "https://www.nihr.ac.uk/researchers/funding-opportunities/"
   
   session = create_session()
-  # NIHR blocks some default clients; use a realistic browser User-Agent
-  session.headers.update({
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Accept-Language": "en-GB,en;q=0.9",
-  })
+  # NIHR may block automated requests - try to establish session by visiting homepage first
+  try:
+    print("Establishing session with NIHR homepage...")
+    homepage_resp = session.get("https://www.nihr.ac.uk/", timeout=15)
+    if homepage_resp.status_code == 200:
+      print("  Session established successfully")
+      time.sleep(2)  # Small delay to seem more human-like
+    else:
+      print(f"  Warning: Homepage returned status {homepage_resp.status_code}")
+  except Exception as e:
+    print(f"  Warning: Could not establish session: {e}")
   
   existing_count = len(existing_grants)
   if existing_count > 0:
@@ -56,27 +62,13 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
       
         print(f"Fetching NIHR opportunities page {page} from {url_to_fetch}...")
       try:
-        # Use browser-like headers to avoid 405
-        # Update session headers for this request
-        original_headers = session.headers.copy()
-        custom_headers = {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": session.headers.get("Accept-Language", "en-GB,en;q=0.9"),
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Referer": listing_url,
-        }
-        session.headers.update(custom_headers)
-        try:
-          resp = fetch_with_retry(session, url_to_fetch, referer=listing_url, timeout=30)
-        except Exception as e:
-          # Some NIHR pages return 405 to default clients; retry with direct session GET
-          print(f"  Fetch_with_retry failed ({e}), retrying with direct session GET...")
-          resp = session.get(url_to_fetch, timeout=30, headers=custom_headers)
-        finally:
-          # Restore original headers
-          session.headers.clear()
-          session.headers.update(original_headers)
+        # Add delay between requests to seem more human-like
+        if page > 1:
+          time.sleep(3)  # Longer delay between pages
+        
+        # Use browser-like headers with proper referer chain
+        referer_url = listing_url if page == 1 else f"{listing_url}?page={page - 2}"
+        resp = fetch_with_retry(session, url_to_fetch, referer=referer_url, timeout=30)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         
@@ -259,10 +251,24 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
     pages_fetched = max(page - 1, 0)
     print(f"Found {len(all_opportunity_urls)} total NIHR opportunities across {pages_fetched} page(s)")
     
-    # If no opportunities were found, exit early with context to avoid undefined variables
+    # If no opportunities were found, check if it was due to an error
     if not all_opportunity_urls:
       if last_listing_error:
-        print(f"NIHR listing fetch failed: {last_listing_error}")
+        error_msg = (
+          f"NIHR listing fetch failed: {last_listing_error}\n\n"
+          "The NIHR website appears to be blocking automated requests. This may be due to:\n"
+          "- Bot protection (Cloudflare, etc.) requiring JavaScript/CAPTCHA\n"
+          "- Geographic restrictions (if running from outside UK)\n"
+          "- Rate limiting or IP-based blocking\n\n"
+          "Possible solutions:\n"
+          "1. Use the NIHR Open Data API: https://nihr.opendatasoft.com/\n"
+          "2. Run the scraper from a UK-based server/VPN\n"
+          "3. Implement browser automation (Selenium/Playwright) to handle JavaScript/CAPTCHA\n"
+          "4. Contact NIHR to request API access or whitelist your IP"
+        )
+        print(error_msg)
+        # Raise exception to indicate failure, not just empty results
+        raise Exception(error_msg)
       else:
         print("NIHR listing returned no opportunities.")
       return grants

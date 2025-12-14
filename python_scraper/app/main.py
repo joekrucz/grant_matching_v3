@@ -136,8 +136,16 @@ async def run_nihr(request: Request):
     log_id = body.get("log_id") if isinstance(body, dict) else None
   except:
     log_id = None
-  result = run_nihr_job(log_id=log_id)
-  return JSONResponse(result)
+  try:
+    result = run_nihr_job(log_id=log_id)
+    return JSONResponse(result)
+  except HTTPException as e:
+    # Re-raise HTTPException to return proper error status
+    raise e
+  except Exception as e:
+    # Catch any other exceptions and return 500
+    print(f"Unexpected error in /run/nihr endpoint: {e}")
+    raise HTTPException(status_code=500, detail=f"NIHR scraper failed: {str(e)}")
 
 
 @app.post("/run/catapult")
