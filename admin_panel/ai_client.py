@@ -7,7 +7,7 @@ This provides:
 """
 import json
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from django.conf import settings
 
@@ -70,7 +70,7 @@ def build_grant_context(grant: Grant) -> Dict[str, Any]:
         "title": _truncate(grant.title, 500),
         "summary": _truncate(grant.summary, 1000),
         "description": _truncate(grant.description, 2000),
-        "eligibility": _truncate(eligibility, 1500),
+        "eligibility": _truncate(eligibility, 2000),  # Increased to capture more eligibility info
         "deadline": grant.deadline.isoformat() if grant.deadline else None,
         "funding_amount": _truncate(grant.funding_amount, 255),
         "status": grant.status,
@@ -93,6 +93,61 @@ def build_company_context(company: Company) -> Dict[str, Any]:
         "notes": _truncate(company.notes, 1000) if company.notes else "",
         # Explicitly exclude raw_data, user, and contact details
     }
+
+
+def prepare_conversation_history(
+    messages: list,
+    max_messages: int = 20,
+    max_total_chars: int = 8000,
+) -> List[Dict[str, str]]:
+    """
+    Prepare conversation history for AI, with context window management.
+    
+    Args:
+        messages: List of ConversationMessage objects (ordered by created_at)
+        max_messages: Maximum number of messages to include
+        max_total_chars: Maximum total characters across all messages
+    
+    Returns:
+        List of message dicts in format [{"role": "user", "content": "..."}, ...]
+    """
+    if not messages:
+        return []
+    
+    # Convert to list of dicts
+    history = []
+    total_chars = 0
+    
+    # Start from the most recent messages and work backwards
+    # We'll include the most recent messages up to the limits
+    recent_messages = list(messages)[-max_messages:] if len(messages) > max_messages else list(messages)
+    
+    for msg in recent_messages:
+        content = (msg.content or "").strip()
+        if not content:
+            continue
+        
+        # Estimate character count (rough approximation: 1 token ≈ 4 chars)
+        content_chars = len(content)
+        
+        # If adding this message would exceed the limit, truncate it
+        if total_chars + content_chars > max_total_chars:
+            remaining_chars = max_total_chars - total_chars
+            if remaining_chars > 100:  # Only include if we have meaningful space
+                content = content[:remaining_chars] + "..."
+                history.append({
+                    "role": msg.role,
+                    "content": content,
+                })
+            break
+        
+        history.append({
+            "role": msg.role,
+            "content": content,
+        })
+        total_chars += content_chars
+    
+    return history
 
 
 class AiAssistantError(Exception):
@@ -120,18 +175,35 @@ class AiAssistantClient:
         user_payload: Dict[str, Any],
         max_tokens: int = 400,
         temperature: float = 0.3,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
-        """Call the model and return parsed JSON, raw response, and latency in ms."""
+        """Call the model and return parsed JSON, raw response, and latency in ms.
+        
+        Args:
+            system_prompt: System prompt for the model
+            user_payload: User payload (will be JSON stringified)
+            max_tokens: Maximum tokens for response
+            temperature: Temperature for generation
+            conversation_history: Optional list of previous messages in format [{"role": "user", "content": "..."}, ...]
+        """
         start = time.time()
+        
+        # Build messages array
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history if provided
+        if conversation_history:
+            messages.extend(conversation_history)
+        
+        # Add current user message
+        messages.append({
+            "role": "user",
+            "content": json.dumps(user_payload),
+        })
+        
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": json.dumps(user_payload),
-                },
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             response_format={"type": "json_object"},
@@ -209,23 +281,62 @@ class AiAssistantClient:
         page_type: str,
         grant_ctx: Optional[Dict[str, Any]] = None,
         company_ctx: Optional[Dict[str, Any]] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        referenced_grants: Optional[Dict[int, Dict[str, Any]]] = None,
     ) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Contextual Q&A with conversation history support.
+        
+        Args:
+            question: Current question from the user
+            page_type: Type of page (grant, company, mixed)
+            grant_ctx: Optional grant context
+            company_ctx: Optional company context
+            conversation_history: Optional list of previous messages [{"role": "user", "content": "..."}, ...]
+            referenced_grants: Optional dict of grant_id -> grant_context for grants mentioned in conversation
+        """
         system_prompt = (
             "You are an assistant for grant administrators.\n"
             "You will receive:\n"
             "- A `page_type` indicating whether the admin is viewing a `grant`, a `company`, or `mixed`.\n"
-            "- A grant object and/or a company object.\n"
+            "- A grant object and/or a company object (for the current page context).\n"
             "- A natural-language question from the admin.\n"
+            "- Previous conversation history (if this is a continuing conversation).\n"
+            "- Referenced grants: If grants were mentioned in previous messages (e.g., from a search), "
+            "you will receive their COMPLETE details in the 'referenced_grants' array. "
+            "Each grant object includes ALL of these fields: grant_id, title, summary, description, eligibility, deadline, funding_amount, status, source, url.\n"
+            "You have access to ALL this information for each grant - use it comprehensively when answering questions.\n"
             "Your task is to:\n"
-            "- Answer the question using only the information in the provided objects.\n"
+            "- Answer the question using ALL available information: provided objects, conversation history, AND referenced grants.\n"
+            "- When answering questions about grants mentioned in the conversation, you MUST:\n"
+            "  1. Identify which specific grant is being referenced by matching the grant title/name from the conversation\n"
+            "  2. Find that grant in the referenced_grants array\n"
+            "  3. Use ALL available information from that grant (title, summary, description, eligibility, deadline, funding_amount, etc.)\n"
+            "  4. If eligibility criteria is provided, use it. If not, use other available fields (description, summary, etc.) to infer eligibility\n"
+            "- When the user asks about 'that grant', 'the grant', 'it', or references a grant by name/number, "
+            "match it to the appropriate grant in referenced_grants by comparing titles.\n"
+            "- For example, if the conversation mentions 'Freight Innovation Cluster', find the grant with that title in referenced_grants.\n"
+            "- IMPORTANT: Even if a grant's eligibility field is empty, use the description, summary, and other fields to answer questions.\n"
+            "- When answering eligibility questions, check the eligibility field first, but also consider:\n"
+            "  - Grant description and summary (may contain eligibility information)\n"
+            "  - Grant source (e.g., UKRI grants often have specific eligibility requirements)\n"
+            "  - Funding amount and status (may indicate company size requirements)\n"
+            "- Provide specific, detailed answers using the grant's full context, not generic responses.\n"
             "- If the answer is not clearly supported by the data, say you cannot answer "
             "based on the available information and suggest what is missing.\n"
-            "- Be concise (ideally under 150 words).\n"
+            "- Be concise (ideally under 150 words) unless the question requires detailed explanation.\n"
+            "- Maintain context from previous messages - you can reference earlier parts of the conversation.\n"
             "You must also return a list of the fields you relied on in your reasoning.\n"
             "Rules:\n"
             "- Do not fabricate dates, amounts, or eligibility criteria.\n"
             "- Do not speculate about private information or internal details not present in the context.\n"
             "- If the user asks about something outside the provided context, say that is outside your scope.\n"
+            "- When answering questions about grants, you MUST:\n"
+            "  1. First identify which specific grant is being referenced (by matching title/name from conversation)\n"
+            "  2. Then use that grant's COMPLETE details from referenced_grants - check ALL fields (title, summary, description, eligibility, deadline, funding_amount, status, source, url)\n"
+            "  3. Provide a specific, detailed answer about THAT grant using all available information\n"
+            "  4. If eligibility field is empty, extract eligibility information from description/summary if available\n"
+            "- If you cannot identify which specific grant is being referenced, say so clearly.\n"
+            "- Never say 'eligibility criteria are not provided' if you have access to the grant's description, summary, or other fields that might contain eligibility information.\n"
             "Always respond with a single JSON object: "
             '{"answer": string, "used_fields": [string], "caveats": [string]}.'
         )
@@ -236,7 +347,32 @@ class AiAssistantClient:
             "grant": grant_ctx,
             "company": company_ctx,
         }
-        return self._call_json_model(system_prompt, payload)
+        
+        # Add referenced grants to payload if provided
+        # Format as a list with all grant details for easy access
+        if referenced_grants:
+            # Create a structured list format with all grant details
+            grants_list = []
+            for grant_id, grant_data in referenced_grants.items():
+                # Ensure all fields are included and clearly labeled
+                grant_entry = {
+                    "grant_id": grant_id,
+                    "title": grant_data.get("title", ""),
+                    "summary": grant_data.get("summary", ""),
+                    "description": grant_data.get("description", ""),
+                    "eligibility": grant_data.get("eligibility", ""),
+                    "deadline": grant_data.get("deadline"),
+                    "funding_amount": grant_data.get("funding_amount", ""),
+                    "status": grant_data.get("status", ""),
+                    "source": grant_data.get("source", ""),
+                    "url": grant_data.get("url", ""),
+                }
+                grants_list.append(grant_entry)
+            payload["referenced_grants"] = grants_list
+            # Also add a note about how many grants are available
+            payload["referenced_grants_count"] = len(grants_list)
+        
+        return self._call_json_model(system_prompt, payload, max_tokens=800, conversation_history=conversation_history)
 
     def grant_company_fit(
         self,

@@ -20,6 +20,7 @@ from .ai_client import (
     AiAssistantError,
     build_company_context,
     build_grant_context,
+    prepare_conversation_history,
 )
 from .models import AiInteractionLog, Conversation, ConversationMessage
 
@@ -395,6 +396,39 @@ def ai_contextual_qa(request):
     grant = grant if 'grant' in locals() else (get_object_or_404(Grant, id=grant_id) if grant_id else None)
     company = company if 'company' in locals() else (get_object_or_404(Company, id=company_id) if company_id else None)
 
+    # Load previous messages from conversation for context
+    previous_messages = []
+    referenced_grant_contexts = {}  # Grants mentioned in previous messages
+    conversation_history = None
+    
+    if conversation:
+        # Get all messages except the one we're about to create
+        previous_messages = list(conversation.messages.all().order_by("created_at"))
+        # Prepare conversation history with context window management
+        conversation_history = prepare_conversation_history(previous_messages)
+        
+        # Extract grant IDs from previous messages' metadata
+        # This allows us to load full grant context for grants mentioned in conversation
+        referenced_grants = []
+        for msg in previous_messages:
+            metadata = msg.metadata or {}
+            # Check for grant_ids in metadata (from search results, fit analysis, etc.)
+            if "grant_ids" in metadata:
+                referenced_grants.extend(metadata["grant_ids"])
+            # Also check for single grant_id
+            if "grant_id" in metadata and metadata["grant_id"]:
+                referenced_grants.append(metadata["grant_id"])
+        
+        # Remove duplicates and load grant contexts
+        referenced_grant_ids = list(set(referenced_grants))
+        if referenced_grant_ids:
+            # Load grant contexts for referenced grants
+            referenced_grant_objects = Grant.objects.filter(id__in=referenced_grant_ids)
+            # Store in a dict for easy access
+            referenced_grant_contexts = {
+                g.id: build_grant_context(g) for g in referenced_grant_objects
+            }
+
     # Save user message
     ConversationMessage.objects.create(
         conversation=conversation,
@@ -407,13 +441,18 @@ def ai_contextual_qa(request):
     if isinstance(client, str):
         return _json_bad_request(client, status=503)
 
+    # Use current grant context if provided, otherwise None
     grant_ctx = build_grant_context(grant) if grant else None
     company_ctx = build_company_context(company) if company else None
+    
+    # Pass conversation history and referenced grants to AI
     parsed, raw_meta, latency_ms = client.contextual_qa(
         question=question,
         page_type=page_type,
         grant_ctx=grant_ctx,
         company_ctx=company_ctx,
+        conversation_history=conversation_history,
+        referenced_grants=referenced_grant_contexts if referenced_grant_contexts else None,
     )
 
     answer = parsed.get("answer") or ""
@@ -432,7 +471,10 @@ def ai_contextual_qa(request):
             "latency_ms": latency_ms,
         },
     )
-    # Update conversation timestamp
+    
+    # Update conversation timestamp and potentially extract topics
+    # For now, we'll just update the timestamp. Topic extraction can be added later
+    # if we want to track what topics were discussed in the conversation.
     conversation.save(update_fields=['updated_at'])
 
     log = AiInteractionLog.objects.create(
@@ -763,6 +805,9 @@ def ai_search_grants_for_company(request):
         search_text += f"{search_summary}\n\n" if search_summary else ""
         search_text += "No matching grants found."
     
+    # Extract grant IDs from results for metadata
+    grant_ids_from_search = [r["grant_id"] for r in results]
+    
     # Save to conversation
     ConversationMessage.objects.create(
         conversation=conversation,
@@ -777,6 +822,7 @@ def ai_search_grants_for_company(request):
         metadata={
             "action": "search_grants_for_company",
             "matched_count": len(results),
+            "grant_ids": grant_ids_from_search,  # Store grant IDs for later reference
             "search_summary": search_summary,
             "model": raw_meta.get("model"),
             "latency_ms": latency_ms,
