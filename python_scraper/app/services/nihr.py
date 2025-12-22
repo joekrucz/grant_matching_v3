@@ -428,57 +428,57 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           # Only use fallback if NO tabs were found at all
           # If we found any tabs, only use those sections (some pages may only have 2-3 tabs)
           if not tabs_found and not sections:
-          desc_el = (
-              detail_soup.select_one("main") or
-              detail_soup.select_one(".content") or
-              detail_soup.select_one("article") or
-              detail_soup.select_one("div[class*='description']")
-          )
-          
-          if desc_el:
-            current_section = None
-            current_content = []
+            desc_el = (
+                detail_soup.select_one("main") or
+                detail_soup.select_one(".content") or
+                detail_soup.select_one("article") or
+                detail_soup.select_one("div[class*='description']")
+            )
             
+            if desc_el:
+              current_section = None
+              current_content = []
+              
               # Process all elements using heading-based parsing only
-            for element in desc_el.descendants:
+              for element in desc_el.descendants:
                 if hasattr(element, 'name') and element.name in ["h2", "h3"]:
-                # Save previous section
-                if current_section and current_content:
-                  sections[current_section] = "\n".join(current_content).strip()
-                      
-                # Start new section
-                heading_text = element.get_text(strip=True).lower()
-                current_section = None
-                
-                # Identify section type by heading text
-                if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
-                  current_section = "overview"
-                elif any(word in heading_text for word in ["eligibility", "who can apply", "who is eligible"]):
-                  current_section = "eligibility"
-                elif any(word in heading_text for word in ["funding", "budget", "cost", "financial"]):
-                  current_section = "funding"
-                elif any(word in heading_text for word in ["application", "how to apply", "apply", "submission"]):
-                  current_section = "how_to_apply"
-                elif any(word in heading_text for word in ["deadline", "closing", "dates", "timeline", "schedule"]):
-                  current_section = "dates"
-                elif any(word in heading_text for word in ["assessment", "evaluation", "review", "criteria"]):
-                  current_section = "assessment"
-                elif any(word in heading_text for word in ["contact", "enquiries", "questions"]):
-                  current_section = "contact"
-                elif any(word in heading_text for word in ["terms", "conditions", "requirements"]):
-                  current_section = "terms"
-                else:
-                  # Use heading as section name (normalized)
-                  current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
-                current_content = []
+                  # Save previous section
+                  if current_section and current_content:
+                    sections[current_section] = "\n".join(current_content).strip()
+                        
+                  # Start new section
+                  heading_text = element.get_text(strip=True).lower()
+                  current_section = None
+                  
+                  # Identify section type by heading text
+                  if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
+                    current_section = "overview"
+                  elif any(word in heading_text for word in ["eligibility", "who can apply", "who is eligible"]):
+                    current_section = "eligibility"
+                  elif any(word in heading_text for word in ["funding", "budget", "cost", "financial"]):
+                    current_section = "funding"
+                  elif any(word in heading_text for word in ["application", "how to apply", "apply", "submission"]):
+                    current_section = "how_to_apply"
+                  elif any(word in heading_text for word in ["deadline", "closing", "dates", "timeline", "schedule"]):
+                    current_section = "dates"
+                  elif any(word in heading_text for word in ["assessment", "evaluation", "review", "criteria"]):
+                    current_section = "assessment"
+                  elif any(word in heading_text for word in ["contact", "enquiries", "questions"]):
+                    current_section = "contact"
+                  elif any(word in heading_text for word in ["terms", "conditions", "requirements"]):
+                    current_section = "terms"
+                  else:
+                    # Use heading as section name (normalized)
+                    current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
+                  current_content = []
                 elif hasattr(element, 'name') and element.name in ["p", "div", "li", "ul", "ol"] and current_section:
-                text = element.get_text(strip=True)
-                if text and len(text) > 10:  # Skip very short text (likely navigation)
-                  current_content.append(text)
-            
-            # Save last section
-            if current_section and current_content:
-              sections[current_section] = "\n".join(current_content).strip()
+                  text = element.get_text(strip=True)
+                  if text and len(text) > 10:  # Skip very short text (likely navigation)
+                    current_content.append(text)
+              
+              # Save last section
+              if current_section and current_content:
+                sections[current_section] = "\n".join(current_content).strip()
             
           # Build description from sections with proper ordering
           description = ""
@@ -715,48 +715,48 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           
           # If no tabs found, fall back to main content area with heading-based parsing
           if not sections:
-          desc_el = (
-              detail_soup.select_one("main") or
-              detail_soup.select_one(".content") or
-              detail_soup.select_one("article")
-          )
-          
-          if desc_el:
-            current_section = None
-            current_content = []
+            desc_el = (
+                detail_soup.select_one("main") or
+                detail_soup.select_one(".content") or
+                detail_soup.select_one("article")
+            )
             
-            for element in desc_el.descendants:
+            if desc_el:
+              current_section = None
+              current_content = []
+              
+              for element in desc_el.descendants:
                 if hasattr(element, 'name') and element.name in ["h2", "h3"]:
-                if current_section and current_content:
-                  sections[current_section] = "\n".join(current_content).strip()
-                    
-                heading_text = element.get_text(strip=True).lower()
-                current_section = None
-                
-                if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
-                  current_section = "overview"
-                elif any(word in heading_text for word in ["eligibility", "who can apply"]):
-                  current_section = "eligibility"
-                elif any(word in heading_text for word in ["funding", "budget", "cost"]):
-                  current_section = "funding"
-                elif any(word in heading_text for word in ["application", "how to apply", "apply"]):
-                  current_section = "how_to_apply"
-                elif any(word in heading_text for word in ["deadline", "closing", "dates"]):
-                  current_section = "dates"
-                elif any(word in heading_text for word in ["assessment", "evaluation"]):
-                  current_section = "assessment"
-                elif any(word in heading_text for word in ["contact", "enquiries"]):
-                  current_section = "contact"
-                else:
-                  current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
-                current_content = []
+                  if current_section and current_content:
+                    sections[current_section] = "\n".join(current_content).strip()
+                      
+                  heading_text = element.get_text(strip=True).lower()
+                  current_section = None
+                  
+                  if any(word in heading_text for word in ["overview", "summary", "introduction", "about"]):
+                    current_section = "overview"
+                  elif any(word in heading_text for word in ["eligibility", "who can apply"]):
+                    current_section = "eligibility"
+                  elif any(word in heading_text for word in ["funding", "budget", "cost"]):
+                    current_section = "funding"
+                  elif any(word in heading_text for word in ["application", "how to apply", "apply"]):
+                    current_section = "how_to_apply"
+                  elif any(word in heading_text for word in ["deadline", "closing", "dates"]):
+                    current_section = "dates"
+                  elif any(word in heading_text for word in ["assessment", "evaluation"]):
+                    current_section = "assessment"
+                  elif any(word in heading_text for word in ["contact", "enquiries"]):
+                    current_section = "contact"
+                  else:
+                    current_section = heading_text.replace(" ", "_").replace("-", "_")[:50]
+                  current_content = []
                 elif hasattr(element, 'name') and element.name in ["p", "div", "li"] and current_section:
-                text = element.get_text(strip=True)
-                if text and len(text) > 10:
-                  current_content.append(text)
-            
-            if current_section and current_content:
-              sections[current_section] = "\n".join(current_content).strip()
+                  text = element.get_text(strip=True)
+                  if text and len(text) > 10:
+                    current_content.append(text)
+              
+              if current_section and current_content:
+                sections[current_section] = "\n".join(current_content).strip()
             
           # Build description from sections with proper ordering
           description = ""

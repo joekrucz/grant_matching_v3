@@ -137,8 +137,8 @@ async def run_nihr(request: Request):
   except:
     log_id = None
   try:
-  result = run_nihr_job(log_id=log_id)
-  return JSONResponse(result)
+    result = run_nihr_job(log_id=log_id)
+    return JSONResponse(result)
   except HTTPException as e:
     # Re-raise HTTPException to return proper error status
     raise e

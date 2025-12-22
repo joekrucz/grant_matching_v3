@@ -49,9 +49,9 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
     page = 1
     max_pages = 20  # Safety limit
     pagination_pattern = None  # Will be determined after first page
-        
-        while page <= max_pages:
-          # Try different pagination URL patterns
+    
+    while page <= max_pages:
+      # Try different pagination URL patterns
       if page == 1:
         url = listing_url
       else:
@@ -64,42 +64,42 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
       
       try:
         print(f"Fetching Catapult opportunities page {page} from {url}...")
-              resp = fetch_with_retry(session, url, timeout=30)
-              soup = BeautifulSoup(resp.text, "html.parser")
-              
-              # Catapult structure: h2 elements inside <a> tags contain grant titles
-              grant_links = soup.select("a h2")
-              
-              new_grants_on_page = 0
-              for h2 in grant_links:
-                link_el = h2.find_parent("a")
-                if not link_el:
-                  continue
-                
-                href = link_el.get("href", "")
-                if not href or "/opportunity/" not in href:
-                  continue
-                
-                # Normalize URL
-                if href.startswith("/"):
-                  href = f"https://cp.catapult.org.uk{href}"
-                elif not href.startswith("http"):
-                  continue
-                
-                # Skip if we've already seen this URL
-                if href in seen_urls:
-                  continue
-                
-                title = h2.get_text(strip=True)
+        resp = fetch_with_retry(session, url, timeout=30)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        
+        # Catapult structure: h2 elements inside <a> tags contain grant titles
+        grant_links = soup.select("a h2")
+        
+        new_grants_on_page = 0
+        for h2 in grant_links:
+          link_el = h2.find_parent("a")
+          if not link_el:
+            continue
+          
+          href = link_el.get("href", "")
+          if not href or "/opportunity/" not in href:
+            continue
+          
+          # Normalize URL
+          if href.startswith("/"):
+            href = f"https://cp.catapult.org.uk{href}"
+          elif not href.startswith("http"):
+            continue
+          
+          # Skip if we've already seen this URL
+          if href in seen_urls:
+            continue
+          
+          title = h2.get_text(strip=True)
           # Remove "Closed:" prefix if present
-                if title.startswith("Closed:"):
-                  title = title.replace("Closed:", "").strip()
-                
-                seen_urls.add(href)
-                all_grant_data.append((h2, href, title))
-                new_grants_on_page += 1
-              
-              if new_grants_on_page > 0:
+          if title.startswith("Closed:"):
+            title = title.replace("Closed:", "").strip()
+          
+          seen_urls.add(href)
+          all_grant_data.append((h2, href, title))
+          new_grants_on_page += 1
+        
+        if new_grants_on_page > 0:
           print(f"  Page {page}: Found {new_grants_on_page} new grants (total: {len(all_grant_data)})")
           
           # On first successful page, try to detect pagination pattern from links
@@ -215,8 +215,6 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
             break
         
         # Try to fetch detail page for more info
-        # Initialize variables early to avoid scope issues
-        funding_amount = None
         try:
           time.sleep(1)  # Throttle
           detail_resp = fetch_with_retry(session, url, referer=listing_url, timeout=30)
@@ -582,27 +580,36 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
               print(f"    Warning: No detected tab found for tab number {tab_number}, using '{parent_tab_key}'")
             
             # Find all cpc-title-content sections within this tab panel
-            # Look for divs with cpc-title-content class, but exclude the inner wrapper
-            # Use a more flexible search - find all divs with the class
-            all_divs_with_class = tab_panel.find_all("div", class_=lambda x: x and "cpc-title-content" in " ".join(x))
-            # Filter: we want the outer cpc-title-content div, not the inner wrapper
-            # The outer div has class "cpc-title-content" but NOT "cpc-title-content__inner"
+            # Search within the kt-tab-inner-content-inner div
+            inner_content = tab_panel.select_one(".kt-tab-inner-content-inner")
+            search_root = inner_content if inner_content else tab_panel
+            
+            # Find all divs with cpc-title-content class
+            all_cpc_divs = search_root.find_all("div")
+            # Filter to get only the outer divs (not the inner wrapper)
             cpc_content_sections = []
-            for div in all_divs_with_class:
+            for div in all_cpc_divs:
               div_classes = div.get("class", [])
-              class_str = " ".join(str(c) for c in div_classes)
+              if not div_classes:
+                continue
+              class_list = [str(c) for c in div_classes]
+              class_str = " ".join(class_list)
               # Include if it has cpc-title-content but NOT cpc-title-content__inner
               if "cpc-title-content" in class_str and "cpc-title-content__inner" not in class_str:
                 cpc_content_sections.append(div)
             
             print(f"    Tab {tab_number} ('{parent_tab_key}'): Found {len(cpc_content_sections)} cpc-title-content sections")
+            
+            # Debug if no sections found
             if len(cpc_content_sections) == 0:
-              # Debug: check what divs are actually in the tab panel
-              all_divs = tab_panel.find_all("div")
-              print(f"      Debug: Tab panel has {len(all_divs)} total divs")
-              for i, div in enumerate(all_divs[:5]):
-                div_classes = div.get("class", [])
-                print(f"        Div {i+1} classes: {div_classes}")
+              print(f"      Debug: Checking tab panel content...")
+              if inner_content:
+                all_divs_in_tab = inner_content.find_all("div")
+                print(f"      Found {len(all_divs_in_tab)} divs in kt-tab-inner-content-inner")
+                for i, div in enumerate(all_divs_in_tab[:10]):
+                  div_classes = div.get("class", [])
+                  if div_classes:
+                    print(f"        Div {i+1} classes: {div_classes}")
             
             # Extract content from each cpc-title-content section in this tab
             for cpc_section in cpc_content_sections:
@@ -779,59 +786,59 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
           if not sections:
             print(f"  No tabs found, extracting content from main page...")
             if detail_desc_el:
-            # Look for headings (h2, h3) to identify sections
-            headings = detail_desc_el.find_all(["h2", "h3"])
-            current_section = None
-            current_content = []
-            
-            for element in detail_desc_el.descendants:
-              if element.name in ["h2", "h3"]:
-                # Save previous section
-                if current_section and current_content:
-                  sections[current_section] = "\n".join(current_content).strip()
-                # Start new section
-                heading_text = element.get_text(strip=True).lower()
-                current_section = None
-                if "overview" in heading_text or "summary" in heading_text:
-                  current_section = "overview"
-                elif "challenge" in heading_text:
-                  current_section = "challenge"
-                elif "ipec" in heading_text:
-                  current_section = "ipec"
-                elif "date" in heading_text or "timeline" in heading_text:
-                  current_section = "dates"
-                elif "apply" in heading_text or "application" in heading_text:
-                  current_section = "how_to_apply"
-                elif "eligibility" in heading_text:
-                  current_section = "eligibility"
-                elif "funding" in heading_text:
-                  current_section = "funding"
-                else:
-                  current_section = "other"
-                current_content = []
-              elif element.name in ["p", "div", "li"] and current_section:
-                text = element.get_text(strip=True)
-                if text:
-                  current_content.append(text)
-            
-            # Save last section
-            if current_section and current_content:
-              sections[current_section] = "\n".join(current_content).strip()
+              # Look for headings (h2, h3) to identify sections
+              headings = detail_desc_el.find_all(["h2", "h3"])
+              current_section = None
+              current_content = []
               
-              # If we got sections from headings, use markdown formatting
-              if sections:
-                formatted_sections = {}
-                for sec_key, sec_content in sections.items():
-                  # Convert to markdown if needed
-                  formatted_sections[sec_key] = sec_content
-                sections = formatted_sections
-                print(f"  Extracted {len(sections)} sections from page headings")
+              for element in detail_desc_el.descendants:
+                if element.name in ["h2", "h3"]:
+                  # Save previous section
+                  if current_section and current_content:
+                    sections[current_section] = "\n".join(current_content).strip()
+                  # Start new section
+                  heading_text = element.get_text(strip=True).lower()
+                  current_section = None
+                  if "overview" in heading_text or "summary" in heading_text:
+                    current_section = "overview"
+                  elif "challenge" in heading_text:
+                    current_section = "challenge"
+                  elif "ipec" in heading_text:
+                    current_section = "ipec"
+                  elif "date" in heading_text or "timeline" in heading_text:
+                    current_section = "dates"
+                  elif "apply" in heading_text or "application" in heading_text:
+                    current_section = "how_to_apply"
+                  elif "eligibility" in heading_text:
+                    current_section = "eligibility"
+                  elif "funding" in heading_text:
+                    current_section = "funding"
+                  else:
+                    current_section = "other"
+                  current_content = []
+                elif element.name in ["p", "div", "li"] and current_section:
+                  text = element.get_text(strip=True)
+                  if text:
+                    current_content.append(text)
+              
+              # Save last section
+              if current_section and current_content:
+                sections[current_section] = "\n".join(current_content).strip()
+                
+                # If we got sections from headings, use markdown formatting
+                if sections:
+                  formatted_sections = {}
+                  for sec_key, sec_content in sections.items():
+                    # Convert to markdown if needed
+                    formatted_sections[sec_key] = sec_content
+                  sections = formatted_sections
+                  print(f"  Extracted {len(sections)} sections from page headings")
           
           # If we still have no sections, use the full description as overview
           if not sections:
             if description:
-            sections["overview"] = description
-            summary_from_tab = description[:500] if len(description) > 500 else description
+              sections["overview"] = description
+              summary_from_tab = description[:500] if len(description) > 500 else description
               print(f"  Using full description as overview ({len(description)} characters)")
             elif detail_desc_el:
               # Last resort: extract all text from main content area with markdown formatting
