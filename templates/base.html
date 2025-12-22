@@ -74,7 +74,7 @@
             <div class="flex items-center justify-between px-4 py-2 bg-base-300 border-b border-base-300">
                 <div class="flex flex-col flex-1">
                     <div class="flex items-center gap-2">
-                        <span class="font-semibold text-sm">Admin AI Assistant</span>
+                        <span class="font-semibold text-sm">AI Assistant</span>
                         <button type="button"
                                 class="btn btn-xs btn-ghost"
                                 id="admin-ai-conversations-btn"
@@ -305,6 +305,210 @@
                 }
             }
 
+            // Track grants mentioned in conversation for link generation
+            let conversationGrants = {}; // {grant_title: grant_slug}
+
+            function updateConversationGrants() {
+                // Load grant mappings from conversation messages
+                if (!currentConversationId) return;
+                
+                fetch(`/admin-panel/ai/conversations/${currentConversationId}`)
+                    .then(resp => resp.json())
+                    .then(data => {
+                        conversationGrants = {};
+                        data.messages.forEach(msg => {
+                            const metadata = msg.metadata || {};
+                            // Check for grant_mapping (from search results)
+                            if (metadata.grant_mapping) {
+                                Object.values(metadata.grant_mapping).forEach(grant => {
+                                    if (grant.title && grant.slug) {
+                                        conversationGrants[grant.title] = grant.slug;
+                                    }
+                                });
+                            }
+                            // Check for individual grant_title and grant_slug
+                            if (metadata.grant_title && metadata.grant_slug) {
+                                conversationGrants[metadata.grant_title] = metadata.grant_slug;
+                            }
+                        });
+                    })
+                    .catch(e => console.error('Error loading conversation grants:', e));
+            }
+
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function parseMarkdown(text) {
+                if (!text) return '';
+                
+                // Split into lines for processing
+                const lines = text.split('\n');
+                const processedLines = [];
+                let inList = false;
+                let listType = null; // 'ol' or 'ul'
+                let currentListItem = null;
+                
+                for (let i = 0; i < lines.length; i++) {
+                    let line = lines[i];
+                    const trimmed = line.trim();
+                    const leadingSpaces = line.length - line.trimStart().length;
+                    
+                    // Skip empty lines - if we're in a list item, add a line break
+                    if (!trimmed) {
+                        if (currentListItem !== null) {
+                            currentListItem += '<br>';
+                        } else if (inList) {
+                            // Empty line ends the list item
+                            if (currentListItem !== null) {
+                                processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                                currentListItem = null;
+                            }
+                        }
+                        continue;
+                    }
+                    
+                    // Check for numbered list items: 1. item, 2. item, etc.
+                    const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+                    if (numberedMatch && leadingSpaces < 3) {
+                        // Close previous list item if any
+                        if (currentListItem !== null) {
+                            processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                            currentListItem = null;
+                        }
+                        
+                        if (!inList || listType !== 'ol') {
+                            if (inList) {
+                                processedLines.push(`</${listType}>`);
+                            }
+                            processedLines.push('<ol class="list-decimal list-inside my-2 space-y-1">');
+                            inList = true;
+                            listType = 'ol';
+                        }
+                        // Start new list item
+                        currentListItem = processInlineMarkdown(numberedMatch[2]);
+                        continue;
+                    }
+                    
+                    // Check for bullet list items: - item or * item
+                    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+                    if (bulletMatch && leadingSpaces < 3) {
+                        // Close previous list item if any
+                        if (currentListItem !== null) {
+                            processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                            currentListItem = null;
+                        }
+                        
+                        if (!inList || listType !== 'ul') {
+                            if (inList) {
+                                processedLines.push(`</${listType}>`);
+                            }
+                            processedLines.push('<ul class="list-disc list-inside my-2 space-y-1">');
+                            inList = true;
+                            listType = 'ul';
+                        }
+                        // Start new list item
+                        currentListItem = processInlineMarkdown(bulletMatch[1]);
+                        continue;
+                    }
+                    
+                    // If we're in a list item and this line is indented, it's a continuation
+                    if (currentListItem !== null && leadingSpaces >= 3) {
+                        currentListItem += '<br>' + processInlineMarkdown(trimmed);
+                        continue;
+                    }
+                    
+                    // Not a list item - close any open list and list item
+                    if (currentListItem !== null) {
+                        processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                        currentListItem = null;
+                    }
+                    if (inList) {
+                        processedLines.push(`</${listType}>`);
+                        inList = false;
+                        listType = null;
+                    }
+                    
+                    // Process markdown in regular text lines
+                    line = processInlineMarkdown(line);
+                    processedLines.push(`<div class="my-1">${line}</div>`);
+                }
+                
+                // Close any open list item and list
+                if (currentListItem !== null) {
+                    processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                }
+                if (inList) {
+                    processedLines.push(`</${listType}>`);
+                }
+                
+                let result = processedLines.join('\n');
+                
+                // Convert multiple consecutive empty lines to single breaks
+                result = result.replace(/\n{3,}/g, '\n\n');
+                
+                return result;
+            }
+            
+            function processInlineMarkdown(text) {
+                if (!text) return '';
+                
+                // First escape HTML to prevent XSS
+                let result = escapeHtml(text);
+                
+                // Process markdown links: [text](url) - must come before bold processing
+                result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+                    const escapedUrl = escapeHtml(url);
+                    const escapedText = linkText; // Already escaped by escapeHtml above
+                    return `<a href="${escapedUrl}" class="link link-primary" target="_blank" rel="noopener noreferrer">${escapedText}</a>`;
+                });
+                
+                // Process bold: **text** or __text__ (must come before italic)
+                result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                result = result.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+                
+                // Process italic: *text* or _text_ (but not if it's part of bold)
+                // Only match single asterisks/underscores that aren't part of double ones
+                result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+                result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+                
+                return result;
+            }
+
+            function linkifyGrantNames(htmlText) {
+                // Convert grant names to hyperlinks in already-processed HTML
+                if (!htmlText || Object.keys(conversationGrants).length === 0) {
+                    return htmlText;
+                }
+                
+                let result = htmlText;
+                
+                // Sort by title length (longest first) to match more specific titles first
+                const sortedTitles = Object.keys(conversationGrants).sort((a, b) => b.length - a.length);
+                
+                for (const title of sortedTitles) {
+                    const slug = conversationGrants[title];
+                    if (!slug) continue;
+                    
+                    // Escape the title for HTML (it's already escaped in the HTML text)
+                    const escapedTitle = escapeHtml(title);
+                    // Escape special regex characters in escaped title
+                    const regexEscapedTitle = escapedTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    // Match grant title (case-insensitive, word boundaries) but not inside HTML tags
+                    // Use a negative lookbehind and lookahead to avoid matching inside tags
+                    const regex = new RegExp(`(?<!<[^>]*)\\b${regexEscapedTitle}\\b(?![^<]*>)`, 'gi');
+                    const url = `/grants/${escapeHtml(slug)}`;
+                    result = result.replace(regex, (match) => {
+                        return `<a href="${url}" class="link link-primary" target="_blank" rel="noopener noreferrer">${match}</a>`;
+                    });
+                }
+                
+                return result;
+            }
+
             function appendMessage(role, text, messageId = null) {
                 const container = document.getElementById('admin-ai-messages');
                 if (!container) return;
@@ -316,8 +520,15 @@
                     bubble.setAttribute('data-message-id', messageId);
                 }
                 
-                // Use textContent for safety (XSS prevention) and whitespace-pre-wrap CSS to preserve formatting
-                bubble.textContent = text;
+                // For assistant messages, process markdown and convert grant names to links
+                if (role === 'assistant') {
+                    const markdownHtml = parseMarkdown(text);
+                    const linkedText = linkifyGrantNames(markdownHtml);
+                    bubble.innerHTML = linkedText;
+                } else {
+                    // Use textContent for user messages (XSS prevention)
+                    bubble.textContent = text;
+                }
                 container.appendChild(bubble);
                 container.scrollTop = container.scrollHeight;
             }
@@ -378,6 +589,24 @@
                     const data = await resp.json();
                     
                     currentConversationId = conversationId;
+                    
+                    // Update grant mappings for link generation
+                    conversationGrants = {};
+                    data.messages.forEach(msg => {
+                        const metadata = msg.metadata || {};
+                        // Check for grant_mapping (from search results)
+                        if (metadata.grant_mapping) {
+                            Object.values(metadata.grant_mapping).forEach(grant => {
+                                if (grant.title && grant.slug) {
+                                    conversationGrants[grant.title] = grant.slug;
+                                }
+                            });
+                        }
+                        // Check for individual grant_title and grant_slug
+                        if (metadata.grant_title && metadata.grant_slug) {
+                            conversationGrants[metadata.grant_title] = metadata.grant_slug;
+                        }
+                    });
                     
                     // Update UI
                     const titleEl = document.getElementById('admin-ai-conversation-title');
@@ -579,6 +808,11 @@
                         updateConversationTitle('Summarised grant');
                     }
                     
+                    // Update grant mappings from response
+                    if (data.grant_title && data.grant_slug) {
+                        conversationGrants[data.grant_title] = data.grant_slug;
+                    }
+                    
                     const bullets = (data.bullets || []).map(b => `• ${b}`).join('\n');
                     const risks = (data.risks || []).map(r => `- Risk: ${r}`).join('\n');
                     appendMessage('assistant', `${bullets}${risks ? '\n\n' + risks : ''}`);
@@ -645,6 +879,11 @@
                     if (data.conversation_id && !currentConversationId) {
                         currentConversationId = data.conversation_id;
                         updateConversationTitle('Grant search');
+                    }
+                    
+                    // Update grant mappings from response
+                    if (data.grant_mapping) {
+                        Object.assign(conversationGrants, data.grant_mapping);
                     }
                     
                     const matchedGrants = data.matched_grants || [];
@@ -778,6 +1017,11 @@
                         updateConversationTitle('Fit analysis');
                     }
                     
+                    // Update grant mappings from response
+                    if (data.grant_title && data.grant_slug) {
+                        conversationGrants[data.grant_title] = data.grant_slug;
+                    }
+                    
                     const score = (data.fit_score || 0).toFixed(2);
                     const scorePercent = (data.fit_score * 100).toFixed(0);
                     const explanation = data.explanation || '';
@@ -885,6 +1129,11 @@
                     if (data.conversation_id && !currentConversationId) {
                         currentConversationId = data.conversation_id;
                         updateConversationTitle(question.length > 30 ? question.substring(0, 30) + '...' : question);
+                    }
+                    
+                    // Update grant mappings from response
+                    if (data.grant_mapping) {
+                        Object.assign(conversationGrants, data.grant_mapping);
                     }
                     
                     const answer = data.answer || 'No answer returned.';

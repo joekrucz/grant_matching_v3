@@ -205,12 +205,15 @@
             // Remove thinking message
             thinkingBubble.remove();
 
-            // Add assistant response
+            // Add assistant response with markdown processing
             const assistantBubble = document.createElement('div');
             assistantBubble.className = 'flex justify-start';
+            const fullAnswer = answer + (caveats ? '\n\n' + caveats : '');
+            const markdownHtml = parseMarkdown(fullAnswer);
+            const linkedContent = linkifyGrantNames(markdownHtml);
             assistantBubble.innerHTML = `
                 <div class="max-w-[80%] rounded-lg px-4 py-2 bg-base-100">
-                    <div class="text-sm whitespace-pre-wrap">${escapeHtml(answer + (caveats ? '\n\n' + caveats : ''))}</div>
+                    <div class="text-sm">${linkedContent}</div>
                     <div class="text-xs opacity-70 mt-1">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                 </div>
             `;
@@ -234,9 +237,180 @@
     }
 
     function escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Track grants mentioned in conversation for link generation
+    let conversationGrants = {};
+
+    function parseMarkdown(text) {
+        if (!text) return '';
+        
+        // Split into lines for processing
+        const lines = text.split('\n');
+        const processedLines = [];
+        let inList = false;
+        let listType = null; // 'ol' or 'ul'
+        let currentListItem = null;
+        
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            const trimmed = line.trim();
+            const leadingSpaces = line.length - line.trimStart().length;
+            
+            // Skip empty lines - if we're in a list item, add a line break
+            if (!trimmed) {
+                if (currentListItem !== null) {
+                    currentListItem += '<br>';
+                } else if (inList) {
+                    // Empty line ends the list item
+                    if (currentListItem !== null) {
+                        processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                        currentListItem = null;
+                    }
+                }
+                continue;
+            }
+            
+            // Check for numbered list items: 1. item, 2. item, etc.
+            const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+            if (numberedMatch && leadingSpaces < 3) {
+                // Close previous list item if any
+                if (currentListItem !== null) {
+                    processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                    currentListItem = null;
+                }
+                
+                if (!inList || listType !== 'ol') {
+                    if (inList) {
+                        processedLines.push(`</${listType}>`);
+                    }
+                    processedLines.push('<ol class="list-decimal list-inside my-2 space-y-1">');
+                    inList = true;
+                    listType = 'ol';
+                }
+                // Start new list item
+                currentListItem = processInlineMarkdown(numberedMatch[2]);
+                continue;
+            }
+            
+            // Check for bullet list items: - item or * item
+            const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+            if (bulletMatch && leadingSpaces < 3) {
+                // Close previous list item if any
+                if (currentListItem !== null) {
+                    processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                    currentListItem = null;
+                }
+                
+                if (!inList || listType !== 'ul') {
+                    if (inList) {
+                        processedLines.push(`</${listType}>`);
+                    }
+                    processedLines.push('<ul class="list-disc list-inside my-2 space-y-1">');
+                    inList = true;
+                    listType = 'ul';
+                }
+                // Start new list item
+                currentListItem = processInlineMarkdown(bulletMatch[1]);
+                continue;
+            }
+            
+            // If we're in a list item and this line is indented, it's a continuation
+            if (currentListItem !== null && leadingSpaces >= 3) {
+                currentListItem += '<br>' + processInlineMarkdown(trimmed);
+                continue;
+            }
+            
+            // Not a list item - close any open list and list item
+            if (currentListItem !== null) {
+                processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+                currentListItem = null;
+            }
+            if (inList) {
+                processedLines.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            
+            // Process markdown in regular text lines
+            line = processInlineMarkdown(line);
+            processedLines.push(`<div class="my-1">${line}</div>`);
+        }
+        
+        // Close any open list item and list
+        if (currentListItem !== null) {
+            processedLines.push(`<li class="ml-2 mb-2">${currentListItem}</li>`);
+        }
+        if (inList) {
+            processedLines.push(`</${listType}>`);
+        }
+        
+        let result = processedLines.join('\n');
+        
+        // Convert multiple consecutive empty lines to single breaks
+        result = result.replace(/\n{3,}/g, '\n\n');
+        
+        return result;
+    }
+    
+    function processInlineMarkdown(text) {
+        if (!text) return '';
+        
+        // First escape HTML to prevent XSS
+        let result = escapeHtml(text);
+        
+        // Process markdown links: [text](url) - must come before bold processing
+        result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+            const escapedUrl = escapeHtml(url);
+            const escapedText = linkText; // Already escaped by escapeHtml above
+            return `<a href="${escapedUrl}" class="link link-primary" target="_blank" rel="noopener noreferrer">${escapedText}</a>`;
+        });
+        
+        // Process bold: **text** or __text__ (must come before italic)
+        result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        result = result.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        
+        // Process italic: *text* or _text_ (but not if it's part of bold)
+        // Only match single asterisks/underscores that aren't part of double ones
+        result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+        result = result.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+        
+        return result;
+    }
+
+    function linkifyGrantNames(htmlText) {
+        // Convert grant names to hyperlinks in already-processed HTML
+        if (!htmlText || Object.keys(conversationGrants).length === 0) {
+            return htmlText;
+        }
+        
+        let result = htmlText;
+        
+        // Sort by title length (longest first) to match more specific titles first
+        const sortedTitles = Object.keys(conversationGrants).sort((a, b) => b.length - a.length);
+        
+        for (const title of sortedTitles) {
+            const slug = conversationGrants[title];
+            if (!slug) continue;
+            
+            // Escape the title for HTML (it's already escaped in the HTML text)
+            const escapedTitle = escapeHtml(title);
+            // Escape special regex characters in escaped title
+            const regexEscapedTitle = escapedTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Match grant title (case-insensitive, word boundaries) but not inside HTML tags
+            // Use a negative lookbehind and lookahead to avoid matching inside tags
+            const regex = new RegExp(`(?<!<[^>]*)\\b${regexEscapedTitle}\\b(?![^<]*>)`, 'gi');
+            const url = `/grants/${escapeHtml(slug)}`;
+            result = result.replace(regex, (match) => {
+                return `<a href="${url}" class="link link-primary" target="_blank" rel="noopener noreferrer">${match}</a>`;
+            });
+        }
+        
+        return result;
     }
 
     // Load messages when page loads
@@ -254,13 +428,43 @@
             const data = await resp.json();
             messagesContainer.innerHTML = '';
             
+            // Load grant mappings from conversation metadata
+            conversationGrants = {};
             if (data.messages && data.messages.length > 0) {
+                data.messages.forEach(msg => {
+                    const metadata = msg.metadata || {};
+                    // Check for grant_mapping (from search results)
+                    if (metadata.grant_mapping) {
+                        Object.values(metadata.grant_mapping).forEach(grant => {
+                            if (grant.title && grant.slug) {
+                                conversationGrants[grant.title] = grant.slug;
+                            }
+                        });
+                    }
+                    // Check for individual grant_title and grant_slug
+                    if (metadata.grant_title && metadata.grant_slug) {
+                        conversationGrants[metadata.grant_title] = metadata.grant_slug;
+                    }
+                });
+                
+                // Render messages with markdown processing
                 data.messages.forEach(msg => {
                     const bubble = document.createElement('div');
                     bubble.className = `flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`;
+                    
+                    let content = msg.content || '';
+                    if (msg.role === 'assistant') {
+                        // Process markdown and linkify grant names for assistant messages
+                        const markdownHtml = parseMarkdown(content);
+                        content = linkifyGrantNames(markdownHtml);
+                    } else {
+                        // Escape HTML for user messages
+                        content = escapeHtml(content);
+                    }
+                    
                     bubble.innerHTML = `
                         <div class="max-w-[80%] rounded-lg px-4 py-2 ${msg.role === 'user' ? 'bg-primary text-primary-content' : 'bg-base-100'}">
-                            <div class="text-sm whitespace-pre-wrap">${escapeHtml(msg.content || '')}</div>
+                            <div class="text-sm ${msg.role === 'user' ? 'whitespace-pre-wrap' : ''}">${content}</div>
                             <div class="text-xs opacity-70 mt-1">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                         </div>
                     `;

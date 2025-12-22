@@ -204,6 +204,9 @@ def ai_summarise_grant(request):
         content=summary_text,
         metadata={
             "action": "summarise_grant",
+            "grant_id": grant_id,
+            "grant_slug": grant.slug,  # Store slug for link generation
+            "grant_title": grant.title,  # Store title for matching
             "bullets": bullets,
             "risks": risks,
             "model": raw_meta.get("model"),
@@ -229,6 +232,8 @@ def ai_summarise_grant(request):
             "bullets": bullets,
             "risks": risks,
             "conversation_id": conversation.id,
+            "grant_title": grant.title,  # Include for link generation
+            "grant_slug": grant.slug,  # Include for link generation
             "meta": {
                 "model": raw_meta.get("model"),
                 "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -459,6 +464,19 @@ def ai_contextual_qa(request):
     used_fields = parsed.get("used_fields") or []
     caveats = parsed.get("caveats") or []
 
+    # Build grant mapping for link generation (from referenced grants)
+    grant_mapping = {}
+    if referenced_grant_contexts:
+        # Get grant objects to access slugs
+        referenced_grant_objects = Grant.objects.filter(id__in=referenced_grant_contexts.keys())
+        for grant_obj in referenced_grant_objects:
+            grant_ctx = referenced_grant_contexts.get(grant_obj.id)
+            if grant_ctx and grant_obj.slug:
+                grant_mapping[grant_obj.id] = {
+                    "title": grant_ctx.get("title", grant_obj.title),
+                    "slug": grant_obj.slug,
+                }
+
     # Save assistant response
     ConversationMessage.objects.create(
         conversation=conversation,
@@ -467,6 +485,7 @@ def ai_contextual_qa(request):
         metadata={
             "used_fields": used_fields,
             "caveats": caveats,
+            "grant_mapping": grant_mapping,  # Store grant title -> slug mapping for link generation
             "model": raw_meta.get("model"),
             "latency_ms": latency_ms,
         },
@@ -498,12 +517,19 @@ def ai_contextual_qa(request):
         latency_ms=latency_ms,
     )
 
+    # Convert grant_mapping from {grant_id: {...}} to {title: slug} format for frontend
+    grant_mapping_list = {}
+    for grant_id, grant_info in grant_mapping.items():
+        if grant_info.get("slug"):
+            grant_mapping_list[grant_info["title"]] = grant_info["slug"]
+    
     return JsonResponse(
         {
             "answer": answer,
             "used_fields": used_fields,
             "caveats": caveats,
             "conversation_id": conversation.id,
+            "grant_mapping": grant_mapping_list,  # Include grant mapping for link generation
             "meta": {
                 "model": raw_meta.get("model"),
                 "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -643,6 +669,9 @@ def ai_grant_company_fit(request):
         content=fit_text,
         metadata={
             "action": "grant_company_fit",
+            "grant_id": grant_id,
+            "grant_slug": grant.slug,  # Store slug for link generation
+            "grant_title": grant.title,  # Store title for matching
             "fit_score": fit_score,
             "explanation": explanation,
             "alignment_points": alignment_points,
@@ -679,6 +708,8 @@ def ai_grant_company_fit(request):
             "concerns": concerns,
             "recommendations": recommendations,
             "conversation_id": conversation.id,
+            "grant_title": grant.title,  # Include for link generation
+            "grant_slug": grant.slug,  # Include for link generation
             "meta": {
                 "model": raw_meta.get("model"),
                 "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -805,8 +836,10 @@ def ai_search_grants_for_company(request):
         search_text += f"{search_summary}\n\n" if search_summary else ""
         search_text += "No matching grants found."
     
-    # Extract grant IDs from results for metadata
+    # Extract grant IDs and slugs from results for metadata
     grant_ids_from_search = [r["grant_id"] for r in results]
+    # Also store grant title -> slug mapping for link generation
+    grant_mapping = {r["grant_id"]: {"title": r["title"], "slug": grants_dict.get(r["grant_id"]).slug if r["grant_id"] in grants_dict else None} for r in results if r["grant_id"] in grants_dict}
     
     # Save to conversation
     ConversationMessage.objects.create(
@@ -823,6 +856,7 @@ def ai_search_grants_for_company(request):
             "action": "search_grants_for_company",
             "matched_count": len(results),
             "grant_ids": grant_ids_from_search,  # Store grant IDs for later reference
+            "grant_mapping": grant_mapping,  # Store title -> slug mapping for link generation
             "search_summary": search_summary,
             "model": raw_meta.get("model"),
             "latency_ms": latency_ms,
@@ -845,10 +879,17 @@ def ai_search_grants_for_company(request):
         latency_ms=latency_ms,
     )
     
+    # Convert grant_mapping from {grant_id: {...}} to {title: slug} format for frontend
+    grant_mapping_list = {}
+    for grant_id, grant_info in grant_mapping.items():
+        if grant_info.get("slug"):
+            grant_mapping_list[grant_info["title"]] = grant_info["slug"]
+    
     return JsonResponse({
         "matched_grants": results,
         "search_summary": search_summary,
         "conversation_id": conversation.id,
+        "grant_mapping": grant_mapping_list,  # Include grant mapping for link generation
         "meta": {
             "model": raw_meta.get("model"),
             "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),

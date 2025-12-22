@@ -67,6 +67,7 @@ def build_grant_context(grant: Grant) -> Dict[str, Any]:
     
     return {
         "id": grant.id,
+        "slug": grant.slug,  # Include slug for generating links
         "title": _truncate(grant.title, 500),
         "summary": _truncate(grant.summary, 1000),
         "description": _truncate(grant.description, 2000),
