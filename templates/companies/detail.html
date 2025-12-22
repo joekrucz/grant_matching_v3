@@ -3,6 +3,10 @@
 {% block title %}{{ company.name }} - Grants Aggregator{% endblock %}
 
 {% block content %}
+<div id="page-context"
+     data-page-type="company"
+     data-company-id="{{ company.id }}"
+     class="hidden"></div>
 <div class="mb-6">
     <a href="{% url 'companies:list' %}" class="btn btn-ghost btn-sm">
         ← Back to Companies

@@ -6,6 +6,7 @@
     <title>{% block title %}Grants Aggregator{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <style>
         [data-loading] {
             opacity: 0.5;
@@ -27,6 +28,7 @@
                 <li><a href="{% url 'companies:list' %}" class="btn btn-ghost">Companies</a></li>
                 {% if user.admin %}
                 <li><a href="{% url 'admin_panel:dashboard' %}" class="btn btn-ghost">Admin</a></li>
+                <li><a href="{% url 'admin_panel:conversations_page' %}" class="btn btn-ghost">Conversations</a></li>
                 {% endif %}
             </ul>
             {% endif %}
@@ -62,6 +64,839 @@
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {% block content %}{% endblock %}
     </main>
+
+    {% if user.is_authenticated and user.admin %}
+    <!-- Admin AI Assistant Popup -->
+    <div id="admin-ai-assistant"
+         class="fixed bottom-4 right-4 z-40">
+        <div id="admin-ai-panel"
+             class="hidden w-80 sm:w-96 bg-base-200 shadow-xl rounded-lg border border-base-300 overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-2 bg-base-300 border-b border-base-300">
+                <div class="flex flex-col flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold text-sm">Admin AI Assistant</span>
+                        <button type="button"
+                                class="btn btn-xs btn-ghost"
+                                id="admin-ai-conversations-btn"
+                                onclick="window.showConversationList()"
+                                title="View conversations">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+                            </svg>
+                        </button>
+                        <button type="button"
+                                class="btn btn-xs btn-ghost"
+                                onclick="window.startNewConversation()"
+                                title="Start new conversation">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                            </svg>
+                        </button>
+                    </div>
+                    <span class="text-xs text-base-content/60" id="admin-ai-context-label">
+                        Ready to summarise or answer questions.
+                    </span>
+                    <span class="text-xs text-base-content/40" id="admin-ai-conversation-title" style="display:none">
+                        Conversation: <span id="admin-ai-conversation-title-text"></span>
+                    </span>
+                </div>
+                <button type="button"
+                        class="btn btn-xs btn-ghost"
+                        onclick="window.toggleAdminAiPanel(false)">
+                    ✕
+                </button>
+            </div>
+            <!-- Conversation List (hidden by default) -->
+            <div id="admin-ai-conversation-list" class="hidden max-h-80 overflow-y-auto px-3 py-2 text-sm border-b border-base-300">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-semibold text-xs">Conversations</span>
+                    <button type="button"
+                            class="btn btn-xs btn-ghost"
+                            onclick="window.hideConversationList()">
+                        ✕
+                    </button>
+                </div>
+                <div id="admin-ai-conversation-list-items" class="space-y-1">
+                    <div class="text-xs text-base-content/60">Loading...</div>
+                </div>
+            </div>
+            <div id="admin-ai-messages"
+                 class="max-h-80 overflow-y-auto px-3 py-2 text-sm space-y-2">
+                <div class="text-xs text-base-content/60">
+                    Ask about the current grant or company, or use the quick actions below.
+                </div>
+            </div>
+            <div class="border-t border-base-300 px-3 py-2 space-y-2">
+                <div class="flex flex-wrap gap-1" id="admin-ai-quick-actions">
+                    <!-- Buttons toggled based on page context -->
+                    <button type="button"
+                            class="btn btn-xs btn-outline"
+                            id="admin-ai-summarise-grant-btn"
+                            style="display:none"
+                            onclick="window.adminAiSummariseGrant()">
+                        Summarise grant
+                    </button>
+                    <button type="button"
+                            class="btn btn-xs btn-outline"
+                            id="admin-ai-summarise-company-btn"
+                            style="display:none"
+                            onclick="window.adminAiSummariseCompany()">
+                        Summarise company
+                    </button>
+                    <button type="button"
+                            class="btn btn-xs btn-primary"
+                            id="admin-ai-search-grants-btn"
+                            style="display:none"
+                            onclick="window.adminAiSearchGrantsForCompany()">
+                        Search grants
+                    </button>
+                    <!-- Grant-Company Fit Analysis -->
+                    <div class="flex gap-1 items-center" id="admin-ai-fit-grant-btn" style="display:none">
+                        <select id="admin-ai-company-selector" class="select select-xs select-bordered max-w-[120px]">
+                            <option value="">Select company...</option>
+                        </select>
+                        <button type="button"
+                                class="btn btn-xs btn-primary"
+                                onclick="window.adminAiCheckFitWithCompany()">
+                            Check Fit
+                        </button>
+                    </div>
+                    <div class="flex gap-1 items-center" id="admin-ai-fit-company-btn" style="display:none">
+                        <select id="admin-ai-grant-selector" class="select select-xs select-bordered max-w-[120px]">
+                            <option value="">Select grant...</option>
+                        </select>
+                        <button type="button"
+                                class="btn btn-xs btn-primary"
+                                onclick="window.adminAiCheckFitWithGrant()">
+                            Check Fit
+                        </button>
+                    </div>
+                </div>
+                <form class="flex gap-2 items-end"
+                      onsubmit="window.adminAiSendQuestion(event)">
+                    <textarea
+                        id="admin-ai-input"
+                        class="textarea textarea-bordered textarea-xs flex-1"
+                        rows="2"
+                        placeholder="Ask a question about this page..."></textarea>
+                    <button type="submit"
+                            class="btn btn-primary btn-xs"
+                            id="admin-ai-send-btn">
+                        Send
+                    </button>
+                </form>
+            </div>
+        </div>
+        <button type="button"
+                id="admin-ai-toggle"
+                class="btn btn-circle btn-primary shadow-lg"
+                onclick="window.toggleAdminAiPanel()">
+            AI
+        </button>
+    </div>
+
+    <script>
+        (function () {
+            // Conversation state
+            let currentConversationId = null;
+            
+            function getCsrfToken() {
+                // Try meta tag first
+                const metaToken = document.querySelector('meta[name="csrf-token"]');
+                if (metaToken && metaToken.content && metaToken.content.trim()) {
+                    return metaToken.content.trim();
+                }
+                // Fallback to cookie
+                function getCookie(name) {
+                    const value = `; ${document.cookie}`;
+                    const parts = value.split(`; ${name}=`);
+                    if (parts.length === 2) {
+                        const token = parts.pop().split(';').shift();
+                        return token ? token.trim() : null;
+                    }
+                    return null;
+                }
+                const cookieToken = getCookie('csrftoken');
+                if (cookieToken) {
+                    return cookieToken;
+                }
+                return null;
+            }
+
+            function getPageContext() {
+                const el = document.getElementById('page-context');
+                if (!el) {
+                    return {pageType: 'unknown', grantId: null, companyId: null};
+                }
+                return {
+                    pageType: el.getAttribute('data-page-type') || 'unknown',
+                    grantId: el.getAttribute('data-grant-id'),
+                    companyId: el.getAttribute('data-company-id'),
+                };
+            }
+
+            async function loadCompanySelector() {
+                const selector = document.getElementById('admin-ai-company-selector');
+                if (!selector || selector.options.length > 1) return; // Already loaded
+                
+                try {
+                    const resp = await fetch('/admin-panel/ai/search_companies?q=');
+                    const data = await resp.json();
+                    data.companies.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name;
+                        selector.appendChild(opt);
+                    });
+                } catch (e) {
+                    console.error('Failed to load companies:', e);
+                }
+            }
+
+            async function loadGrantSelector() {
+                const selector = document.getElementById('admin-ai-grant-selector');
+                if (!selector || selector.options.length > 1) return; // Already loaded
+                
+                try {
+                    const resp = await fetch('/admin-panel/ai/search_grants?q=');
+                    const data = await resp.json();
+                    data.grants.forEach(g => {
+                        const opt = document.createElement('option');
+                        opt.value = g.id;
+                        opt.textContent = g.title.length > 20 ? g.title.substring(0, 20) + '...' : g.title;
+                        selector.appendChild(opt);
+                    });
+                } catch (e) {
+                    console.error('Failed to load grants:', e);
+                }
+            }
+
+            function setContextLabel() {
+                const labelEl = document.getElementById('admin-ai-context-label');
+                const grantBtn = document.getElementById('admin-ai-summarise-grant-btn');
+                const companyBtn = document.getElementById('admin-ai-summarise-company-btn');
+                const searchGrantsBtn = document.getElementById('admin-ai-search-grants-btn');
+                const fitGrantBtn = document.getElementById('admin-ai-fit-grant-btn');
+                const fitCompanyBtn = document.getElementById('admin-ai-fit-company-btn');
+                const ctx = getPageContext();
+
+                if (ctx.pageType === 'grant' && ctx.grantId) {
+                    labelEl.textContent = 'Context: Grant detail';
+                    grantBtn.style.display = 'inline-flex';
+                    companyBtn.style.display = 'none';
+                    searchGrantsBtn.style.display = 'none';
+                    fitGrantBtn.style.display = 'flex';
+                    fitCompanyBtn.style.display = 'none';
+                    loadCompanySelector();
+                } else if (ctx.pageType === 'company' && ctx.companyId) {
+                    labelEl.textContent = 'Context: Company detail';
+                    grantBtn.style.display = 'none';
+                    companyBtn.style.display = 'inline-flex';
+                    searchGrantsBtn.style.display = 'inline-flex';
+                    fitGrantBtn.style.display = 'none';
+                    fitCompanyBtn.style.display = 'flex';
+                    loadGrantSelector();
+                } else {
+                    labelEl.textContent = 'No specific context detected.';
+                    grantBtn.style.display = 'none';
+                    companyBtn.style.display = 'none';
+                    fitGrantBtn.style.display = 'none';
+                    fitCompanyBtn.style.display = 'none';
+                }
+            }
+
+            function appendMessage(role, text, messageId = null) {
+                const container = document.getElementById('admin-ai-messages');
+                if (!container) return;
+                const bubble = document.createElement('div');
+                bubble.className = role === 'user'
+                    ? 'bg-base-300 rounded px-2 py-1 text-xs whitespace-pre-wrap'
+                    : 'bg-base-100 rounded px-2 py-1 text-xs whitespace-pre-wrap';
+                if (messageId) {
+                    bubble.setAttribute('data-message-id', messageId);
+                }
+                
+                // Use textContent for safety (XSS prevention) and whitespace-pre-wrap CSS to preserve formatting
+                bubble.textContent = text;
+                container.appendChild(bubble);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            async function loadConversationList() {
+                const listContainer = document.getElementById('admin-ai-conversation-list-items');
+                if (!listContainer) return;
+                
+                try {
+                    const resp = await fetch('/admin-panel/ai/conversations');
+                    const data = await resp.json();
+                    listContainer.innerHTML = '';
+                    
+                    if (data.conversations.length === 0) {
+                        listContainer.innerHTML = '<div class="text-xs text-base-content/60">No conversations yet.</div>';
+                        return;
+                    }
+                    
+                    data.conversations.forEach(conv => {
+                        const item = document.createElement('div');
+                        item.className = 'p-2 bg-base-100 rounded hover:bg-base-200 text-xs';
+                        item.innerHTML = `
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="flex-1 cursor-pointer" onclick="window.loadConversation(${conv.id})">
+                                    <div class="font-semibold">${conv.title || 'New Conversation'}</div>
+                                    <div class="text-base-content/60 text-xs">${conv.message_count} messages • ${new Date(conv.updated_at).toLocaleDateString()}</div>
+                                </div>
+                                <div class="flex gap-1" onclick="event.stopPropagation()">
+                                    <button type="button"
+                                            class="btn btn-xs btn-ghost"
+                                            onclick="window.renameConversation(${conv.id}, ${JSON.stringify(conv.title || 'New Conversation')})"
+                                            title="Rename">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                                            <path d="m2.695 14.762-1.262 3.155a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.885L17.5 5.5a2.121 2.121 0 0 0-3-3L3.58 13.419a4 4 0 0 0-.885 1.343Z" />
+                                        </svg>
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-xs btn-ghost text-error"
+                                            onclick="window.deleteConversation(${conv.id})"
+                                            title="Delete">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                                            <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        listContainer.appendChild(item);
+                    });
+                } catch (e) {
+                    listContainer.innerHTML = '<div class="text-xs text-error">Error loading conversations.</div>';
+                }
+            }
+
+            async function loadConversation(conversationId) {
+                try {
+                    const resp = await fetch(`/admin-panel/ai/conversations/${conversationId}`);
+                    const data = await resp.json();
+                    
+                    currentConversationId = conversationId;
+                    
+                    // Update UI
+                    const titleEl = document.getElementById('admin-ai-conversation-title');
+                    const titleTextEl = document.getElementById('admin-ai-conversation-title-text');
+                    if (titleEl && titleTextEl) {
+                        titleTextEl.textContent = data.title || 'New Conversation';
+                        titleEl.style.display = 'block';
+                    }
+                    
+                    // Clear and load messages
+                    const container = document.getElementById('admin-ai-messages');
+                    if (container) {
+                        container.innerHTML = '';
+                        data.messages.forEach(msg => {
+                            appendMessage(msg.role, msg.content, msg.id);
+                        });
+                    }
+                    
+                    // Hide conversation list
+                    hideConversationList();
+                } catch (e) {
+                    appendMessage('assistant', 'Error loading conversation.');
+                }
+            }
+
+            window.showConversationList = function() {
+                const listEl = document.getElementById('admin-ai-conversation-list');
+                if (listEl) {
+                    listEl.classList.remove('hidden');
+                    loadConversationList();
+                }
+            };
+
+            window.hideConversationList = function() {
+                const listEl = document.getElementById('admin-ai-conversation-list');
+                if (listEl) {
+                    listEl.classList.add('hidden');
+                }
+            };
+
+            function updateConversationTitle(title) {
+                const titleEl = document.getElementById('admin-ai-conversation-title');
+                const titleTextEl = document.getElementById('admin-ai-conversation-title-text');
+                if (titleEl && titleTextEl) {
+                    titleTextEl.textContent = title;
+                    titleEl.style.display = 'block';
+                }
+            }
+
+            window.startNewConversation = function() {
+                currentConversationId = null;
+                const titleEl = document.getElementById('admin-ai-conversation-title');
+                if (titleEl) {
+                    titleEl.style.display = 'none';
+                }
+                const container = document.getElementById('admin-ai-messages');
+                if (container) {
+                    container.innerHTML = '<div class="text-xs text-base-content/60">Ask about the current grant or company, or use the quick actions below.</div>';
+                }
+            };
+
+            window.renameConversation = async function(conversationId, currentTitle) {
+                const newTitle = prompt('Enter new title:', currentTitle);
+                if (newTitle === null || newTitle.trim() === currentTitle) {
+                    return; // User cancelled or didn't change
+                }
+                
+                try {
+                    const csrftoken = getCsrfToken();
+                    const resp = await fetch(`/admin-panel/ai/conversations/${conversationId}/update`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken,
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ title: newTitle.trim() }),
+                    });
+                    
+                    if (!resp.ok) {
+                        const data = await resp.json();
+                        throw new Error(data.error || 'Failed to rename conversation');
+                    }
+                    
+                    // Reload conversation list
+                    loadConversationList();
+                    
+                    // If this is the current conversation, update the title display
+                    if (currentConversationId === conversationId) {
+                        updateConversationTitle(newTitle.trim());
+                    }
+                } catch (err) {
+                    alert('Error renaming conversation: ' + err.message);
+                }
+            };
+
+            window.deleteConversation = async function(conversationId) {
+                if (!confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
+                    return;
+                }
+                
+                try {
+                    const csrftoken = getCsrfToken();
+                    const resp = await fetch(`/admin-panel/ai/conversations/${conversationId}/delete`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRFToken': csrftoken,
+                        },
+                        credentials: 'same-origin',
+                    });
+                    
+                    if (!resp.ok) {
+                        const data = await resp.json();
+                        throw new Error(data.error || 'Failed to delete conversation');
+                    }
+                    
+                    // If this was the current conversation, clear it
+                    if (currentConversationId === conversationId) {
+                        window.startNewConversation();
+                    }
+                    
+                    // Reload conversation list
+                    loadConversationList();
+                } catch (err) {
+                    alert('Error deleting conversation: ' + err.message);
+                }
+            };
+
+            async function callAdminAi(url, body) {
+                const csrftoken = getCsrfToken();
+                if (!csrftoken) {
+                    throw new Error('CSRF token not found. Please refresh the page.');
+                }
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body || {}),
+                });
+                if (!resp.ok) {
+                    let msg = 'Something went wrong.';
+                    try {
+                        const data = await resp.json();
+                        if (data && data.error) {
+                            msg = data.error;
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                    throw new Error(msg);
+                }
+                return resp.json();
+            }
+
+            window.toggleAdminAiPanel = function (forceState) {
+                const panel = document.getElementById('admin-ai-panel');
+                const btn = document.getElementById('admin-ai-toggle');
+                if (!panel || !btn) return;
+                const shouldOpen = typeof forceState === 'boolean'
+                    ? forceState
+                    : panel.classList.contains('hidden');
+                if (shouldOpen) {
+                    panel.classList.remove('hidden');
+                    btn.classList.add('hidden');
+                    setContextLabel();
+                    // Hide conversation list if open
+                    hideConversationList();
+                } else {
+                    panel.classList.add('hidden');
+                    btn.classList.remove('hidden');
+                }
+            };
+
+            window.adminAiSummariseGrant = async function () {
+                const ctx = getPageContext();
+                if (!ctx.grantId) {
+                    appendMessage('assistant', 'No grant found on this page.');
+                    return;
+                }
+                appendMessage('assistant', 'Summarising grant...');
+                try {
+                    const requestBody = {
+                        grant_id: ctx.grantId,
+                        page_type: ctx.pageType,
+                        company_id: ctx.companyId,
+                    };
+                    if (currentConversationId) {
+                        requestBody.conversation_id = currentConversationId;
+                    }
+                    const data = await callAdminAi('/admin-panel/ai/summarise_grant', requestBody);
+                    
+                    // Update conversation_id if this was a new conversation
+                    if (data.conversation_id && !currentConversationId) {
+                        currentConversationId = data.conversation_id;
+                        updateConversationTitle('Summarised grant');
+                    }
+                    
+                    const bullets = (data.bullets || []).map(b => `• ${b}`).join('\n');
+                    const risks = (data.risks || []).map(r => `- Risk: ${r}`).join('\n');
+                    appendMessage('assistant', `${bullets}${risks ? '\n\n' + risks : ''}`);
+                } catch (err) {
+                    appendMessage('assistant', err.message || 'Error summarising grant.');
+                }
+            };
+
+            window.adminAiSummariseCompany = async function () {
+                const ctx = getPageContext();
+                if (!ctx.companyId) {
+                    appendMessage('assistant', 'No company found on this page.');
+                    return;
+                }
+                appendMessage('assistant', 'Summarising company...');
+                try {
+                    const requestBody = {
+                        company_id: ctx.companyId,
+                        page_type: ctx.pageType,
+                        grant_id: ctx.grantId,
+                    };
+                    if (currentConversationId) {
+                        requestBody.conversation_id = currentConversationId;
+                    }
+                    const data = await callAdminAi('/admin-panel/ai/summarise_company', requestBody);
+                    
+                    // Update conversation_id if this was a new conversation
+                    if (data.conversation_id && !currentConversationId) {
+                        currentConversationId = data.conversation_id;
+                        updateConversationTitle('Summarised company');
+                    }
+                    
+                    const bullets = (data.bullets || []).map(b => `• ${b}`).join('\n');
+                    const highlights = (data.highlights || []).map(h => `- Highlight: ${h}`).join('\n');
+                    const gaps = (data.gaps || []).map(g => `- Gap: ${g}`).join('\n');
+                    let text = bullets;
+                    if (highlights) text += `\n\n${highlights}`;
+                    if (gaps) text += `\n\n${gaps}`;
+                    appendMessage('assistant', text);
+                } catch (err) {
+                    appendMessage('assistant', err.message || 'Error summarising company.');
+                }
+            };
+
+            window.adminAiSearchGrantsForCompany = async function () {
+                const ctx = getPageContext();
+                if (!ctx.companyId) {
+                    appendMessage('assistant', 'No company found on this page.');
+                    return;
+                }
+                appendMessage('assistant', 'Searching grants in database...');
+                try {
+                    const requestBody = {
+                        company_id: ctx.companyId,
+                        page_type: ctx.pageType,
+                        limit: 50,
+                    };
+                    if (currentConversationId) {
+                        requestBody.conversation_id = currentConversationId;
+                    }
+                    const data = await callAdminAi('/admin-panel/ai/search_grants_for_company', requestBody);
+                    
+                    // Update conversation_id if this was a new conversation
+                    if (data.conversation_id && !currentConversationId) {
+                        currentConversationId = data.conversation_id;
+                        updateConversationTitle('Grant search');
+                    }
+                    
+                    const matchedGrants = data.matched_grants || [];
+                    const searchSummary = data.search_summary || '';
+                    
+                    if (matchedGrants.length === 0) {
+                        let text = searchSummary || 'No matching grants found.';
+                        appendMessage('assistant', text);
+                        return;
+                    }
+                    
+                    // Format results
+                    let text = '';
+                    if (searchSummary) {
+                        text += `${searchSummary}\n\n`;
+                    }
+                    text += `Found ${matchedGrants.length} matching grant${matchedGrants.length !== 1 ? 's' : ''}:\n\n`;
+                    
+                    matchedGrants.slice(0, 10).forEach((grant, idx) => {
+                        const score = (grant.relevance_score * 100).toFixed(0);
+                        text += `${idx + 1}. **${grant.title}** (${score}% match)\n`;
+                        if (grant.explanation) {
+                            text += `   ${grant.explanation}\n`;
+                        }
+                        if (grant.deadline) {
+                            text += `   Deadline: ${grant.deadline}\n`;
+                        }
+                        if (grant.funding_amount) {
+                            text += `   Funding: ${grant.funding_amount}\n`;
+                        }
+                        if (grant.url) {
+                            text += `   [View grant](${grant.url})\n`;
+                        }
+                        text += '\n';
+                    });
+                    
+                    if (matchedGrants.length > 10) {
+                        text += `\n... and ${matchedGrants.length - 10} more matches.`;
+                    }
+                    
+                    appendMessage('assistant', text);
+                } catch (err) {
+                    appendMessage('assistant', err.message || 'Error searching grants.');
+                }
+            };
+
+            async function searchCompanyByName(query) {
+                try {
+                    const resp = await fetch(`/admin-panel/ai/search_companies?q=${encodeURIComponent(query)}`);
+                    const data = await resp.json();
+                    return data.companies || [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            async function searchGrantByName(query) {
+                try {
+                    const resp = await fetch(`/admin-panel/ai/search_grants?q=${encodeURIComponent(query)}`);
+                    const data = await resp.json();
+                    return data.grants || [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            function parseFitAnalysisQuestion(question, ctx) {
+                // Patterns for fit analysis questions
+                const fitPatterns = [
+                    /(?:is|does|would|will)\s+(?:this\s+)?(?:grant|funding)\s+(?:a\s+)?(?:good\s+)?(?:fit|match|suitable|appropriate)\s+(?:for|with)\s+(?:the\s+company\s+)?(.+)/i,
+                    /(?:is|does|would|will)\s+(?:this\s+)?(?:a\s+)?(?:good\s+)?(?:grant|funding)\s+(?:for|with)\s+(?:the\s+company\s+)?(.+)/i,
+                    /(?:is|does|would|will)\s+(.+?)\s+(?:a\s+)?(?:good\s+)?(?:fit|match|suitable|appropriate)\s+(?:for|with)\s+(?:this\s+)?(?:grant|funding)/i,
+                    /(?:check|analyze|assess)\s+(?:fit|match)\s+(?:for|with)\s+(?:the\s+company\s+)?(.+)/i,
+                    /(?:how\s+)?(?:well\s+)?(?:does|will)\s+(?:this\s+)?(?:grant|funding)\s+(?:fit|match)\s+(?:the\s+company\s+)?(.+)/i,
+                ];
+
+                for (const pattern of fitPatterns) {
+                    const match = question.match(pattern);
+                    if (match) {
+                        let entityName = match[1].trim();
+                        // Remove common words at the start/end
+                        entityName = entityName.replace(/^(the|a|an|this|that)\s+/i, '');
+                        entityName = entityName.replace(/\s+(the|a|an|this|that)$/i, '');
+                        // Remove trailing punctuation
+                        entityName = entityName.replace(/[.,!?;:]$/, '');
+                        if (entityName.length > 2) {
+                            return entityName.trim();
+                        }
+                    }
+                }
+                return null;
+            }
+
+            window.adminAiCheckFitWithCompany = async function () {
+                const ctx = getPageContext();
+                const selector = document.getElementById('admin-ai-company-selector');
+                if (!ctx.grantId || !selector || !selector.value) {
+                    appendMessage('assistant', 'Please select a company first.');
+                    return;
+                }
+                await runFitAnalysis(ctx.grantId, selector.value);
+            };
+
+            window.adminAiCheckFitWithGrant = async function () {
+                const ctx = getPageContext();
+                const selector = document.getElementById('admin-ai-grant-selector');
+                if (!ctx.companyId || !selector || !selector.value) {
+                    appendMessage('assistant', 'Please select a grant first.');
+                    return;
+                }
+                await runFitAnalysis(selector.value, ctx.companyId);
+            };
+
+            async function runFitAnalysis(grantId, companyId) {
+                appendMessage('assistant', 'Analyzing fit...');
+                try {
+                    const ctx = getPageContext();
+                    const requestBody = {
+                        grant_id: grantId,
+                        company_id: companyId,
+                        page_type: ctx.pageType,
+                    };
+                    if (currentConversationId) {
+                        requestBody.conversation_id = currentConversationId;
+                    }
+                    const data = await callAdminAi('/admin-panel/ai/grant_company_fit', requestBody);
+                    
+                    // Update conversation_id if this was a new conversation
+                    if (data.conversation_id && !currentConversationId) {
+                        currentConversationId = data.conversation_id;
+                        updateConversationTitle('Fit analysis');
+                    }
+                    
+                    const score = (data.fit_score || 0).toFixed(2);
+                    const scorePercent = (data.fit_score * 100).toFixed(0);
+                    const explanation = data.explanation || '';
+                    const alignment = (data.alignment_points || []).map(a => `✓ ${a}`).join('\n');
+                    const concerns = (data.concerns || []).map(c => `⚠ ${c}`).join('\n');
+                    const recommendations = (data.recommendations || []).map(r => `💡 ${r}`).join('\n');
+                    
+                    let response = `Fit Score: ${scorePercent}% (${score}/1.0)\n\n${explanation}`;
+                    if (alignment) response += `\n\nAlignment Points:\n${alignment}`;
+                    if (concerns) response += `\n\nConcerns:\n${concerns}`;
+                    if (recommendations) response += `\n\nRecommendations:\n${recommendations}`;
+                    
+                    appendMessage('assistant', response);
+                } catch (err) {
+                    appendMessage('assistant', err.message || 'Error analyzing fit.');
+                }
+            }
+
+            window.adminAiSendQuestion = async function (event) {
+                if (event) event.preventDefault();
+                const input = document.getElementById('admin-ai-input');
+                if (!input) return;
+                const question = (input.value || '').trim();
+                if (!question) return;
+                input.value = '';
+                appendMessage('user', question);
+
+                const ctx = getPageContext();
+                
+                // Check if this is a fit analysis question
+                const entityName = parseFitAnalysisQuestion(question, ctx);
+                if (entityName && entityName.length > 2) {
+                    // Try to find the entity and run fit analysis
+                    if (ctx.grantId) {
+                        // User is on grant page, looking for company
+                        const companies = await searchCompanyByName(entityName);
+                        if (companies.length === 1) {
+                            appendMessage('assistant', `Checking fit with ${companies[0].name}...`);
+                            await runFitAnalysis(ctx.grantId, companies[0].id);
+                            return;
+                        } else if (companies.length > 1) {
+                            // Show top matches and let user pick
+                            const topMatches = companies.slice(0, 5).map(c => c.name).join(', ');
+                            appendMessage('assistant', `Found ${companies.length} companies matching "${entityName}". Top matches: ${topMatches}. Please be more specific or use the dropdown.`);
+                            return;
+                        } else {
+                            // No exact match, try fuzzy search with individual words
+                            const words = entityName.split(/\s+/).filter(w => w.length > 2);
+                            if (words.length > 0) {
+                                // Try searching with each significant word
+                                for (const word of words) {
+                                    const fuzzyResults = await searchCompanyByName(word);
+                                    if (fuzzyResults.length > 0) {
+                                        // Check if any result contains all words
+                                        const fullMatch = fuzzyResults.find(c => 
+                                            words.every(w => c.name.toLowerCase().includes(w.toLowerCase()))
+                                        );
+                                        if (fullMatch) {
+                                            appendMessage('assistant', `Found "${fullMatch.name}". Checking fit...`);
+                                            await runFitAnalysis(ctx.grantId, fullMatch.id);
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                            appendMessage('assistant', `Could not find a company matching "${entityName}". Please check the spelling or use the dropdown to select a company.`);
+                            return;
+                        }
+                    } else if (ctx.companyId) {
+                        // User is on company page, looking for grant
+                        const grants = await searchGrantByName(entityName);
+                        if (grants.length === 1) {
+                            appendMessage('assistant', `Checking fit with ${grants[0].title}...`);
+                            await runFitAnalysis(grants[0].id, ctx.companyId);
+                            return;
+                        } else if (grants.length > 1) {
+                            const topMatches = grants.slice(0, 5).map(g => g.title).join(', ');
+                            appendMessage('assistant', `Found ${grants.length} grants matching "${entityName}". Top matches: ${topMatches}. Please be more specific or use the dropdown.`);
+                            return;
+                        } else {
+                            appendMessage('assistant', `Could not find a grant matching "${entityName}". Please check the spelling or use the dropdown to select a grant.`);
+                            return;
+                        }
+                    }
+                }
+
+                // Regular Q&A
+                appendMessage('assistant', 'Thinking...');
+                try {
+                    const requestBody = {
+                        message: question,
+                        page_type: ctx.pageType,
+                        grant_id: ctx.grantId,
+                        company_id: ctx.companyId,
+                    };
+                    
+                    // Include conversation_id if we have one
+                    if (currentConversationId) {
+                        requestBody.conversation_id = currentConversationId;
+                    }
+                    
+                    const data = await callAdminAi('/admin-panel/ai/contextual_qa', requestBody);
+                    
+                    // Update conversation_id if this was a new conversation
+                    if (data.conversation_id && !currentConversationId) {
+                        currentConversationId = data.conversation_id;
+                        updateConversationTitle(question.length > 30 ? question.substring(0, 30) + '...' : question);
+                    }
+                    
+                    const answer = data.answer || 'No answer returned.';
+                    const caveats = (data.caveats || []).join(' ');
+                    appendMessage('assistant', `${answer}${caveats ? '\n\n' + caveats : ''}`);
+                } catch (err) {
+                    appendMessage('assistant', err.message || 'Error answering question.');
+                }
+            };
+        })();
+    </script>
+    {% endif %}
 
     <footer class="footer footer-center bg-base-200 text-base-content border-t border-base-300 mt-12 p-6">
         <p class="text-sm">

@@ -1,15 +1,27 @@
 """
 Admin panel views.
 """
+import json
+
+from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.urls import reverse
+from django_ratelimit.decorators import ratelimit
+
 from grants.models import Grant, ScrapeLog
 from users.models import User
 from companies.models import Company
 from grants_aggregator import CELERY_AVAILABLE
+from .ai_client import (
+    AiAssistantClient,
+    AiAssistantError,
+    build_company_context,
+    build_grant_context,
+)
+from .models import AiInteractionLog, Conversation, ConversationMessage
 
 # Import tasks only if Celery is available
 if CELERY_AVAILABLE:
@@ -36,6 +48,17 @@ def admin_required(view_func):
             return redirect('/')
         return view_func(request, *args, **kwargs)
     return wrapper
+
+
+def _json_bad_request(message, status=400):
+    return JsonResponse({"error": message}, status=status)
+
+
+def _get_ai_client():
+    try:
+        return AiAssistantClient()
+    except AiAssistantError as exc:
+        return str(exc)
 
 
 @login_required
@@ -113,6 +136,895 @@ def dashboard(request):
         'last_refresh_task': last_refresh_task,
     }
     return render(request, 'admin_panel/dashboard.html', context)
+
+
+@login_required
+@admin_required
+@ratelimit(key='user_or_ip', rate='30/h', block=True)
+def ai_summarise_grant(request):
+    """API endpoint: summarise a single grant for an admin."""
+    if request.method != "POST":
+        return _json_bad_request("Method not allowed", status=405)
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+    grant_id = payload.get("grant_id")
+    conversation_id = payload.get("conversation_id")
+    page_type = payload.get("page_type", "grant")
+    company_id = payload.get("company_id")
+    
+    if not grant_id:
+        return _json_bad_request("grant_id is required")
+
+    # Get or create conversation
+    conversation = None
+    if conversation_id:
+        conversation = Conversation.objects.filter(id=conversation_id, user=request.user).first()
+        if not conversation:
+            return _json_bad_request("Conversation not found", status=404)
+    else:
+        # Create new conversation for this action
+        grant = get_object_or_404(Grant, id=grant_id)
+        conversation = Conversation.objects.create(
+            user=request.user,
+            title=f"{grant.title} Conversation",
+            initial_page_type=page_type,
+            initial_grant_id=grant_id,
+            initial_company_id=company_id,
+        )
+
+    grant = get_object_or_404(Grant, id=grant_id) if not grant else grant
+    client = _get_ai_client()
+    if isinstance(client, str):
+        return _json_bad_request(client, status=503)
+
+    grant_ctx = build_grant_context(grant)
+    parsed, raw_meta, latency_ms = client.summarise_grant(grant_ctx)
+
+    bullets = parsed.get("bullets") or []
+    risks = parsed.get("risks") or []
+    
+    # Format response for conversation
+    summary_text = "Grant Summary:\n\n" + "\n".join([f"• {b}" for b in bullets])
+    if risks:
+        summary_text += "\n\nRisks:\n" + "\n".join([f"⚠ {r}" for r in risks])
+
+    # Save to conversation
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="user",
+        content=f"Summarise grant: {grant.title}",
+        metadata={"action": "summarise_grant", "grant_id": grant_id},
+    )
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="assistant",
+        content=summary_text,
+        metadata={
+            "action": "summarise_grant",
+            "bullets": bullets,
+            "risks": risks,
+            "model": raw_meta.get("model"),
+            "latency_ms": latency_ms,
+        },
+    )
+    # Update conversation timestamp
+    conversation.save(update_fields=['updated_at'])
+
+    log = AiInteractionLog.objects.create(
+        user=request.user,
+        endpoint="summarise_grant",
+        model_name=raw_meta.get("model"),
+        grant=grant,
+        company=None,
+        request_payload={"grant_id": grant_id, "conversation_id": conversation.id},
+        response_payload={"bullets": bullets, "risks": risks},
+        latency_ms=latency_ms,
+    )
+
+    return JsonResponse(
+        {
+            "bullets": bullets,
+            "risks": risks,
+            "conversation_id": conversation.id,
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+                "log_id": log.id,
+            },
+        }
+    )
+
+
+@login_required
+@admin_required
+@ratelimit(key='user_or_ip', rate='30/h', block=True)
+def ai_summarise_company(request):
+    """API endpoint: summarise a single company for an admin."""
+    if request.method != "POST":
+        return _json_bad_request("Method not allowed", status=405)
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+    company_id = payload.get("company_id")
+    conversation_id = payload.get("conversation_id")
+    page_type = payload.get("page_type", "company")
+    grant_id = payload.get("grant_id")
+    
+    if not company_id:
+        return _json_bad_request("company_id is required")
+
+    # Get or create conversation
+    conversation = None
+    if conversation_id:
+        conversation = Conversation.objects.filter(id=conversation_id, user=request.user).first()
+        if not conversation:
+            return _json_bad_request("Conversation not found", status=404)
+    else:
+        # Create new conversation for this action
+        company = get_object_or_404(Company, id=company_id)
+        conversation = Conversation.objects.create(
+            user=request.user,
+            title=f"{company.name} Conversation",
+            initial_page_type=page_type,
+            initial_grant_id=grant_id,
+            initial_company_id=company_id,
+        )
+
+    company = get_object_or_404(Company, id=company_id) if not company else company
+    client = _get_ai_client()
+    if isinstance(client, str):
+        return _json_bad_request(client, status=503)
+
+    company_ctx = build_company_context(company)
+    parsed, raw_meta, latency_ms = client.summarise_company(company_ctx)
+
+    bullets = parsed.get("bullets") or []
+    highlights = parsed.get("highlights") or []
+    gaps = parsed.get("gaps") or []
+    
+    # Format response for conversation
+    summary_text = "Company Summary:\n\n" + "\n".join([f"• {b}" for b in bullets])
+    if highlights:
+        summary_text += "\n\nHighlights:\n" + "\n".join([f"✓ {h}" for h in highlights])
+    if gaps:
+        summary_text += "\n\nGaps:\n" + "\n".join([f"⚠ {g}" for g in gaps])
+
+    # Save to conversation
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="user",
+        content=f"Summarise company: {company.name}",
+        metadata={"action": "summarise_company", "company_id": company_id},
+    )
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="assistant",
+        content=summary_text,
+        metadata={
+            "action": "summarise_company",
+            "bullets": bullets,
+            "highlights": highlights,
+            "gaps": gaps,
+            "model": raw_meta.get("model"),
+            "latency_ms": latency_ms,
+        },
+    )
+    # Update conversation timestamp
+    conversation.save(update_fields=['updated_at'])
+
+    log = AiInteractionLog.objects.create(
+        user=request.user,
+        endpoint="summarise_company",
+        model_name=raw_meta.get("model"),
+        grant=None,
+        company=company,
+        request_payload={"company_id": company_id, "conversation_id": conversation.id},
+        response_payload={"bullets": bullets, "highlights": highlights, "gaps": gaps},
+        latency_ms=latency_ms,
+    )
+
+    return JsonResponse(
+        {
+            "bullets": bullets,
+            "highlights": highlights,
+            "gaps": gaps,
+            "conversation_id": conversation.id,
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+                "log_id": log.id,
+            },
+        }
+    )
+
+
+@login_required
+@admin_required
+@ratelimit(key='user_or_ip', rate='30/h', block=True)
+def ai_contextual_qa(request):
+    """API endpoint: contextual Q&A for an admin based on current page context."""
+    if request.method != "POST":
+        return _json_bad_request("Method not allowed", status=405)
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+
+    question = (payload.get("message") or "").strip()
+    page_type = (payload.get("page_type") or "unknown").strip()
+    grant_id = payload.get("grant_id")
+    company_id = payload.get("company_id")
+    conversation_id = payload.get("conversation_id")
+
+    if not question:
+        return _json_bad_request("message is required")
+
+    # Get or create conversation
+    conversation = None
+    if conversation_id:
+        conversation = Conversation.objects.filter(id=conversation_id, user=request.user).first()
+        if not conversation:
+            return _json_bad_request("Conversation not found", status=404)
+    else:
+        # Create new conversation if none provided
+        grant = get_object_or_404(Grant, id=grant_id) if grant_id else None
+        company = get_object_or_404(Company, id=company_id) if company_id else None
+        
+        # Generate title based on context
+        title = None
+        if grant:
+            title = f"{grant.title} Conversation"
+        elif company:
+            title = f"{company.name} Conversation"
+        
+        conversation = Conversation.objects.create(
+            user=request.user,
+            title=title,
+            initial_page_type=page_type,
+            initial_grant_id=grant_id,
+            initial_company_id=company_id,
+        )
+
+    grant = grant if 'grant' in locals() else (get_object_or_404(Grant, id=grant_id) if grant_id else None)
+    company = company if 'company' in locals() else (get_object_or_404(Company, id=company_id) if company_id else None)
+
+    # Save user message
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="user",
+        content=question,
+        metadata={"page_type": page_type, "grant_id": grant_id, "company_id": company_id},
+    )
+
+    client = _get_ai_client()
+    if isinstance(client, str):
+        return _json_bad_request(client, status=503)
+
+    grant_ctx = build_grant_context(grant) if grant else None
+    company_ctx = build_company_context(company) if company else None
+    parsed, raw_meta, latency_ms = client.contextual_qa(
+        question=question,
+        page_type=page_type,
+        grant_ctx=grant_ctx,
+        company_ctx=company_ctx,
+    )
+
+    answer = parsed.get("answer") or ""
+    used_fields = parsed.get("used_fields") or []
+    caveats = parsed.get("caveats") or []
+
+    # Save assistant response
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="assistant",
+        content=answer,
+        metadata={
+            "used_fields": used_fields,
+            "caveats": caveats,
+            "model": raw_meta.get("model"),
+            "latency_ms": latency_ms,
+        },
+    )
+    # Update conversation timestamp
+    conversation.save(update_fields=['updated_at'])
+
+    log = AiInteractionLog.objects.create(
+        user=request.user,
+        endpoint="contextual_qa",
+        model_name=raw_meta.get("model"),
+        grant=grant,
+        company=company,
+        request_payload={
+            "message": question,
+            "page_type": page_type,
+            "grant_id": grant_id,
+            "company_id": company_id,
+            "conversation_id": conversation.id,
+        },
+        response_payload={
+            "answer": answer,
+            "used_fields": used_fields,
+            "caveats": caveats,
+        },
+        latency_ms=latency_ms,
+    )
+
+    return JsonResponse(
+        {
+            "answer": answer,
+            "used_fields": used_fields,
+            "caveats": caveats,
+            "conversation_id": conversation.id,
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+                "log_id": log.id,
+            },
+        }
+    )
+
+
+@login_required
+@admin_required
+def ai_search_companies(request):
+    """API endpoint: search companies by name for AI assistant dropdowns."""
+    if request.method != "GET":
+        return _json_bad_request("Method not allowed", status=405)
+    
+    query = request.GET.get("q", "").strip()
+    
+    # If no query, return all companies (for dropdown population)
+    # If query provided, filter by name
+    if query:
+        companies = Company.objects.filter(name__icontains=query)[:20]
+    else:
+        companies = Company.objects.all()[:50]  # Limit to 50 for dropdown
+    
+    results = [
+        {"id": c.id, "name": c.name, "company_type": c.company_type or "", "status": c.status or ""}
+        for c in companies
+    ]
+    
+    return JsonResponse({"companies": results})
+
+
+@login_required
+@admin_required
+def ai_search_grants(request):
+    """API endpoint: search grants by title for AI assistant dropdowns."""
+    if request.method != "GET":
+        return _json_bad_request("Method not allowed", status=405)
+    
+    query = request.GET.get("q", "").strip()
+    
+    # If no query, return all grants (for dropdown population)
+    # If query provided, filter by title
+    if query:
+        grants = Grant.objects.filter(title__icontains=query)[:20]
+    else:
+        grants = Grant.objects.all()[:50]  # Limit to 50 for dropdown
+    
+    results = [
+        {"id": g.id, "title": g.title, "source": g.get_source_display(), "status": g.get_status_display()}
+        for g in grants
+    ]
+    
+    return JsonResponse({"grants": results})
+
+
+@login_required
+@admin_required
+@ratelimit(key='user_or_ip', rate='30/h', block=True)
+def ai_grant_company_fit(request):
+    """API endpoint: analyze how well a grant fits a company."""
+    if request.method != "POST":
+        return _json_bad_request("Method not allowed", status=405)
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+    
+    grant_id = payload.get("grant_id")
+    company_id = payload.get("company_id")
+    conversation_id = payload.get("conversation_id")
+    page_type = payload.get("page_type", "mixed")
+    
+    if not grant_id or not company_id:
+        return _json_bad_request("Both grant_id and company_id are required")
+    
+    # Get or create conversation
+    conversation = None
+    if conversation_id:
+        conversation = Conversation.objects.filter(id=conversation_id, user=request.user).first()
+        if not conversation:
+            return _json_bad_request("Conversation not found", status=404)
+    else:
+        # Create new conversation for this action
+        grant = get_object_or_404(Grant, id=grant_id)
+        company = get_object_or_404(Company, id=company_id)
+        conversation = Conversation.objects.create(
+            user=request.user,
+            title=f"{company.name} & {grant.title} Conversation",
+            initial_page_type=page_type,
+            initial_grant_id=grant_id,
+            initial_company_id=company_id,
+        )
+    
+    grant = grant if 'grant' in locals() else get_object_or_404(Grant, id=grant_id)
+    company = company if 'company' in locals() else get_object_or_404(Company, id=company_id)
+    
+    client = _get_ai_client()
+    if isinstance(client, str):
+        return _json_bad_request(client, status=503)
+    
+    grant_ctx = build_grant_context(grant)
+    company_ctx = build_company_context(company)
+    parsed, raw_meta, latency_ms = client.grant_company_fit(grant_ctx, company_ctx)
+    
+    fit_score = parsed.get("fit_score", 0.0)
+    explanation = parsed.get("explanation", "")
+    alignment_points = parsed.get("alignment_points", [])
+    concerns = parsed.get("concerns", [])
+    recommendations = parsed.get("recommendations", [])
+    
+    # Format response for conversation
+    score_percent = int(fit_score * 100)
+    fit_text = f"Fit Analysis: {company.name} ↔ {grant.title}\n\n"
+    fit_text += f"Fit Score: {score_percent}% ({fit_score:.2f}/1.0)\n\n"
+    fit_text += f"{explanation}\n\n"
+    if alignment_points:
+        fit_text += "Alignment Points:\n" + "\n".join([f"✓ {a}" for a in alignment_points]) + "\n\n"
+    if concerns:
+        fit_text += "Concerns:\n" + "\n".join([f"⚠ {c}" for c in concerns]) + "\n\n"
+    if recommendations:
+        fit_text += "Recommendations:\n" + "\n".join([f"💡 {r}" for r in recommendations])
+
+    # Save to conversation
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="user",
+        content=f"Check fit: {grant.title} with {company.name}",
+        metadata={"action": "grant_company_fit", "grant_id": grant_id, "company_id": company_id},
+    )
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="assistant",
+        content=fit_text,
+        metadata={
+            "action": "grant_company_fit",
+            "fit_score": fit_score,
+            "explanation": explanation,
+            "alignment_points": alignment_points,
+            "concerns": concerns,
+            "recommendations": recommendations,
+            "model": raw_meta.get("model"),
+            "latency_ms": latency_ms,
+        },
+    )
+    # Update conversation timestamp
+    conversation.save(update_fields=['updated_at'])
+    
+    log = AiInteractionLog.objects.create(
+        user=request.user,
+        endpoint="grant_company_fit",
+        model_name=raw_meta.get("model"),
+        grant=grant,
+        company=company,
+        request_payload={"grant_id": grant_id, "company_id": company_id, "conversation_id": conversation.id},
+        response_payload={
+            "fit_score": fit_score,
+            "explanation": explanation,
+            "alignment_points": alignment_points,
+            "concerns": concerns,
+        },
+        latency_ms=latency_ms,
+    )
+    
+    return JsonResponse(
+        {
+            "fit_score": fit_score,
+            "explanation": explanation,
+            "alignment_points": alignment_points,
+            "concerns": concerns,
+            "recommendations": recommendations,
+            "conversation_id": conversation.id,
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+                "log_id": log.id,
+            },
+        }
+    )
+
+
+@login_required
+@admin_required
+@ratelimit(key='user_or_ip', rate='20/h', block=True)
+def ai_search_grants_for_company(request):
+    """API endpoint: search grants in DB that match a company."""
+    if request.method != "POST":
+        return _json_bad_request("Method not allowed", status=405)
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+    
+    company_id = payload.get("company_id")
+    conversation_id = payload.get("conversation_id")
+    page_type = payload.get("page_type", "company")
+    limit = payload.get("limit", 50)  # Max grants to analyze
+    
+    if not company_id:
+        return _json_bad_request("company_id is required")
+    
+    # Get or create conversation
+    conversation = None
+    if conversation_id:
+        conversation = Conversation.objects.filter(id=conversation_id, user=request.user).first()
+        if not conversation:
+            return _json_bad_request("Conversation not found", status=404)
+    else:
+        # Create new conversation for this action
+        company = get_object_or_404(Company, id=company_id)
+        conversation = Conversation.objects.create(
+            user=request.user,
+            title=f"{company.name} Conversation",
+            initial_page_type=page_type,
+            initial_company_id=company_id,
+        )
+    
+    company = company if 'company' in locals() else get_object_or_404(Company, id=company_id)
+    
+    # Fetch a reasonable set of grants to analyze
+    # Prioritize active/open grants, then recent ones
+    active_grant_ids = list(Grant.objects.filter(
+        status__in=['open', 'upcoming', 'active']
+    ).order_by('-deadline', '-created_at').values_list('id', flat=True)[:limit])
+    
+    # If not enough active grants, include some closed ones
+    if len(active_grant_ids) < 20:
+        additional_ids = list(Grant.objects.exclude(
+            id__in=active_grant_ids
+        ).order_by('-deadline', '-created_at').values_list('id', flat=True)[:limit - len(active_grant_ids)])
+        all_grant_ids = active_grant_ids + additional_ids
+    else:
+        all_grant_ids = active_grant_ids
+    
+    grants_qs = Grant.objects.filter(id__in=all_grant_ids).order_by('-deadline', '-created_at')
+    
+    # Build grant contexts for AI
+    grants_list = [build_grant_context(g) for g in grants_qs]
+    
+    if not grants_list:
+        return JsonResponse({
+            "matched_grants": [],
+            "search_summary": "No grants found in database to analyze.",
+            "conversation_id": conversation.id,
+        })
+    
+    client = _get_ai_client()
+    if isinstance(client, str):
+        return _json_bad_request(client, status=503)
+    
+    company_ctx = build_company_context(company)
+    parsed, raw_meta, latency_ms = client.search_grants_for_company(company_ctx, grants_list)
+    
+    matched_grants = parsed.get("matched_grants", [])
+    search_summary = parsed.get("search_summary", "")
+    
+    # Fetch full grant objects for matched grants
+    grant_ids = [m.get("grant_id") for m in matched_grants if m.get("grant_id")]
+    grants_dict = {g.id: g for g in Grant.objects.filter(id__in=grant_ids)}
+    
+    # Build response with grant details
+    results = []
+    for match in matched_grants:
+        grant_id = match.get("grant_id")
+        if grant_id and grant_id in grants_dict:
+            grant = grants_dict[grant_id]
+            results.append({
+                "grant_id": grant_id,
+                "title": grant.title,
+                "summary": grant.summary,
+                "deadline": grant.deadline.isoformat() if grant.deadline else None,
+                "funding_amount": grant.funding_amount,
+                "status": grant.status,
+                "source": grant.source,
+                "url": grant.url,
+                "relevance_score": match.get("relevance_score", 0.0),
+                "explanation": match.get("explanation", ""),
+            })
+    
+    # Format response for conversation
+    if results:
+        search_text = f"Grant Search for {company.name}\n\n"
+        search_text += f"{search_summary}\n\n" if search_summary else ""
+        search_text += f"Found {len(results)} matching grants:\n\n"
+        for i, result in enumerate(results[:10], 1):  # Show top 10 in conversation
+            score_percent = int(result["relevance_score"] * 100)
+            search_text += f"{i}. {result['title']} ({score_percent}% match)\n"
+            search_text += f"   {result['explanation']}\n"
+            if result.get("deadline"):
+                search_text += f"   Deadline: {result['deadline']}\n"
+            search_text += "\n"
+    else:
+        search_text = f"Grant Search for {company.name}\n\n"
+        search_text += f"{search_summary}\n\n" if search_summary else ""
+        search_text += "No matching grants found."
+    
+    # Save to conversation
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="user",
+        content=f"Search grants for: {company.name}",
+        metadata={"action": "search_grants_for_company", "company_id": company_id},
+    )
+    ConversationMessage.objects.create(
+        conversation=conversation,
+        role="assistant",
+        content=search_text,
+        metadata={
+            "action": "search_grants_for_company",
+            "matched_count": len(results),
+            "search_summary": search_summary,
+            "model": raw_meta.get("model"),
+            "latency_ms": latency_ms,
+        },
+    )
+    # Update conversation timestamp
+    conversation.save(update_fields=['updated_at'])
+    
+    log = AiInteractionLog.objects.create(
+        user=request.user,
+        endpoint="search_grants_for_company",
+        model_name=raw_meta.get("model"),
+        grant=None,
+        company=company,
+        request_payload={"company_id": company_id, "conversation_id": conversation.id, "limit": limit},
+        response_payload={
+            "matched_count": len(results),
+            "search_summary": search_summary,
+        },
+        latency_ms=latency_ms,
+    )
+    
+    return JsonResponse({
+        "matched_grants": results,
+        "search_summary": search_summary,
+        "conversation_id": conversation.id,
+        "meta": {
+            "model": raw_meta.get("model"),
+            "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+            "latency_ms": latency_ms,
+            "log_id": log.id,
+        },
+    })
+
+
+@login_required
+@admin_required
+def ai_conversations_list(request):
+    """API endpoint: list all conversations for the current user."""
+    if request.method != "GET":
+        return _json_bad_request("Method not allowed", status=405)
+    
+    conversations = Conversation.objects.filter(user=request.user).order_by("-updated_at")[:50]
+    
+    results = [
+        {
+            "id": c.id,
+            "title": c.title or c.get_default_title(),
+            "message_count": c.get_message_count(),
+            "created_at": c.created_at.isoformat(),
+            "updated_at": c.updated_at.isoformat(),
+            "initial_page_type": c.initial_page_type,
+            "initial_grant_id": c.initial_grant_id,
+            "initial_company_id": c.initial_company_id,
+        }
+        for c in conversations
+    ]
+    
+    return JsonResponse({"conversations": results})
+
+
+@login_required
+@admin_required
+def ai_conversation_detail(request, conversation_id):
+    """API endpoint: get a conversation with all its messages."""
+    if request.method != "GET":
+        return _json_bad_request("Method not allowed", status=405)
+    
+    conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
+    
+    messages = conversation.messages.all().order_by("created_at")
+    
+    return JsonResponse(
+        {
+            "id": conversation.id,
+            "title": conversation.title or conversation.get_default_title(),
+            "created_at": conversation.created_at.isoformat(),
+            "updated_at": conversation.updated_at.isoformat(),
+            "initial_page_type": conversation.initial_page_type,
+            "initial_grant_id": conversation.initial_grant_id,
+            "initial_company_id": conversation.initial_company_id,
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "metadata": m.metadata,
+                    "created_at": m.created_at.isoformat(),
+                }
+                for m in messages
+            ],
+        }
+    )
+
+
+@login_required
+@admin_required
+def ai_conversation_create(request):
+    """API endpoint: create a new conversation."""
+    if request.method != "POST":
+        return _json_bad_request("Method not allowed", status=405)
+    
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+    
+    conversation = Conversation.objects.create(
+        user=request.user,
+        title=payload.get("title"),
+        initial_page_type=payload.get("page_type"),
+        initial_grant_id=payload.get("grant_id"),
+        initial_company_id=payload.get("company_id"),
+    )
+    
+    return JsonResponse(
+        {
+            "id": conversation.id,
+            "title": conversation.title or conversation.get_default_title(),
+            "created_at": conversation.created_at.isoformat(),
+        }
+    )
+
+
+@login_required
+@admin_required
+def ai_conversation_add_message(request, conversation_id):
+    """API endpoint: add a message to a conversation."""
+    if request.method != "POST":
+        return _json_bad_request("Method not allowed", status=405)
+    
+    conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
+    
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+    
+    role = payload.get("role")  # "user" or "assistant"
+    content = payload.get("content", "").strip()
+    metadata = payload.get("metadata", {})
+    
+    if role not in ["user", "assistant"]:
+        return _json_bad_request("role must be 'user' or 'assistant'")
+    
+    if not content:
+        return _json_bad_request("content is required")
+    
+    message = ConversationMessage.objects.create(
+        conversation=conversation,
+        role=role,
+        content=content,
+        metadata=metadata,
+    )
+    
+    # Update conversation's updated_at
+    conversation.save(update_fields=["updated_at"])
+    
+    # Auto-generate title from first user message if not set
+    if not conversation.title and role == "user":
+        conversation.title = content[:50] + ("..." if len(content) > 50 else "")
+        conversation.save(update_fields=["title", "updated_at"])
+    
+    return JsonResponse(
+        {
+            "id": message.id,
+            "role": message.role,
+            "content": message.content,
+            "created_at": message.created_at.isoformat(),
+        }
+    )
+
+
+@login_required
+@admin_required
+def ai_conversation_update(request, conversation_id):
+    """API endpoint: update a conversation (e.g., rename title)."""
+    if request.method not in ["PUT", "PATCH"]:
+        return _json_bad_request("Method not allowed", status=405)
+    
+    conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
+    
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return _json_bad_request("Invalid JSON payload")
+    
+    # Update title if provided
+    if "title" in payload:
+        title = payload.get("title", "").strip()
+        conversation.title = title if title else None
+        conversation.save(update_fields=["title", "updated_at"])
+    
+    return JsonResponse(
+        {
+            "id": conversation.id,
+            "title": conversation.title or conversation.get_default_title(),
+            "updated_at": conversation.updated_at.isoformat(),
+        }
+    )
+
+
+@login_required
+@admin_required
+def ai_conversation_delete(request, conversation_id):
+    """API endpoint: delete a conversation."""
+    if request.method != "DELETE":
+        return _json_bad_request("Method not allowed", status=405)
+    
+    conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
+    conversation_id_value = conversation.id
+    conversation.delete()
+    
+    return JsonResponse({"success": True, "deleted_id": conversation_id_value})
+
+
+@login_required
+@admin_required
+def ai_conversations_page(request):
+    """Dedicated page for viewing and managing AI conversations."""
+    conversations = Conversation.objects.filter(user=request.user).order_by("-updated_at")
+    
+    # Get selected conversation ID from query param or use most recent
+    selected_id = request.GET.get("conversation_id")
+    selected_conversation = None
+    
+    if selected_id:
+        try:
+            selected_conversation = Conversation.objects.get(id=selected_id, user=request.user)
+        except Conversation.DoesNotExist:
+            pass
+    
+    # If no selection and conversations exist, use most recent
+    if not selected_conversation and conversations.exists():
+        selected_conversation = conversations.first()
+    
+    # Get messages for selected conversation
+    conversation_messages = []
+    if selected_conversation:
+        conversation_messages = selected_conversation.messages.all().order_by("created_at")
+    
+    context = {
+        "conversations": conversations,
+        "selected_conversation": selected_conversation,
+        "conversation_messages": conversation_messages,
+    }
+    return render(request, "admin_panel/conversations.html", context)
 
 
 @login_required

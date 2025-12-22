@@ -5,6 +5,10 @@
 {% block title %}{{ grant.title }} - Grants Aggregator{% endblock %}
 
 {% block content %}
+<div id="page-context"
+     data-page-type="grant"
+     data-grant-id="{{ grant.id }}"
+     class="hidden"></div>
 <div class="mb-6">
     <a href="{% url 'grants:list' %}" class="btn btn-ghost btn-sm">
         ← Back to Grants
