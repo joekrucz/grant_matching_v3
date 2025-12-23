@@ -9,7 +9,12 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.conf import settings
 from .models import Company, FundingSearch, GrantMatchResult
-from .services import CompaniesHouseService, CompaniesHouseError
+from .services import (
+    CompaniesHouseService,
+    CompaniesHouseError,
+    ThreeSixtyGivingService,
+    ThreeSixtyGivingError,
+)
 from grants_aggregator import CELERY_AVAILABLE
 from grants.models import Grant
 
@@ -168,6 +173,16 @@ def company_create(request):
                 registration_status='registered',
                 **normalized_data
             )
+
+            # Attempt to enrich with historical grants from 360Giving (non-blocking)
+            try:
+                grants_received = ThreeSixtyGivingService.fetch_grants_received(company.company_number)
+                company.grants_received_360 = grants_received
+                company.save(update_fields=['grants_received_360'])
+            except ThreeSixtyGivingError as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"360Giving lookup skipped for {company.company_number}: {e}")
             
             messages.success(request, f'Company {company.name} created successfully.')
             return redirect('companies:detail', id=company.id)

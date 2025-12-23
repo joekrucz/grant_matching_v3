@@ -14,6 +14,11 @@ class CompaniesHouseError(Exception):
     pass
 
 
+class ThreeSixtyGivingError(Exception):
+    """Custom exception for 360Giving API errors."""
+    pass
+
+
 class GrantMatchingError(Exception):
     """Custom exception for grant matching errors."""
     pass
@@ -170,6 +175,184 @@ class CompaniesHouseService:
             normalized['filing_history'] = filing_history
         
         return normalized
+
+
+class ThreeSixtyGivingService:
+    """Service to interact with the 360Giving API."""
+
+    BASE_URL = "https://api.threesixtygiving.org/api/v1"
+    RATE_LIMIT_DELAY = 0.6  # API allows 2 req/s
+
+    @classmethod
+    def org_id_from_company_number(cls, company_number):
+        """
+        Build a 360Giving Org ID from a Companies House number.
+
+        The API expects the GB-COH-{number} format, zero-padded to 8 digits.
+        """
+        if not company_number:
+            raise ThreeSixtyGivingError("Company number is required to build Org ID")
+
+        # Do not double-prefix if an Org ID was already provided
+        if str(company_number).startswith("GB-COH-"):
+            return str(company_number)
+
+        clean_number = str(company_number).strip()
+        padded_number = clean_number.zfill(8)
+        return f"GB-COH-{padded_number}"
+
+    @classmethod
+    def fetch_grants_received(cls, company_number, limit=100):
+        """
+        Fetch grants received by an organisation from the 360Giving API.
+
+        Args:
+            company_number: Companies House company number
+            limit: Page size for API pagination (max 100)
+
+        Returns:
+            dict: {
+                "org_id": "GB-COH-00000000",
+                "count": int,
+                "grants": [...],
+                "fetched_at": iso_timestamp,
+                "source_url": str
+            }
+
+        Raises:
+            ThreeSixtyGivingError: If API request fails
+        """
+        org_id = cls.org_id_from_company_number(company_number)
+        page_limit = min(limit, 100)
+        url = f"{cls.BASE_URL}/org/{org_id}/grants_received/"
+        params = {"limit": page_limit, "offset": 0}
+
+        grants = []
+        count = None
+        source_url = url
+
+        try:
+            while True:
+                response = requests.get(url, params=params, timeout=10)
+
+                if response.status_code == 404:
+                    raise ThreeSixtyGivingError(f"Organisation {org_id} not found in 360Giving")
+                if response.status_code == 429:
+                    # Back off and retry respecting the 2 rps guideline
+                    time.sleep(1.2)
+                    continue
+                if response.status_code >= 400:
+                    raise ThreeSixtyGivingError(
+                        f"360Giving API error: {response.status_code} - {response.text}"
+                    )
+
+                data = response.json()
+                if count is None:
+                    count = data.get("count")
+
+                page_grants = data.get("results") or data.get("grants") or data.get("data") or []
+                # Normalize each grant to a simpler structure for templates/UI
+                for grant in page_grants:
+                    grants.append(cls._normalize_grant(grant))
+
+                next_url = data.get("next")
+                if not next_url:
+                    break
+
+                # Support both absolute and relative next URLs
+                if next_url.startswith("http"):
+                    url = next_url
+                    params = {}
+                else:
+                    url = f"{cls.BASE_URL}{next_url}"
+                    params = {}
+
+                time.sleep(cls.RATE_LIMIT_DELAY)
+
+            return {
+                "org_id": org_id,
+                "count": count if count is not None else len(grants),
+                "grants": cls._sort_grants(grants),
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "source_url": source_url,
+            }
+        except requests.exceptions.RequestException as exc:
+            raise ThreeSixtyGivingError(f"360Giving request failed: {str(exc)}")
+
+    @staticmethod
+    def _normalize_grant(grant):
+        """
+        Flatten 360Giving grant payload to the fields we display.
+        """
+        data = grant.get("data", {}) if isinstance(grant, dict) else {}
+
+        # Funder: take first fundingOrganization name if present
+        funder_name = None
+        funders = data.get("fundingOrganization") or []
+        if isinstance(funders, list) and funders:
+            funder_name = funders[0].get("name")
+
+        # Normalize award date to YYYY-MM-DD if parseable
+        award_date_raw = data.get("awardDate")
+        award_date_clean = ThreeSixtyGivingService._format_date(award_date_raw)
+
+        return {
+            "id": grant.get("grant_id") or data.get("id"),
+            "title": data.get("title"),
+            "description": ThreeSixtyGivingService._clean_text(data.get("description")),
+            "amountAwarded": data.get("amountAwarded"),
+            "awardDate": award_date_clean,
+            "funder": funder_name,
+            "raw": grant,
+        }
+
+    @staticmethod
+    def _sort_grants(grants):
+        """
+        Sort grants by awardDate descending when available.
+        """
+        def parse_date(g):
+            from datetime import datetime
+            val = g.get("awardDate")
+            if not val:
+                return None
+            # Try ISO first
+            for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
+                try:
+                    return datetime.strptime(val, fmt)
+                except Exception:
+                    continue
+            return None
+
+        return sorted(grants, key=lambda g: parse_date(g) or "", reverse=True)
+
+    @staticmethod
+    def _format_date(date_val):
+        """
+        Return YYYY-MM-DD if the string looks like an ISO datetime/date, else original.
+        """
+        if not date_val or not isinstance(date_val, str):
+            return date_val
+        # If already just a date
+        if len(date_val) == 10 and date_val[4] == '-' and date_val[7] == '-':
+            return date_val
+        # Try to parse common ISO formats
+        from datetime import datetime
+        for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ"):
+            try:
+                return datetime.strptime(date_val, fmt).strftime("%Y-%m-%d")
+            except Exception:
+                continue
+        return date_val
+
+    @staticmethod
+    def _clean_text(text_val):
+        """
+        Trim leading/trailing whitespace and collapse leading tabs/spaces.
+        """
+        if not text_val or not isinstance(text_val, str):
+            return text_val
+        return text_val.strip()
 
 
 class ChatGPTMatchingService:

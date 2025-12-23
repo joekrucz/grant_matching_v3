@@ -43,6 +43,7 @@ class Company(models.Model):
     address = models.JSONField(default=dict, blank=True)
     date_of_creation = models.DateField(blank=True, null=True)
     filing_history = models.JSONField(default=dict, blank=True)  # Stores filing history from Companies House
+    grants_received_360 = models.JSONField(default=dict, blank=True)  # Grants received via 360Giving
     website = models.URLField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     raw_data = models.JSONField(default=dict, blank=True)
