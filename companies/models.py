@@ -45,6 +45,7 @@ class Company(models.Model):
     filing_history = models.JSONField(default=dict, blank=True)  # Stores filing history from Companies House
     grants_received_360 = models.JSONField(default=dict, blank=True)  # Grants received via 360Giving
     website = models.URLField(blank=True, null=True)
+    # Legacy single notes field (kept for backwards compatibility)
     notes = models.TextField(blank=True, null=True)
     raw_data = models.JSONField(default=dict, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='companies')
@@ -102,23 +103,6 @@ class Company(models.Model):
             parts.append(self.address['country'])
         
         return ', '.join(parts)
-
-
-class CompanyFile(models.Model):
-    """Files uploaded for a company (e.g., supporting docs)."""
-
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='files')
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='company_files')
-    file = models.FileField(upload_to='company_files/%Y/%m/')
-    original_name = models.CharField(max_length=255, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'company_files'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return self.original_name or self.file.name
     
     def get_account_filings(self):
         """
@@ -290,6 +274,42 @@ class CompanyFile(models.Model):
         )
         
         return account_filings
+
+
+class CompanyNote(models.Model):
+    """Individual notes attached to a company."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='company_notes')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='company_notes')
+    title = models.CharField(max_length=255, blank=True, null=True)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'company_notes'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        base = self.title or (self.body[:50] + '...' if len(self.body) > 50 else self.body)
+        return f"{self.company.name} - {base}"
+
+
+class CompanyFile(models.Model):
+    """Files uploaded for a company (e.g., supporting docs)."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='files')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='company_files')
+    file = models.FileField(upload_to='company_files/%Y/%m/')
+    original_name = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'company_files'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.original_name or self.file.name
 
 
 class FundingSearch(models.Model):

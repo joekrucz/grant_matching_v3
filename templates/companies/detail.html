@@ -67,7 +67,7 @@ details[open] summary .collapse-indicator::after {
     <div class="space-y-4" id="company-tab-panels">
 
 {% if current_tab == 'info' %}
-<div id="tab-info" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+<div id="tab-info" class="card bg-base-200 border border-base-300 mb-4">
     <div class="card-body py-4 px-4">
         <div class="flex justify-between items-center mb-4">
             <h2 class="card-title text-xl">Company Information</h2>
@@ -132,7 +132,7 @@ details[open] summary .collapse-indicator::after {
 {% endif %}
 
 {% if current_tab == 'notes' %}
-<div id="tab-notes" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+<div id="tab-notes" class="card bg-base-200 border border-base-300 mb-4">
     <div class="card-body py-4 px-4">
         <h2 class="card-title text-xl mb-4">Website & Notes</h2>
         {% if can_edit %}
@@ -149,17 +149,6 @@ details[open] summary .collapse-indicator::after {
                     value="{{ company.website|default:'' }}" 
                     class="input input-bordered"
                 >
-            </div>
-            <div class="form-control">
-                <label class="label" for="id_notes">
-                    <span class="label-text">Notes</span>
-                </label>
-                <textarea 
-                    name="notes" 
-                    id="id_notes" 
-                    rows="4"
-                    class="textarea textarea-bordered"
-                >{{ company.notes|default:'' }}</textarea>
             </div>
             <div class="form-control">
                 <label class="label" for="id_company_file">
@@ -185,13 +174,85 @@ details[open] summary .collapse-indicator::after {
             </a>
         </div>
         {% endif %}
-        {% if company.notes %}
-        <div>
-            <div class="text-sm font-semibold mb-1">Notes</div>
-            <div class="whitespace-pre-wrap">{{ company.notes }}</div>
+        {% endif %}
+        <div class="divider my-6">Notes</div>
+
+        {% if can_edit %}
+        <div class="mb-6">
+            <form method="post" action="{% url 'companies:note_create' company.id %}" class="space-y-3">
+                {% csrf_token %}
+                <div class="form-control">
+                    <label class="label" for="id_note_title">
+                        <span class="label-text">Title (optional)</span>
+                    </label>
+                    <input
+                        type="text"
+                        name="title"
+                        id="id_note_title"
+                        class="input input-bordered"
+                        placeholder="e.g. Call with founder, Eligibility check, Next steps"
+                    >
+                </div>
+                <div class="form-control">
+                    <label class="label" for="id_note_body">
+                        <span class="label-text">Note</span>
+                    </label>
+                    <textarea
+                        name="body"
+                        id="id_note_body"
+                        rows="3"
+                        class="textarea textarea-bordered"
+                        placeholder="Add a note about this company..."
+                    ></textarea>
+                </div>
+                <div class="form-control">
+                    <button type="submit" class="btn btn-success btn-sm">Add Note</button>
+                </div>
+            </form>
         </div>
         {% endif %}
+
+        {% if notes %}
+        <div class="space-y-3">
+            {% for note in notes %}
+            <div class="border border-base-300 rounded-lg p-3 bg-base-100">
+                <div class="flex justify-between items-start gap-2">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            {% if note.title %}
+                            <div class="font-semibold text-sm">{{ note.title }}</div>
+                            {% else %}
+                            <div class="font-semibold text-sm text-base-content/70">Note</div>
+                            {% endif %}
+                            <div class="text-xs text-base-content/60">
+                                {{ note.created_at|date:"M d, Y H:i" }} by {{ note.user.name|default:note.user.email }}
+                            </div>
+                        </div>
+                        <div class="text-sm whitespace-pre-wrap">{{ note.body }}</div>
+                    </div>
+                    {% if can_edit %}
+                    <form method="post" action="{% url 'companies:note_delete' note.id %}">
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="btn btn-ghost btn-xs text-error"
+                            onclick="return confirm('Delete this note?');"
+                        >
+                            Delete
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-sm text-base-content/60">
+            No notes yet for this company.
+            {% if can_edit %}Use the form above to add the first one.{% endif %}
+        </div>
         {% endif %}
+
         {% if company_files %}
         <div class="mt-4">
             <div class="text-sm font-semibold mb-2">Files</div>
@@ -221,7 +282,7 @@ details[open] summary .collapse-indicator::after {
 
 {% if current_tab == 'grants' %}
 {% with grants_data=company.grants_received_360 %}
-<div id="tab-grants" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+<div id="tab-grants" class="card bg-base-200 border border-base-300 mb-4">
     <div class="card-body py-4 px-4">
         <div class="flex justify-between items-center mb-4">
             <h2 class="card-title text-xl">Historic Grants (360Giving)</h2>
@@ -296,15 +357,23 @@ details[open] summary .collapse-indicator::after {
 {% endif %}
 
 {% if current_tab == 'filings' %}
-<div id="tab-filings" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+<div id="tab-filings" class="card bg-base-200 border border-base-300 mb-4">
     <div class="card-body py-4 px-4">
         <div class="flex justify-between items-center mb-4">
             <div class="flex items-center gap-3">
                 <h2 class="card-title text-xl">Account Filings</h2>
             </div>
-            {% if company.filing_history.fetched_at %}
-            <div class="text-sm text-base-content/60">Last updated: {{ company.filing_history.fetched_at }}</div>
-            {% endif %}
+            <div class="flex items-center gap-3">
+                {% if company.filing_history.fetched_at %}
+                <div class="text-sm text-base-content/60">Last updated: {{ company.filing_history.fetched_at }}</div>
+                {% endif %}
+                {% if can_edit and company.company_number %}
+                <form method="post" action="{% url 'companies:filings_refresh' company.id %}">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline" type="submit">Refresh</button>
+                </form>
+                {% endif %}
+            </div>
         </div>
 
         {% if company.filing_history and company.filing_history.items %}
@@ -409,7 +478,7 @@ details[open] summary .collapse-indicator::after {
 {% endif %}
 
 {% if current_tab == 'funding' %}
-<div id="tab-funding" class="card bg-base-200 shadow-xl border border-base-300">
+<div id="tab-funding" class="card bg-base-200 border border-base-300">
     <div class="card-body py-4 px-4">
         <div class="flex justify-between items-center mb-4">
             <div class="flex items-center gap-3">
@@ -426,7 +495,7 @@ details[open] summary .collapse-indicator::after {
         </div>
         
         <div id="funding-search-form" class="hidden mb-6">
-            <div class="card bg-base-300">
+            <div class="card bg-base-300 border border-base-300">
                 <form method="post" action="{% url 'companies:funding_search_create' company.id %}" class="card-body">
                     {% csrf_token %}
                     <div class="form-control">
@@ -473,7 +542,7 @@ details[open] summary .collapse-indicator::after {
         {% if funding_searches %}
         <div class="space-y-2">
             {% for search in funding_searches %}
-            <div class="card bg-base-300">
+            <div class="card bg-base-300 border border-base-300">
                 <div class="card-body py-3">
                     <a href="{% url 'companies:funding_search_detail' search.id %}" class="card-title text-lg link link-primary">
                         {{ search.name }}
@@ -486,16 +555,14 @@ details[open] summary .collapse-indicator::after {
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info">
-            <span>No funding searches yet.</span>
-        </div>
+        <div class="text-sm text-base-content/70">No funding searches yet for this company.</div>
         {% endif %}
     </div>
 </div>
 {% endif %}
 
 {% if can_edit and current_tab == 'settings' %}
-<div id="tab-settings" class="card bg-base-200 shadow-xl border border-base-300">
+<div id="tab-settings" class="card bg-base-200 border border-base-300">
     <div class="card-body py-4 px-4 space-y-4">
         <h2 class="card-title text-xl">Settings</h2>
         <form method="post"

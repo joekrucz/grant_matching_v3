@@ -66,7 +66,7 @@
     </a>
 </div>
 
-<div class="card bg-base-200 shadow-xl">
+<div class="card bg-base-200 border border-base-300">
     <div class="card-body">
         <div class="flex justify-between items-start mb-6">
             <h1 class="card-title text-3xl">{{ funding_search.name }}</h1>
@@ -144,7 +144,7 @@
         
         <!-- File Upload Section -->
         <div class="divider">OR</div>
-        <div class="card bg-base-100 shadow-md">
+        <div class="card bg-base-100 border border-base-300">
             <div class="card-body">
                 <h2 class="card-title text-xl">Upload Project Document</h2>
                 <p class="text-sm text-base-content/70 mb-4">
@@ -180,7 +180,7 @@
         <!-- Matching Section -->
         {% if funding_search.project_description %}
         <div class="divider"></div>
-        <div class="card bg-base-100 shadow-md">
+        <div class="card bg-base-100 border border-base-300">
             <div class="card-body">
                 <h2 class="card-title text-xl">Grant Matching</h2>
                 <p class="text-sm text-base-content/70 mb-4">
@@ -283,7 +283,7 @@
 
 <!-- Match Results Section -->
 {% if match_results %}
-<div class="card bg-base-200 shadow-xl mt-6">
+<div class="card bg-base-200 border border-base-300 mt-6">
     <div class="card-body">
         <h2 class="card-title text-2xl mb-4">Grant Matching Results</h2>
         <p class="text-sm text-base-content/70 mb-6">
@@ -295,7 +295,7 @@
         
         <div class="space-y-4">
             {% for match in match_results %}
-            <div class="card bg-base-100 shadow-md {% if forloop.first %}border-2 border-primary{% endif %}">
+            <div class="card bg-base-100 border border-base-300 {% if forloop.first %}border-2 border-primary{% endif %}">
                 <div class="card-body">
                     <div class="flex justify-between items-start mb-2">
                         <div class="flex-1">
@@ -365,7 +365,7 @@
     </div>
 </div>
 {% elif funding_search.matching_status == 'completed' %}
-<div class="card bg-base-200 shadow-xl mt-6">
+<div class="card bg-base-200 border border-base-300 mt-6">
     <div class="card-body">
         <div class="alert alert-info">
             <span>No matching grants found above the threshold. Try adjusting your project description or run the matching again.</span>

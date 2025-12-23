@@ -9,7 +9,8 @@ from django.core.paginator import Paginator
 from django.db.models.functions import Lower
 from django.db.models import Q
 from django.conf import settings
-from .models import Company, FundingSearch, GrantMatchResult, CompanyFile
+from django.urls import reverse
+from .models import Company, FundingSearch, GrantMatchResult, CompanyFile, CompanyNote
 from .services import (
     CompaniesHouseService,
     CompaniesHouseError,
@@ -100,6 +101,7 @@ def company_detail(request, id):
         'can_edit': can_edit,
         'trl_levels': TRL_LEVELS,
         'company_files': company.files.all(),
+        'notes': company.company_notes.all(),
         'current_tab': current_tab,
         'can_edit_tabs': can_edit,
     }
@@ -121,6 +123,52 @@ def company_file_delete(request, file_id):
         messages.success(request, 'File deleted.')
 
     return redirect('companies:detail', id=company.id)
+
+
+@login_required
+def company_note_create(request, company_id):
+    """Create a new note for a company."""
+    company = get_object_or_404(Company, id=company_id)
+
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to add notes for this company.')
+        return redirect('companies:list')
+
+    if request.method == 'POST':
+        body = (request.POST.get('body') or '').strip()
+        title = (request.POST.get('title') or '').strip() or None
+
+        if not body:
+            messages.error(request, 'Note text cannot be empty.')
+        else:
+            CompanyNote.objects.create(
+                company=company,
+                user=request.user,
+                title=title,
+                body=body,
+            )
+            messages.success(request, 'Note added.')
+
+    detail_url = reverse('companies:detail', args=[company_id])
+    return redirect(f'{detail_url}?tab=notes')
+
+
+@login_required
+def company_note_delete(request, note_id):
+    """Delete a note for a company."""
+    note = get_object_or_404(CompanyNote, id=note_id)
+    company = note.company
+
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to delete notes for this company.')
+        return redirect('companies:list')
+
+    if request.method == 'POST':
+        note.delete()
+        messages.success(request, 'Note deleted.')
+
+    detail_url = reverse('companies:detail', args=[company.id])
+    return redirect(f'{detail_url}?tab=notes')
 
 
 @login_required
@@ -147,6 +195,33 @@ def company_refresh_grants(request, id):
         messages.error(request, f'Unexpected error refreshing grants: {e}')
 
     return redirect('companies:detail', id=id)
+
+
+@login_required
+def company_refresh_filings(request, id):
+    """Refresh filing history from Companies House for a company."""
+    company = get_object_or_404(Company, id=id)
+
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to refresh this company.')
+        return redirect('companies:list')
+
+    if not company.company_number:
+        messages.error(request, 'Company number is required to refresh filing history.')
+        return redirect('companies:detail', id=id)
+
+    try:
+        filing_history = CompaniesHouseService.fetch_filing_history(company.company_number)
+        # Replace the filing_history field with fresh data
+        company.filing_history = filing_history
+        company.save(update_fields=['filing_history'])
+        messages.success(request, 'Filing history refreshed successfully.')
+    except CompaniesHouseError as e:
+        messages.error(request, f'Companies House refresh failed: {e}')
+    except Exception as e:
+        messages.error(request, f'Unexpected error refreshing filing history: {e}')
+
+    return redirect(f'{reverse("companies:detail", args=[id])}?tab=filings')
 
 
 @login_required
@@ -201,7 +276,7 @@ def company_create(request):
             )
             
             messages.success(request, f'Unregistered company "{company.name}" created successfully.')
-            return redirect('companies:detail', id=company.id)
+            return redirect('companies:onboarding', id=company.id)
         
         else:
             # Companies House API lookup (existing flow)
@@ -251,7 +326,7 @@ def company_create(request):
                 logger.info(f"360Giving lookup skipped for {company.company_number}: {e}")
             
             messages.success(request, f'Company {company.name} created successfully.')
-            return redirect('companies:detail', id=company.id)
+            return redirect('companies:onboarding', id=company.id)
         
         except CompaniesHouseError as e:
             messages.error(request, str(e))
@@ -570,4 +645,94 @@ def funding_search_status(request, id):
         'error': funding_search.matching_error,
         'last_matched_at': funding_search.last_matched_at.isoformat() if funding_search.last_matched_at else None,
     })
+
+
+@login_required
+def company_search(request):
+    """API endpoint to search Companies House by company name."""
+    from django.http import JsonResponse
+    
+    query = request.GET.get('q', '').strip()
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'results': []})
+    
+    try:
+        results = CompaniesHouseService.search_companies(query, items_per_page=20)
+        return JsonResponse({'results': results})
+    except CompaniesHouseError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f'Unexpected error: {str(e)}'}, status=500)
+
+
+@login_required
+def company_onboarding(request, id):
+    """Multi-step onboarding flow after company creation."""
+    company = get_object_or_404(Company, id=id)
+    
+    # Check if user has permission (owner or admin)
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to access this company.')
+        return redirect('companies:list')
+    
+    if request.method == 'POST':
+        step = request.POST.get('step', 'website')
+        action = request.POST.get('action', 'next')
+        
+        # Only save when "Finish" is clicked (step == 'files' and action == 'finish')
+        if step == 'files' and action == 'finish':
+            # Save all data at once
+            saved_items = []
+            
+            # Save website
+            website = request.POST.get('website', '').strip()
+            if website:
+                company.website = website
+                company.save(update_fields=['website'])
+                saved_items.append('website')
+            
+            # Save note
+            note_title = request.POST.get('note_title', '').strip()
+            note_body = request.POST.get('note_body', '').strip()
+            if note_body:
+                CompanyNote.objects.create(
+                    company=company,
+                    user=request.user,
+                    title=note_title or None,
+                    body=note_body
+                )
+                saved_items.append('note')
+            
+            # Save file
+            uploaded_file = request.FILES.get('company_file')
+            if uploaded_file:
+                CompanyFile.objects.create(
+                    company=company,
+                    uploaded_by=request.user,
+                    file=uploaded_file,
+                    original_name=uploaded_file.name,
+                )
+                saved_items.append('file')
+            
+            if saved_items:
+                messages.success(request, f'Company setup completed. Saved: {", ".join(saved_items)}.')
+            else:
+                messages.info(request, 'Company setup completed.')
+            
+            # Redirect to detail page
+            return redirect('companies:detail', id=id)
+    
+    # Allow user to manually navigate steps, default to website
+    requested_step = request.GET.get('step', 'website')
+    if requested_step in ['website', 'notes', 'files']:
+        current_step = requested_step
+    else:
+        current_step = 'website'
+    
+    context = {
+        'company': company,
+        'current_step': current_step,
+    }
+    return render(request, 'companies/onboarding.html', context)
 

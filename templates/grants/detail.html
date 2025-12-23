@@ -15,7 +15,7 @@
     </a>
 </div>
 
-<div class="card bg-base-200 shadow-xl">
+<div class="card bg-base-200">
     <div class="card-body">
         <div class="flex justify-between items-start mb-4">
             <h1 class="card-title text-3xl">{{ grant.title }}</h1>
@@ -37,7 +37,7 @@
         </div>
         {% endif %}
         
-        <div class="stats shadow mb-6">
+        <div class="stats mb-6">
             {% if grant.funding_amount %}
             <div class="stat">
                 <div class="stat-title">Funding Amount</div>
@@ -59,7 +59,7 @@
                     {% for section in sections_list %}
                         {% if section.is_tab and section.sections %}
                             {# This is a tab with nested sections #}
-                        <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
+                        <div class="collapse collapse-arrow bg-base-100 border border-base-300">
                                 <input type="checkbox" {% if section.key == 'overview' or section.key == 'summary' or forloop.first %}checked{% endif %} />
                             <div class="collapse-title text-lg font-semibold text-primary">
                                     {% if section.title %}{{ section.title }}{% else %}{{ section.key|title|replace:"_| " }}{% endif %}
@@ -67,7 +67,7 @@
                                 <div class="collapse-content">
                                     <div class="space-y-3 pt-2">
                                         {% for nested_section in section.sections %}
-                                            <div class="collapse collapse-arrow bg-base-200 border border-base-300 shadow-sm">
+                                            <div class="collapse collapse-arrow bg-base-200 border border-base-300">
                                                 <input type="checkbox" {% if forloop.first %}checked{% endif %} />
                                                 <div class="collapse-title text-base font-semibold text-primary">
                                                     {% if nested_section.title %}{{ nested_section.title }}{% else %}Section{% endif %}
@@ -89,7 +89,7 @@
                             </div>
                         {% else %}
                             {# Regular section (not a tab) #}
-                            <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
+                            <div class="collapse collapse-arrow bg-base-100 border border-base-300">
                                 <input type="checkbox" {% if section.key == 'overview' or section.key == 'summary' or forloop.first %}checked{% endif %} />
                                 <div class="collapse-title text-lg font-semibold text-primary">
                                     {% if section.title %}{{ section.title }}{% else %}{{ section.key|title|replace:"_| " }}{% endif %}
@@ -112,7 +112,7 @@
                         {% if section %}
                             {% with section_parts=section|split_lines:"\n\n" %}
                                 {% if section_parts %}
-                                    <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
+                                    <div class="collapse collapse-arrow bg-base-100 border border-base-300">
                                         <input type="checkbox" />
                                         <div class="collapse-title text-lg font-semibold text-primary">
                                             {{ section_parts.0|truncatewords:10 }}

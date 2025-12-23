@@ -5,7 +5,7 @@
 {% block content %}
 <div class="hero min-h-[80vh]">
     <div class="hero-content">
-        <div class="card bg-base-200 w-full max-w-2xl shadow-xl">
+        <div class="card bg-base-200 w-full max-w-2xl border border-base-300">
             <div class="card-body">
                 <h1 class="card-title text-3xl justify-center mb-4">Add Company</h1>
                 
@@ -20,6 +20,35 @@
                     {% csrf_token %}
                     <input type="hidden" name="creation_mode" value="registered">
                     
+                    <div class="form-control mb-4">
+                        <label class="label" for="id_company_search">
+                            <span class="label-text">Search by Company Name</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="id_company_search" 
+                            placeholder="Type company name to search..."
+                            class="input input-bordered"
+                            autocomplete="off"
+                        >
+                        <label class="label">
+                            <span class="label-text-alt">Search for a company by its registered name. Results will appear below.</span>
+                        </label>
+                        <div id="search-results" class="mt-2 hidden">
+                            <div class="card bg-base-100 border border-base-300">
+                                <div class="card-body p-3 max-h-64 overflow-y-auto">
+                                    <div id="search-results-list"></div>
+                                    <div id="search-loading" class="hidden text-center text-sm text-base-content/60">
+                                        Searching...
+                                    </div>
+                                    <div id="search-error" class="hidden text-center text-sm text-error"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="divider">OR</div>
+                    
                     <div class="form-control">
                         <label class="label" for="id_company_number">
                             <span class="label-text">Companies House Number</span>
@@ -28,12 +57,11 @@
                             type="text" 
                             name="company_number" 
                             id="id_company_number" 
-                            required 
                             placeholder="e.g., 12345678"
                             class="input input-bordered"
                         >
                         <label class="label">
-                            <span class="label-text-alt">Enter a Companies House company number to fetch company details automatically.</span>
+                            <span class="label-text-alt">Enter a Companies House company number directly.</span>
                         </label>
                     </div>
                     
@@ -203,5 +231,123 @@ function switchMode(mode) {
         manualTab.classList.add('tab-active');
     }
 }
+
+// Company search with debounce
+(function() {
+    const searchInput = document.getElementById('id_company_search');
+    const resultsContainer = document.getElementById('search-results');
+    const resultsList = document.getElementById('search-results-list');
+    const loadingIndicator = document.getElementById('search-loading');
+    const errorIndicator = document.getElementById('search-error');
+    const companyNumberInput = document.getElementById('id_company_number');
+    
+    let debounceTimer = null;
+    let currentSearch = null;
+    
+    searchInput.addEventListener('input', function(e) {
+        const query = e.target.value.trim();
+        
+        // Clear previous timer
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+        }
+        
+        // Hide results if query is too short
+        if (query.length < 2) {
+            resultsContainer.classList.add('hidden');
+            resultsList.innerHTML = '';
+            loadingIndicator.classList.add('hidden');
+            errorIndicator.classList.add('hidden');
+            return;
+        }
+        
+        // Show loading state
+        resultsContainer.classList.remove('hidden');
+        loadingIndicator.classList.remove('hidden');
+        errorIndicator.classList.add('hidden');
+        resultsList.innerHTML = '';
+        
+        // Set debounce timer (300ms)
+        debounceTimer = setTimeout(function() {
+            currentSearch = query;
+            performSearch(query);
+        }, 300);
+    });
+    
+    function performSearch(query) {
+        // Only proceed if this is still the current search
+        if (query !== currentSearch) {
+            return;
+        }
+        
+        fetch(`/companies/search?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                // Check if this is still the current search
+                if (query !== currentSearch) {
+                    return;
+                }
+                
+                loadingIndicator.classList.add('hidden');
+                
+                if (data.error) {
+                    errorIndicator.textContent = data.error;
+                    errorIndicator.classList.remove('hidden');
+                    return;
+                }
+                
+                const results = data.results || [];
+                
+                if (results.length === 0) {
+                    resultsList.innerHTML = '<div class="text-center text-sm text-base-content/60 py-2">No companies found</div>';
+                    return;
+                }
+                
+                resultsList.innerHTML = results.map(company => {
+                    const status = company.company_status || 'Unknown';
+                    const type = company.company_type || 'Unknown';
+                    const address = company.address_snippet || '';
+                    const date = company.date_of_creation || '';
+                    
+                    return `
+                        <div class="p-2 hover:bg-base-200 rounded cursor-pointer border-b border-base-300 last:border-b-0" 
+                             onclick="selectCompany('${company.company_number}', '${company.title.replace(/'/g, "\\'")}')">
+                            <div class="font-semibold text-sm">${escapeHtml(company.title)}</div>
+                            <div class="text-xs text-base-content/70 mt-1">
+                                <span class="badge badge-outline badge-sm">${company.company_number}</span>
+                                <span class="ml-2">${escapeHtml(status)}</span>
+                                ${type !== 'Unknown' ? `<span class="ml-2">${escapeHtml(type)}</span>` : ''}
+                            </div>
+                            ${address ? `<div class="text-xs text-base-content/60 mt-1">${escapeHtml(address)}</div>` : ''}
+                            ${date ? `<div class="text-xs text-base-content/60 mt-1">Created: ${escapeHtml(date)}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            })
+            .catch(error => {
+                if (query !== currentSearch) {
+                    return;
+                }
+                loadingIndicator.classList.add('hidden');
+                errorIndicator.textContent = 'Error searching companies. Please try again.';
+                errorIndicator.classList.remove('hidden');
+            });
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    window.selectCompany = function(companyNumber, companyName) {
+        companyNumberInput.value = companyNumber;
+        searchInput.value = companyName;
+        resultsContainer.classList.add('hidden');
+        currentSearch = null;
+        // Mark the form as ready to submit
+        companyNumberInput.setAttribute('required', 'required');
+    };
+})();
 </script>
 {% endblock %}

@@ -9,7 +9,7 @@
     </a>
 </div>
 
-<div class="card bg-base-200 shadow-xl mb-6">
+<div class="card bg-base-200 mb-6">
     <div class="card-body">
         <h1 class="card-title text-3xl mb-6">{{ target_user.email }}</h1>
         
@@ -71,7 +71,7 @@
 </div>
 
 {% if target_user != user %}
-<div class="card bg-base-200 shadow-xl border border-error">
+<div class="card bg-base-200 border border-error">
     <div class="card-body">
         <h2 class="card-title text-error">Danger Zone</h2>
         <a href="{% url 'admin_panel:user_delete' target_user.id %}" class="btn btn-error">

@@ -4,7 +4,12 @@
 
 {% block content %}
 <div class="mb-6 flex justify-between items-center">
-    <h1 class="text-3xl font-bold">Companies</h1>
+    <div>
+        <h1 class="text-3xl font-bold">Companies</h1>
+        <p class="text-sm text-base-content/70 mt-1">
+            {{ page_obj.paginator.count }} compan{% if page_obj.paginator.count == 1 %}y{% else %}ies{% endif %}
+        </p>
+    </div>
     <a href="{% url 'companies:create' %}" class="btn btn-primary">
         Add Company
     </a>
@@ -12,7 +17,7 @@
 
 <div class="space-y-4">
     {% for company in page_obj %}
-    <div class="card bg-base-200 shadow-md hover:shadow-xl transition-shadow">
+    <div class="card bg-base-200 border border-base-300">
         <div class="card-body p-3">
             <div class="flex justify-between items-start mb-2">
                 <h2 class="card-title">

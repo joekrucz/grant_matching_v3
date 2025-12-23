@@ -30,6 +30,68 @@ class CompaniesHouseService:
     BASE_URL = "https://api.company-information.service.gov.uk"
     
     @classmethod
+    def search_companies(cls, query, items_per_page=20):
+        """
+        Search companies by name using Companies House API.
+        
+        Args:
+            query: Company name to search for
+            items_per_page: Number of results to return (max 100, default 20)
+            
+        Returns:
+            list: List of company search results with company_number, title, etc.
+            
+        Raises:
+            CompaniesHouseError: If API request fails
+        """
+        api_key = settings.COMPANIES_HOUSE_API_KEY
+        if not api_key:
+            raise CompaniesHouseError("COMPANIES_HOUSE_API_KEY not configured")
+        
+        if not query or len(query.strip()) < 2:
+            return []
+        
+        url = f"{cls.BASE_URL}/search/companies"
+        from requests.auth import HTTPBasicAuth
+        
+        params = {
+            'q': query.strip(),
+            'items_per_page': min(items_per_page, 100)  # API max is 100
+        }
+        
+        try:
+            response = requests.get(
+                url,
+                auth=HTTPBasicAuth(api_key, ''),
+                params=params,
+                timeout=10
+            )
+            
+            if response.status_code == 401:
+                raise CompaniesHouseError("Invalid API key")
+            elif response.status_code != 200:
+                raise CompaniesHouseError(f"API error: {response.status_code} - {response.text}")
+            
+            data = response.json()
+            items = data.get('items', [])
+            
+            # Format results for easier use
+            results = []
+            for item in items[:items_per_page]:  # Limit to requested number
+                results.append({
+                    'company_number': item.get('company_number', ''),
+                    'title': item.get('title', ''),
+                    'company_status': item.get('company_status', ''),
+                    'company_type': item.get('company_type', ''),
+                    'address_snippet': item.get('address_snippet', ''),
+                    'date_of_creation': item.get('date_of_creation', ''),
+                })
+            
+            return results
+        except requests.exceptions.RequestException as e:
+            raise CompaniesHouseError(f"Search request failed: {str(e)}")
+    
+    @classmethod
     def fetch_company(cls, company_number):
         """
         Fetch company data from Companies House API.
