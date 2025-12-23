@@ -6,9 +6,10 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db.models.functions import Lower
 from django.db.models import Q
 from django.conf import settings
-from .models import Company, FundingSearch, GrantMatchResult
+from .models import Company, FundingSearch, GrantMatchResult, CompanyFile
 from .services import (
     CompaniesHouseService,
     CompaniesHouseError,
@@ -31,10 +32,10 @@ def companies_list(request):
     # SECURITY: Only show companies owned by the current user (unless admin)
     if request.user.admin:
         # Admins can see all companies
-        companies = Company.objects.all().select_related('user').order_by('-created_at')
+        companies = Company.objects.all().select_related('user').order_by(Lower('name'))
     else:
         # Regular users only see their own companies
-        companies = Company.objects.filter(user=request.user).select_related('user').order_by('-created_at')
+        companies = Company.objects.filter(user=request.user).select_related('user').order_by(Lower('name'))
     
     # Pagination
     paginator = Paginator(companies, 20)
@@ -67,20 +68,85 @@ def company_detail(request, id):
             messages.error(request, 'You do not have permission to edit this company.')
             return redirect('companies:detail', id=id)
         
-        # Update editable fields
+        # Handle website/notes update
         company.website = request.POST.get('website', company.website)
         company.notes = request.POST.get('notes', company.notes)
         company.save()
-        messages.success(request, 'Company updated successfully.')
+
+        # Handle optional file upload
+        uploaded_file = request.FILES.get('company_file')
+        if uploaded_file:
+            CompanyFile.objects.create(
+                company=company,
+                uploaded_by=request.user,
+                file=uploaded_file,
+                original_name=uploaded_file.name,
+            )
+            messages.success(request, 'Company updated and file uploaded.')
+        else:
+            messages.success(request, 'Company updated successfully.')
+
         return redirect('companies:detail', id=id)
     
+    # Tab selection
+    allowed_tabs = ['info', 'notes', 'grants', 'filings', 'funding', 'settings']
+    current_tab = request.GET.get('tab', 'info')
+    if current_tab not in allowed_tabs:
+        current_tab = 'info'
+
     context = {
         'company': company,
         'funding_searches': funding_searches,
         'can_edit': can_edit,
         'trl_levels': TRL_LEVELS,
+        'company_files': company.files.all(),
+        'current_tab': current_tab,
+        'can_edit_tabs': can_edit,
     }
     return render(request, 'companies/detail.html', context)
+
+
+@login_required
+def company_file_delete(request, file_id):
+    """Delete a company file (owner or admin)."""
+    company_file = get_object_or_404(CompanyFile, id=file_id)
+    company = company_file.company
+
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to delete this file.')
+        return redirect('companies:detail', id=company.id)
+
+    if request.method == 'POST':
+        company_file.delete()
+        messages.success(request, 'File deleted.')
+
+    return redirect('companies:detail', id=company.id)
+
+
+@login_required
+def company_refresh_grants(request, id):
+    """Refresh grants from 360Giving for a company."""
+    company = get_object_or_404(Company, id=id)
+
+    if request.user != company.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to refresh this company.')
+        return redirect('companies:list')
+
+    if not company.company_number:
+        messages.error(request, 'Company number is required to refresh grants.')
+        return redirect('companies:detail', id=id)
+
+    try:
+        grants_received = ThreeSixtyGivingService.fetch_grants_received(company.company_number)
+        company.grants_received_360 = grants_received
+        company.save(update_fields=['grants_received_360'])
+        messages.success(request, 'Grants refreshed successfully.')
+    except ThreeSixtyGivingError as e:
+        messages.error(request, f'360Giving refresh failed: {e}')
+    except Exception as e:
+        messages.error(request, f'Unexpected error refreshing grants: {e}')
+
+    return redirect('companies:detail', id=id)
 
 
 @login_required

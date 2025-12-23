@@ -102,6 +102,23 @@ class Company(models.Model):
             parts.append(self.address['country'])
         
         return ', '.join(parts)
+
+
+class CompanyFile(models.Model):
+    """Files uploaded for a company (e.g., supporting docs)."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='files')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='company_files')
+    file = models.FileField(upload_to='company_files/%Y/%m/')
+    original_name = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'company_files'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.original_name or self.file.name
     
     def get_account_filings(self):
         """

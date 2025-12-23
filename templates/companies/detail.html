@@ -7,37 +7,78 @@
      data-page-type="company"
      data-company-id="{{ company.id }}"
      class="hidden"></div>
-<div class="mb-6">
-    <a href="{% url 'companies:list' %}" class="btn btn-ghost btn-sm">
-        ← Back to Companies
+
+<style>
+details summary::-webkit-details-marker {
+    display: none;
+}
+summary .collapse-indicator::after {
+    content: "⌵"; /* downwards line arrow */
+    font-size: 0.9rem;
+}
+details[open] summary .collapse-indicator::after {
+    content: "⌃"; /* upwards line arrow */
+}
+</style>
+<div class="my-2 flex items-center">
+    <a href="{% url 'companies:list' %}" class="btn btn-ghost btn-sm mr-2" aria-label="Back to Companies">
+        ←
     </a>
+    <h1 class="text-2xl font-bold">{{ company.name|title }}</h1>
 </div>
 
-<div class="card bg-base-200 shadow-xl mb-6">
-    <div class="card-body">
-        <div class="flex justify-between items-start mb-4">
-            <div>
-            <h1 class="card-title text-3xl">{{ company.name }}</h1>
-                {% if not company.is_registered %}
-                <span class="badge badge-warning mt-2">Not Yet Registered</span>
-                {% else %}
-                <span class="badge badge-success mt-2">Registered</span>
-                {% endif %}
-            </div>
+<div class="grid md:grid-cols-[220px,1fr] gap-4">
+    <div class="md:hidden mb-2">
+        <div class="tabs tabs-boxed w-full overflow-x-auto">
+            <a href="?tab=info" class="tab {% if current_tab == 'info' %}tab-active underline{% endif %}">Company Info</a>
+            <a href="?tab=notes" class="tab {% if current_tab == 'notes' %}tab-active underline{% endif %}">Website & Notes</a>
+            <a href="?tab=grants" class="tab {% if current_tab == 'grants' %}tab-active underline{% endif %}">Grants</a>
+            <a href="?tab=filings" class="tab {% if current_tab == 'filings' %}tab-active underline{% endif %}">Filings</a>
+            <a href="?tab=funding" class="tab {% if current_tab == 'funding' %}tab-active underline{% endif %}">Funding</a>
             {% if can_edit %}
-            <form method="post"
-                  action="{% url 'companies:delete' company.id %}"
-                  onsubmit="return confirm('Delete this company? This cannot be undone.');">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-error btn-sm" aria-label="Delete company">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                        <path d="M9 3a1 1 0 0 0-.894.553L7.382 5H5a1 1 0 1 0 0 2h14a1 1 0 1 0 0-2h-2.382l-.724-1.447A1 1 0 0 0 15 3H9Zm-3 6a1 1 0 0 1 1 1v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-8a1 1 0 1 1 2 0v8a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-8a1 1 0 0 1 1-1Zm4 1a1 1 0 0 0-1 1v7a1 1 0 1 0 2 0v-7a1 1 0 0 0-1-1Zm4 0a1 1 0 0 0-1 1v7a1 1 0 1 0 2 0v-7a1 1 0 0 0-1-1Z"/>
-                    </svg>
-                </button>
-            </form>
+            <a href="?tab=settings" class="tab {% if current_tab == 'settings' %}tab-active underline{% endif %}">Settings</a>
             {% endif %}
         </div>
-        
+    </div>
+    <div class="hidden md:block">
+        <div class="tabs tabs-vertical tabs-l flex flex-col gap-1 bg-base-200 border border-base-300 rounded-xl p-2 w-full">
+            <a href="?tab=info" class="tab w-full justify-start {% if current_tab == 'info' %}tab-active underline{% endif %}" data-company-tab="info">
+                Company Information
+            </a>
+            <a href="?tab=notes" class="tab w-full justify-start {% if current_tab == 'notes' %}tab-active underline{% endif %}" data-company-tab="notes">
+                Website & Notes
+            </a>
+            <a href="?tab=grants" class="tab w-full justify-start {% if current_tab == 'grants' %}tab-active underline{% endif %}" data-company-tab="grants">
+                Historic Grants
+            </a>
+            <a href="?tab=filings" class="tab w-full justify-start {% if current_tab == 'filings' %}tab-active underline{% endif %}" data-company-tab="filings">
+                Account Filings
+            </a>
+            <a href="?tab=funding" class="tab w-full justify-start {% if current_tab == 'funding' %}tab-active underline{% endif %}" data-company-tab="funding">
+                Funding Searches
+            </a>
+            {% if can_edit %}
+            <a href="?tab=settings" class="tab w-full justify-start {% if current_tab == 'settings' %}tab-active underline{% endif %}" data-company-tab="settings">
+                Settings
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="space-y-4" id="company-tab-panels">
+
+{% if current_tab == 'info' %}
+<div id="tab-info" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+    <div class="card-body py-4 px-4">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="card-title text-xl">Company Information</h2>
+            <div class="flex items-center gap-2">
+                {% if not company.is_registered %}
+                <span class="badge badge-warning">Not Yet Registered</span>
+                {% else %}
+                <span class="badge badge-success">Registered</span>
+                {% endif %}
+            </div>
+        </div>
         <div class="mb-4">
             <div class="text-sm font-semibold mb-1">Company Number</div>
             <div class="text-base">
@@ -86,8 +127,16 @@
             </div>
         </div>
         {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if current_tab == 'notes' %}
+<div id="tab-notes" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+    <div class="card-body py-4 px-4">
+        <h2 class="card-title text-xl mb-4">Website & Notes</h2>
         {% if can_edit %}
-        <form method="post" class="mt-6 space-y-4">
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
             {% csrf_token %}
             <div class="form-control">
                 <label class="label" for="id_website">
@@ -112,13 +161,24 @@
                     class="textarea textarea-bordered"
                 >{{ company.notes|default:'' }}</textarea>
             </div>
-            <div class="form-control mt-6">
-                <button type="submit" class="btn btn-primary">Update Company</button>
+            <div class="form-control">
+                <label class="label" for="id_company_file">
+                    <span class="label-text">Upload File</span>
+                </label>
+                <input 
+                    type="file" 
+                    name="company_file" 
+                    id="id_company_file" 
+                    class="file-input file-input-bordered w-full"
+                >
+            </div>
+            <div class="form-control">
+                <button type="submit" class="btn btn-primary btn-sm">Save</button>
             </div>
         </form>
         {% else %}
         {% if company.website %}
-        <div class="mb-4">
+        <div class="mb-3">
             <div class="text-sm font-semibold mb-1">Website</div>
             <a href="{{ company.website }}" target="_blank" class="link link-primary">
                 {{ company.website }}
@@ -126,28 +186,58 @@
         </div>
         {% endif %}
         {% if company.notes %}
-        <div class="mb-4">
+        <div>
             <div class="text-sm font-semibold mb-1">Notes</div>
             <div class="whitespace-pre-wrap">{{ company.notes }}</div>
         </div>
         {% endif %}
         {% endif %}
-    </div>
-</div>
-
-{% with grants_data=company.grants_received_360 %}
-{% if grants_data.count or grants_data.grants %}
-<details class="card bg-base-200 shadow-xl mb-6" open>
-    <summary class="card-body cursor-pointer">
-        <div class="flex justify-between items-center">
-            <h2 class="card-title text-2xl">Historic Grants (360Giving)</h2>
-            <div class="text-sm text-base-content/70">
-                {% if grants_data.count %}{{ grants_data.count }} recorded grant{{ grants_data.count|pluralize }}{% else %}Grants found{% endif %}
-                {% if grants_data.fetched_at %} • fetched {{ grants_data.fetched_at }}{% endif %}
+        {% if company_files %}
+        <div class="mt-4">
+            <div class="text-sm font-semibold mb-2">Files</div>
+            <div class="space-y-2 text-sm">
+                {% for f in company_files %}
+                <div class="flex items-center justify-between rounded-lg border border-base-300 px-3 py-2">
+                    <div class="flex-1">
+                        <a href="{{ f.file.url }}" class="link link-primary" target="_blank" rel="noopener noreferrer">
+                            {{ f.original_name|default:f.file.name }}
+                        </a>
+                        <div class="text-base-content/60">Uploaded {{ f.created_at|date:"M d, Y H:i" }}</div>
+                    </div>
+                    {% if can_edit %}
+                    <form method="post" action="{% url 'companies:file_delete' f.id %}">
+                        {% csrf_token %}
+                        <button class="btn btn-ghost btn-xs text-error" type="submit">Delete</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
             </div>
         </div>
-    </summary>
-    <div class="card-body pt-0">
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if current_tab == 'grants' %}
+{% with grants_data=company.grants_received_360 %}
+<div id="tab-grants" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+    <div class="card-body py-4 px-4">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="card-title text-xl">Historic Grants (360Giving)</h2>
+            <div class="flex items-center gap-3">
+                <div class="text-sm text-base-content/70">
+                    {% if grants_data.count %}{{ grants_data.count }} recorded grant{{ grants_data.count|pluralize }}{% else %}No grants found yet{% endif %}
+                    {% if grants_data.fetched_at %} • fetched {{ grants_data.fetched_at }}{% endif %}
+                </div>
+                {% if can_edit %}
+                <form method="post" action="{% url 'companies:grants_refresh' company.id %}">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline">Refresh</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
         <div class="overflow-x-auto">
             <table class="table table-zebra">
                 <thead>
@@ -201,98 +291,107 @@
             </table>
         </div>
     </div>
-</details>
-{% endif %}
+</div>
 {% endwith %}
+{% endif %}
 
-{% if company.filing_history and company.filing_history.items %}
-{% with account_filings=company.get_account_filings %}
-{% if account_filings %}
-<details class="card bg-base-200 shadow-xl mb-6" open>
-    <summary class="card-body cursor-pointer">
-        <div class="flex justify-between items-center">
-            <h2 class="card-title text-2xl">Account Filings</h2>
+{% if current_tab == 'filings' %}
+<div id="tab-filings" class="card bg-base-200 shadow-xl border border-base-300 mb-4">
+    <div class="card-body py-4 px-4">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <h2 class="card-title text-xl">Account Filings</h2>
+            </div>
             {% if company.filing_history.fetched_at %}
             <div class="text-sm text-base-content/60">Last updated: {{ company.filing_history.fetched_at }}</div>
             {% endif %}
         </div>
-    </summary>
-    <div class="card-body pt-0">
-        <div class="overflow-x-auto">
-            <table class="table table-zebra">
-                <thead>
-                    <tr>
-                        <th>Financial Year</th>
-                        <th>Accounts Made Up To</th>
-                        <th>Account Type</th>
-                        <th>Filing Status</th>
-                        <th>View Document</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for filing in account_filings %}
-                    <tr>
-                        <td>
-                            {% if filing.financial_year %}
-                                <span class="font-semibold">{{ filing.financial_year }}</span>
-                            {% else %}
-                                <span class="text-base-content/60">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if filing.made_up_to_date %}
-                                <span class="font-semibold">{{ filing.made_up_to_date }}</span>
-                            {% else %}
-                                <span class="text-base-content/60">Not specified</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if filing.account_type and filing.account_type != 'Unknown' %}
-                                <span class="badge badge-primary">{{ filing.account_type }}</span>
-                            {% else %}
-                                <span class="badge badge-ghost">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if filing.filing_status %}
-                                {% if filing.filing_status == 'On Time' %}
-                                    <span class="badge badge-success">
-                                        On Time
-                                        {% if filing.filing_status_days and filing.filing_status_days > 0 %}
-                                            ({{ filing.filing_status_days }} day{{ filing.filing_status_days|pluralize }} early)
+
+        {% if company.filing_history and company.filing_history.items %}
+            {% with account_filings=company.get_account_filings %}
+                {% if account_filings %}
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra">
+                        <thead>
+                            <tr>
+                                <th>Financial Year</th>
+                                <th>Accounts Made Up To</th>
+                                <th>Account Type</th>
+                                <th>Filing Status</th>
+                                <th>View Document</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for filing in account_filings %}
+                            <tr>
+                                <td>
+                                    {% if filing.financial_year %}
+                                        <span class="font-semibold">{{ filing.financial_year }}</span>
+                                    {% else %}
+                                        <span class="text-base-content/60">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if filing.made_up_to_date %}
+                                        <span class="font-semibold">{{ filing.made_up_to_date }}</span>
+                                    {% else %}
+                                        <span class="text-base-content/60">Not specified</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if filing.account_type and filing.account_type != 'Unknown' %}
+                                        <span class="badge badge-primary">{{ filing.account_type }}</span>
+                                    {% else %}
+                                        <span class="badge badge-ghost">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if filing.filing_status %}
+                                        {% if filing.filing_status == 'On Time' %}
+                                            <span class="badge badge-success">
+                                                On Time
+                                                {% if filing.filing_status_days and filing.filing_status_days > 0 %}
+                                                    ({{ filing.filing_status_days }} day{{ filing.filing_status_days|pluralize }} early)
+                                                {% endif %}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-error">
+                                                Late
+                                                {% if filing.filing_status_days %}
+                                                    ({{ filing.filing_status_days }} day{{ filing.filing_status_days|pluralize }})
+                                                {% endif %}
+                                            </span>
                                         {% endif %}
-                                    </span>
-                                {% else %}
-                                    <span class="badge badge-error">
-                                        Late
-                                        {% if filing.filing_status_days %}
-                                            ({{ filing.filing_status_days }} day{{ filing.filing_status_days|pluralize }})
-                                        {% endif %}
-                                    </span>
-                                {% endif %}
-                            {% else %}
-                                <span class="text-base-content/60">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if filing.document_link %}
-                                <a 
-                                    href="{{ filing.document_link }}" 
-                                    target="_blank" 
-                                    class="btn btn-sm btn-outline"
-                                    rel="noopener noreferrer"
-                                >
-                                    View PDF
-                                </a>
-                            {% else %}
-                                <span class="text-base-content/60">-</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                                    {% else %}
+                                        <span class="text-base-content/60">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if filing.document_link %}
+                                        <a 
+                                            href="{{ filing.document_link }}" 
+                                            target="_blank" 
+                                            class="btn btn-sm btn-outline"
+                                            rel="noopener noreferrer"
+                                        >
+                                            View PDF
+                                        </a>
+                                    {% else %}
+                                        <span class="text-base-content/60">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-sm text-base-content/70">No filings available yet for this company.</div>
+                {% endif %}
+            {% endwith %}
+        {% else %}
+            <div class="text-sm text-base-content/70">No filings available yet for this company.</div>
+        {% endif %}
         
         {% if company.company_number %}
         <div class="mt-4">
@@ -306,19 +405,18 @@
         </div>
         {% endif %}
     </div>
-</details>
-{% endif %}
-{% endwith %}
+</div>
 {% endif %}
 
-<details class="card bg-base-200 shadow-xl" open>
-    <summary class="card-body cursor-pointer">
-        <div class="flex justify-between items-center">
-            <h2 class="card-title text-2xl">Funding Searches</h2>
+{% if current_tab == 'funding' %}
+<div id="tab-funding" class="card bg-base-200 shadow-xl border border-base-300">
+    <div class="card-body py-4 px-4">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <h2 class="card-title text-xl">Funding Searches</h2>
+            </div>
             <span class="text-sm text-base-content/70">{{ funding_searches|length }} search{{ funding_searches|length|pluralize }}</span>
         </div>
-    </summary>
-    <div class="card-body pt-0">
         <div class="flex justify-between items-center mb-4">
             <div></div>
             <button onclick="document.getElementById('funding-search-form').classList.toggle('hidden')" 
@@ -393,5 +491,26 @@
         </div>
         {% endif %}
     </div>
-</details>
+</div>
+{% endif %}
+
+{% if can_edit and current_tab == 'settings' %}
+<div id="tab-settings" class="card bg-base-200 shadow-xl border border-base-300">
+    <div class="card-body py-4 px-4 space-y-4">
+        <h2 class="card-title text-xl">Settings</h2>
+        <form method="post"
+              action="{% url 'companies:delete' company.id %}"
+              onsubmit="return confirm('Delete this company? This cannot be undone.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-error btn-sm">
+                Delete Company
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+    </div>
+</div>
+
 {% endblock %}
