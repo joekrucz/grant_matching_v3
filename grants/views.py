@@ -1,6 +1,7 @@
 """
 Grant views.
 """
+import re
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -37,7 +38,65 @@ def grants_list(request):
         grants = grants.filter(status=status)
     
     # Ordering
-    grants = grants.order_by('-deadline', '-created_at')
+    sort_by = request.GET.get('sort', 'title')
+    sort_order = request.GET.get('order', 'asc')
+    
+    if sort_by == 'deadline':
+        if sort_order == 'desc':
+            grants = grants.order_by('-deadline', 'title')
+        else:
+            # Soonest first: nulls last, then ascending
+            grants = grants.extra(
+                select={'deadline_null': 'CASE WHEN deadline IS NULL THEN 1 ELSE 0 END'}
+            ).order_by('deadline_null', 'deadline', 'title')
+    elif sort_by == 'funding':
+        # For funding amount, we need to extract numeric values from strings
+        # Since funding_amount is stored as a string (e.g., "£500,000", "Up to £1M")
+        # we'll sort in Python after fetching
+        grants_list = list(grants)
+        
+        def extract_funding_value(funding_str):
+            """Extract numeric value from funding amount string."""
+            if not funding_str:
+                return 0
+            # Remove currency symbols and extract numbers
+            # Handle formats like "£500,000", "Up to £1M", "£1.5M", etc.
+            numbers = re.findall(r'[\d,]+\.?\d*', funding_str.replace(',', ''))
+            if numbers:
+                value = float(numbers[0].replace(',', ''))
+                # Handle multipliers (M = million, K = thousand)
+                if 'M' in funding_str.upper() or 'million' in funding_str.lower():
+                    value *= 1000000
+                elif 'K' in funding_str.upper() or 'thousand' in funding_str.lower():
+                    value *= 1000
+                return value
+            return 0
+        
+        if sort_order == 'desc':
+            grants_list.sort(key=lambda g: extract_funding_value(g.funding_amount), reverse=True)
+        else:
+            grants_list.sort(key=lambda g: extract_funding_value(g.funding_amount))
+        
+        # Pagination for in-memory list
+        paginator = Paginator(grants_list, 20)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+        
+        context = {
+            'page_obj': page_obj,
+            'query': query,
+            'source_filter': source,
+            'status_filter': status,
+            'sort_by': sort_by,
+            'sort_order': sort_order,
+        }
+        return render(request, 'grants/list.html', context)
+    else:
+        # Default: alphabetical by title
+        if sort_order == 'desc':
+            grants = grants.order_by('-title')
+        else:
+            grants = grants.order_by('title')
     
     # Pagination
     paginator = Paginator(grants, 20)
@@ -49,6 +108,8 @@ def grants_list(request):
         'query': query,
         'source_filter': source,
         'status_filter': status,
+        'sort_by': sort_by,
+        'sort_order': sort_order,
     }
     return render(request, 'grants/list.html', context)
 

@@ -28,6 +28,23 @@
                 <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Closed</option>
                 <option value="unknown" {% if status_filter == 'unknown' %}selected{% endif %}>Unknown</option>
             </select>
+            <select name="sort" class="select select-bordered" onchange="this.form.submit()">
+                <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Sort by Title</option>
+                <option value="deadline" {% if sort_by == 'deadline' %}selected{% endif %}>Sort by Deadline</option>
+                <option value="funding" {% if sort_by == 'funding' %}selected{% endif %}>Sort by Funding Amount</option>
+            </select>
+            <select name="order" class="select select-bordered" onchange="this.form.submit()">
+                {% if sort_by == 'deadline' %}
+                    <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Soonest First</option>
+                    <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Latest First</option>
+                {% elif sort_by == 'funding' %}
+                    <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Smallest First</option>
+                    <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Largest First</option>
+                {% else %}
+                    <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>A-Z</option>
+                    <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Z-A</option>
+                {% endif %}
+            </select>
             <button type="submit" class="btn btn-primary">Filter</button>
         </div>
     </form>
@@ -77,7 +94,7 @@
 {% if page_obj.has_other_pages %}
 <div class="join flex justify-center mt-6">
     {% if page_obj.has_previous %}
-    <a href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" 
+    <a href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}{% if sort_order %}&order={{ sort_order }}{% endif %}" 
        class="join-item btn">
         Previous
     </a>
@@ -88,7 +105,7 @@
     </button>
     
     {% if page_obj.has_next %}
-    <a href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" 
+    <a href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}{% if sort_order %}&order={{ sort_order }}{% endif %}" 
        class="join-item btn">
         Next
     </a>
