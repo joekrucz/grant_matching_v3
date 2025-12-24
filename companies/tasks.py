@@ -38,16 +38,36 @@ if CELERY_TASKS_AVAILABLE:
         logger.info(f"match_grants_with_chatgpt task started for funding_search_id: {funding_search_id}")
         
         funding_search = FundingSearch.objects.get(id=funding_search_id)
-        logger.info(f"Found funding search: {funding_search.name}, project_description length: {len(funding_search.project_description or '')}")
         
         funding_search.matching_status = 'running'
-        funding_search.matching_progress = {'current': 0, 'total': 0, 'percentage': 0}
+        funding_search.matching_progress = {
+            'current': 0, 
+            'total': 0, 
+            'percentage': 0,
+            'stage': 'processing_sources',
+            'stage_message': 'Processing input sources...'
+        }
         funding_search.save()
         
         try:
-            project_text = funding_search.project_description
+            # Compile text from all selected input sources (this includes scraping website if selected)
+            logger.info("Compiling input sources (this may include website scraping)...")
+            project_text = funding_search.compile_input_sources_text()
+            logger.info(f"Found funding search: {funding_search.name}, compiled input sources length: {len(project_text or '')}")
             if not project_text:
-                raise ValueError("No project description available")
+                raise ValueError("No input sources available. Please select company files, notes, website, or add a project description.")
+            
+            logger.info(f"Input sources compiled. Total text length: {len(project_text)} characters")
+            
+            # Update progress to show we're ready to match
+            funding_search.matching_progress = {
+                'current': 0,
+                'total': 0,
+                'percentage': 0,
+                'stage': 'ready_to_match',
+                'stage_message': 'Input sources processed. Starting grant matching...'
+            }
+            funding_search.save()
             
             # Get ALL grants (170 grants)
             grants = Grant.objects.all().order_by('-created_at')
@@ -79,7 +99,9 @@ if CELERY_TASKS_AVAILABLE:
                     matching_progress={
                         'current': current,
                         'total': total,
-                        'percentage': round(percentage, 1)
+                        'percentage': round(percentage, 1),
+                        'stage': 'matching',
+                        'stage_message': f'Matching grant {current} of {total}...'
                     }
                 )
             
@@ -104,14 +126,27 @@ if CELERY_TASKS_AVAILABLE:
                     grant_data = grants_list[grant_idx]
                     grant = Grant.objects.get(id=grant_data['id'])
                     
+                    # Get scores - support both new format (eligibility/competitiveness) and old format (score)
+                    eligibility_score = result.get('eligibility_score')
+                    competitiveness_score = result.get('competitiveness_score')
+                    overall_score = result.get('score')
+                    
+                    # Calculate overall score from components if available, otherwise use provided score
+                    if eligibility_score is not None and competitiveness_score is not None:
+                        calculated_score = (eligibility_score + competitiveness_score) / 2.0
+                    else:
+                        calculated_score = overall_score if overall_score is not None else 0.0
+                    
                     # Only save matches above threshold
-                    if result['score'] > 0.2:  # Lower threshold since we're processing all grants
+                    if calculated_score > 0.2:  # Lower threshold since we're processing all grants
                         # Use update_or_create to handle duplicates gracefully
                         match_obj, created = GrantMatchResult.objects.update_or_create(
                             funding_search=funding_search,
                             grant=grant,
                             defaults={
-                                'match_score': result['score'],
+                                'match_score': calculated_score,
+                                'eligibility_score': eligibility_score,
+                                'competitiveness_score': competitiveness_score,
                                 'match_reasons': {
                                     'explanation': result.get('explanation', ''),
                                     'alignment_points': result.get('alignment_points', []),
@@ -129,7 +164,13 @@ if CELERY_TASKS_AVAILABLE:
             # Update funding search
             funding_search.matching_status = 'completed'
             funding_search.last_matched_at = timezone.now()
-            funding_search.matching_progress = {'current': len(grants_list), 'total': len(grants_list), 'percentage': 100}
+            funding_search.matching_progress = {
+                'current': len(grants_list), 
+                'total': len(grants_list), 
+                'percentage': 100,
+                'stage': 'completed',
+                'stage_message': 'Matching completed!'
+            }
             funding_search.save()
             
             result_summary = {

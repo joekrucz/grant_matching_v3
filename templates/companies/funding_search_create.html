@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Funding Search - {{ company.name }} - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="hero min-h-[80vh]">
+    <div class="hero-content">
+        <div class="card bg-base-200 w-full max-w-2xl border border-base-300">
+            <div class="card-body">
+                <h1 class="card-title text-2xl justify-center mb-2">Create Funding Search</h1>
+                <p class="text-center text-base-content/70 mb-6">{{ company.name }}</p>
+                
+                <form method="post" action="{% url 'companies:funding_search_create' company.id %}">
+                    {% csrf_token %}
+                    <div class="form-control mb-4">
+                        <label class="label" for="id_name">
+                            <span class="label-text">Name <span class="text-error">*</span></span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="name" 
+                            id="id_name" 
+                            required 
+                            placeholder="e.g., Q1 2025 Funding Search"
+                            class="input input-bordered"
+                        >
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label" for="trl-levels-dropdown">
+                            <span class="label-text">TRL Levels</span>
+                        </label>
+                        <div class="trl-levels-dropdown-container dropdown w-full">
+                            <div role="button" class="btn btn-outline w-full justify-between" id="trl-levels-dropdown">
+                                <span id="trl-levels-display">Select TRL Levels</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                            <ul class="trl-levels-dropdown-content dropdown-content bg-base-200 border border-base-300 rounded-box w-full p-2 shadow-lg z-[1] max-h-64 overflow-y-auto" style="display: flex; flex-direction: column;">
+                                {% for value, label in trl_levels %}
+                                <li class="w-full">
+                                    <label class="label cursor-pointer justify-start gap-3 py-2 w-full">
+                                        <input 
+                                            type="checkbox" 
+                                            class="checkbox checkbox-sm" 
+                                            value="{{ value }}"
+                                            name="trl_levels"
+                                        >
+                                        <span class="label-text">{{ label }}</span>
+                                    </label>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div id="trl-levels-selected" class="flex flex-col gap-2 mt-2"></div>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label" for="id_notes">
+                            <span class="label-text">Notes</span>
+                        </label>
+                        <textarea 
+                            name="notes" 
+                            id="id_notes" 
+                            rows="3"
+                            placeholder="Any additional notes about this funding search..."
+                            class="textarea textarea-bordered"
+                        ></textarea>
+                    </div>
+                    
+                    <div class="flex gap-3 justify-end mt-6">
+                        <a href="{% url 'companies:detail' company.id %}" class="btn btn-ghost">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Create Funding Search</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('input[name="trl_levels"]');
+    const displaySpan = document.getElementById('trl-levels-display');
+    const selectedContainer = document.getElementById('trl-levels-selected');
+    const dropdown = document.querySelector('.trl-levels-dropdown-container');
+    
+    function updateDisplay() {
+        const selected = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => {
+                const label = cb.closest('label').querySelector('.label-text').textContent;
+                return { value: cb.value, label: label };
+            });
+        
+        if (selected.length === 0) {
+            displaySpan.textContent = 'Select TRL Levels';
+            selectedContainer.innerHTML = '';
+        } else {
+            displaySpan.textContent = `${selected.length} TRL Level${selected.length > 1 ? 's' : ''} selected`;
+            selectedContainer.innerHTML = selected.map(item => 
+                `<div><span class="badge badge-primary">${item.label}</span></div>`
+            ).join('');
+        }
+    }
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateDisplay);
+    });
+    
+    const dropdownButton = document.getElementById('trl-levels-dropdown');
+    let isDropdownOpen = false;
+    
+    // Toggle dropdown on button click
+    dropdownButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        isDropdownOpen = !isDropdownOpen;
+        if (isDropdownOpen) {
+            dropdown.classList.add('dropdown-open');
+        } else {
+            dropdown.classList.remove('dropdown-open');
+        }
+    });
+    
+    // Prevent dropdown from closing when clicking inside the dropdown content
+    const dropdownContent = dropdown.querySelector('.trl-levels-dropdown-content');
+    if (dropdownContent) {
+        dropdownContent.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+    
+    // Prevent any focus/blur events from affecting other dropdowns
+    dropdownButton.addEventListener('focus', function(e) {
+        e.stopPropagation();
+    });
+    
+    dropdownButton.addEventListener('blur', function(e) {
+        e.stopPropagation();
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!dropdown.contains(event.target)) {
+            dropdown.classList.remove('dropdown-open');
+            isDropdownOpen = false;
+        }
+    });
+});
+</script>
+{% endblock %}
+

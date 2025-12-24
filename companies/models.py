@@ -320,18 +320,26 @@ class FundingSearch(models.Model):
         ('running', 'Running'),
         ('completed', 'Completed'),
         ('error', 'Error'),
+        ('cancelled', 'Cancelled'),
     ]
     
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='funding_searches')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='funding_searches')
     name = models.CharField(max_length=255)
     notes = models.TextField(blank=True, null=True)
-    trl_level = models.CharField(max_length=255, choices=TRL_LEVELS, blank=True, null=True)
+    trl_level = models.CharField(max_length=255, choices=TRL_LEVELS, blank=True, null=True)  # Legacy single TRL level (deprecated)
+    trl_levels = models.JSONField(default=list, blank=True)  # Multiple TRL levels stored as list
     
     # Matching fields
     project_description = models.TextField(blank=True, null=True)  # Text input or extracted from file
     uploaded_file = models.FileField(upload_to='funding_searches/%Y/%m/', blank=True, null=True)
     file_type = models.CharField(max_length=50, blank=True, null=True)  # 'pdf', 'docx', 'txt', 'text'
+    
+    # Company data selections for matching
+    selected_company_files = models.ManyToManyField('CompanyFile', blank=True, related_name='funding_searches')
+    selected_company_notes = models.ManyToManyField('CompanyNote', blank=True, related_name='funding_searches')
+    use_company_website = models.BooleanField(default=False)  # Whether to use company website as a source
+    
     last_matched_at = models.DateTimeField(blank=True, null=True)
     matching_status = models.CharField(max_length=50, default='pending', choices=MATCHING_STATUS_CHOICES, db_index=True)
     matching_error = models.TextField(blank=True, null=True)  # Store error message if matching fails
@@ -349,6 +357,165 @@ class FundingSearch(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.company.name})"
+    
+    def get_all_trl_levels(self):
+        """
+        Get all TRL levels, combining the new trl_levels list with the legacy trl_level field.
+        Returns a list of unique TRL level values.
+        """
+        trl_levels = list(self.trl_levels) if self.trl_levels else []
+        if self.trl_level and self.trl_level not in trl_levels:
+            trl_levels.append(self.trl_level)
+        return trl_levels
+    
+    def compile_input_sources_text(self):
+        """
+        Compile text from all selected input sources for matching.
+        Returns combined text from:
+        - Selected company files (extracted text)
+        - Selected company notes (body text)
+        - Company website (if selected - includes URL)
+        - Uploaded file (if exists - extracted text)
+        - Project description (if exists - for backward compatibility)
+        """
+        def extract_text_from_file(file, file_type):
+            """Extract text from uploaded file."""
+            if file_type == 'pdf':
+                try:
+                    import PyPDF2
+                    pdf_reader = PyPDF2.PdfReader(file)
+                    text = ""
+                    for page in pdf_reader.pages:
+                        text += page.extract_text() + "\n"
+                    return text.strip()
+                except Exception as e:
+                    raise Exception(f"Error reading PDF: {str(e)}")
+            
+            elif file_type == 'docx':
+                try:
+                    from docx import Document
+                    doc = Document(file)
+                    text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+                    return text.strip()
+                except Exception as e:
+                    raise Exception(f"Error reading DOCX: {str(e)}")
+            
+            elif file_type == 'txt':
+                try:
+                    file.seek(0)  # Reset file pointer
+                    text = file.read().decode('utf-8')
+                    return text.strip()
+                except UnicodeDecodeError:
+                    try:
+                        file.seek(0)
+                        text = file.read().decode('latin-1')
+                        return text.strip()
+                    except Exception as e:
+                        raise Exception(f"Error reading text file: {str(e)}")
+            
+            else:
+                raise Exception(f"Unsupported file type: {file_type}")
+        
+        text_parts = []
+        
+        # Add project description if it exists (for backward compatibility)
+        if self.project_description:
+            text_parts.append(f"Project Description:\n{self.project_description}\n")
+        
+        # Add selected company notes
+        selected_notes = self.selected_company_notes.all()
+        if selected_notes:
+            notes_text = "\n\n".join([
+                f"Note: {note.title or 'Untitled'}\n{note.body}"
+                for note in selected_notes
+            ])
+            text_parts.append(f"Company Notes:\n{notes_text}\n")
+        
+        # Add selected company files (extract text)
+        selected_files = self.selected_company_files.all()
+        for company_file in selected_files:
+            try:
+                file = company_file.file
+                file_name = company_file.original_name or file.name
+                
+                # Determine file type
+                file_name_lower = file_name.lower()
+                if file_name_lower.endswith('.pdf'):
+                    file_type = 'pdf'
+                elif file_name_lower.endswith('.docx'):
+                    file_type = 'docx'
+                elif file_name_lower.endswith('.txt'):
+                    file_type = 'txt'
+                else:
+                    file_type = 'txt'  # Default
+                
+                # Extract text from file
+                with file.open('rb') as f:
+                    extracted_text = extract_text_from_file(f, file_type)
+                
+                if extracted_text:
+                    text_parts.append(f"Company File: {file_name}\n{extracted_text}\n")
+            except Exception as e:
+                # If extraction fails, just include the filename
+                file_name = company_file.original_name or (company_file.file.name if company_file.file else 'Unknown')
+                text_parts.append(f"Company File: {file_name} (text extraction failed: {str(e)})\n")
+        
+        # Add uploaded file if exists (extract text)
+        if self.uploaded_file and self.file_type:
+            try:
+                with self.uploaded_file.open('rb') as f:
+                    extracted_text = extract_text_from_file(f, self.file_type)
+                
+                if extracted_text:
+                    text_parts.append(f"Uploaded File: {self.uploaded_file.name}\n{extracted_text}\n")
+            except Exception as e:
+                # If extraction fails, just include the filename
+                text_parts.append(f"Uploaded File: {self.uploaded_file.name} (text extraction failed: {str(e)})\n")
+        
+        # Add company website if selected (scrape content)
+        if self.use_company_website and self.company.website:
+            try:
+                import requests
+                from bs4 import BeautifulSoup
+                from urllib.parse import urljoin, urlparse
+                
+                # Fetch website content
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+                response = requests.get(self.company.website, headers=headers, timeout=10)
+                response.raise_for_status()
+                
+                # Parse HTML and extract text
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # Remove script and style elements
+                for script in soup(["script", "style", "nav", "footer", "header"]):
+                    script.decompose()
+                
+                # Get text content
+                website_text = soup.get_text()
+                
+                # Clean up whitespace
+                lines = (line.strip() for line in website_text.splitlines())
+                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                website_text = ' '.join(chunk for chunk in chunks if chunk)
+                
+                # Limit to reasonable length (first 5000 characters)
+                if len(website_text) > 5000:
+                    website_text = website_text[:5000] + "... (truncated)"
+                
+                if website_text:
+                    text_parts.append(f"Company Website: {self.company.website}\n{website_text}\n")
+                else:
+                    text_parts.append(f"Company Website: {self.company.website} (no text content found)\n")
+            except Exception as e:
+                # If scraping fails, just include the URL
+                text_parts.append(f"Company Website: {self.company.website} (scraping failed: {str(e)})\n")
+        
+        # Combine all text parts
+        combined_text = "\n\n---\n\n".join(text_parts)
+        return combined_text.strip()
 
 
 class CompanyGrant(models.Model):
@@ -395,7 +562,9 @@ class GrantMatchResult(models.Model):
     
     funding_search = models.ForeignKey(FundingSearch, on_delete=models.CASCADE, related_name='match_results')
     grant = models.ForeignKey(Grant, on_delete=models.CASCADE, related_name='match_results')
-    match_score = models.FloatField(db_index=True)  # 0.0 to 1.0
+    match_score = models.FloatField(db_index=True)  # 0.0 to 1.0 - Overall score (average of eligibility and competitiveness)
+    eligibility_score = models.FloatField(null=True, blank=True, db_index=True)  # 0.0 to 1.0 - How well the project meets eligibility criteria
+    competitiveness_score = models.FloatField(null=True, blank=True, db_index=True)  # 0.0 to 1.0 - How competitive the project is for this grant
     match_reasons = models.JSONField(default=dict)  # e.g., {"explanation": "...", "alignment_points": [], "concerns": []}
     matched_at = models.DateTimeField(auto_now_add=True)
     
@@ -406,6 +575,16 @@ class GrantMatchResult(models.Model):
         indexes = [
             models.Index(fields=['funding_search', '-match_score']),
         ]
+    
+    def save(self, *args, **kwargs):
+        # Calculate overall match_score as average of eligibility and competitiveness if both are provided
+        if self.eligibility_score is not None and self.competitiveness_score is not None:
+            self.match_score = (self.eligibility_score + self.competitiveness_score) / 2.0
+        elif self.match_score is None:
+            # Fallback: if no component scores and no match_score set, default to 0
+            self.match_score = 0.0
+        # If only one component score is provided, keep the existing match_score (don't recalculate)
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.funding_search.name} - {self.grant.title} ({self.match_score:.2f})"

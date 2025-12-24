@@ -358,6 +358,8 @@ def company_delete(request, id):
 @login_required
 def funding_search_create(request, company_id):
     """Create funding search for a company."""
+    from .models import TRL_LEVELS
+    
     # SECURITY: Check authorization before loading data
     company = get_object_or_404(Company, id=company_id)
     
@@ -370,20 +372,33 @@ def funding_search_create(request, company_id):
         name = request.POST.get('name', '').strip()
         if not name:
             messages.error(request, 'Name is required.')
-            return redirect('companies:detail', id=company_id)
+            return render(request, 'companies/funding_search_create.html', {
+                'company': company,
+                'trl_levels': TRL_LEVELS,
+            })
+        
+        # Get multiple TRL levels from form
+        trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
+        trl_levels = [level for level in trl_levels if level]  # Remove empty values
         
         funding_search = FundingSearch.objects.create(
             company=company,
             user=request.user,
             name=name,
             notes=request.POST.get('notes', ''),
-            trl_level=request.POST.get('trl_level', '') or None,
+            trl_level=request.POST.get('trl_level', '') or None,  # Keep for backwards compatibility
+            trl_levels=trl_levels,
         )
         
         messages.success(request, 'Funding search created successfully.')
-        return redirect('companies:detail', id=company_id)
+        return redirect('companies:funding_search_select_data', id=funding_search.id)
     
-    return redirect('companies:detail', id=company_id)
+    # GET request - show the form
+    context = {
+        'company': company,
+        'trl_levels': TRL_LEVELS,
+    }
+    return render(request, 'companies/funding_search_create.html', context)
 
 
 @login_required
@@ -406,11 +421,13 @@ def funding_search_detail(request, id):
             messages.error(request, 'You do not have permission to edit this funding search.')
             return redirect('companies:funding_search_detail', id=id)
         
-        # Handle regular form submission (name, notes, trl_level, project_description)
+        # Handle regular form submission (name, notes, trl_levels)
         funding_search.name = request.POST.get('name', funding_search.name)
         funding_search.notes = request.POST.get('notes', funding_search.notes)
-        funding_search.trl_level = request.POST.get('trl_level', '') or None
-        funding_search.project_description = request.POST.get('project_description', funding_search.project_description)
+        # Get multiple TRL levels from form
+        trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
+        trl_levels = [level for level in trl_levels if level]  # Remove empty values
+        funding_search.trl_levels = trl_levels
         funding_search.save()
         
         messages.success(request, 'Funding search updated successfully.')
@@ -421,13 +438,78 @@ def funding_search_detail(request, id):
         funding_search=funding_search
     ).select_related('grant').order_by('-match_score')[:50]
     
+    # Get selected sources (company files and notes)
+    selected_files = funding_search.selected_company_files.all().order_by('-created_at')
+    selected_notes = funding_search.selected_company_notes.all().order_by('-created_at')
+    
     context = {
         'funding_search': funding_search,
         'can_edit': can_edit,
         'trl_levels': TRL_LEVELS,
         'match_results': match_results,
+        'selected_files': selected_files,
+        'selected_notes': selected_notes,
     }
     return render(request, 'companies/funding_search_detail.html', context)
+
+
+@login_required
+def funding_search_select_data(request, id):
+    """Second step: Select company data to use for funding search."""
+    from .models import CompanyFile, CompanyNote
+    
+    # SECURITY: Check authorization before loading data
+    funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to edit (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to edit this funding search.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    company = funding_search.company
+    
+    if request.method == 'POST':
+        # Get selected company files
+        selected_file_ids = request.POST.getlist('company_files')
+        selected_files = CompanyFile.objects.filter(
+            id__in=selected_file_ids,
+            company=company
+        )
+        funding_search.selected_company_files.set(selected_files)
+        
+        # Get selected company notes
+        selected_note_ids = request.POST.getlist('company_notes')
+        selected_notes = CompanyNote.objects.filter(
+            id__in=selected_note_ids,
+            company=company
+        )
+        funding_search.selected_company_notes.set(selected_notes)
+        
+        # Get website selection
+        funding_search.use_company_website = request.POST.get('use_company_website') == 'on'
+        
+        funding_search.save()
+        
+        messages.success(request, 'Company data selected successfully.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    # GET request - show selection form
+    company_files = company.files.all().order_by('-created_at')
+    company_notes = company.company_notes.all().order_by('-created_at')
+    
+    # Get currently selected items
+    selected_file_ids = set(funding_search.selected_company_files.values_list('id', flat=True))
+    selected_note_ids = set(funding_search.selected_company_notes.values_list('id', flat=True))
+    
+    context = {
+        'funding_search': funding_search,
+        'company': company,
+        'company_files': company_files,
+        'company_notes': company_notes,
+        'selected_file_ids': selected_file_ids,
+        'selected_note_ids': selected_note_ids,
+    }
+    return render(request, 'companies/funding_search_select_data.html', context)
 
 
 @login_required
@@ -490,7 +572,7 @@ def extract_text_from_file(file, file_type):
 
 @login_required
 def funding_search_upload(request, id):
-    """Handle file upload and text extraction."""
+    """Handle file upload."""
     # SECURITY: Check authorization before loading data
     funding_search = get_object_or_404(FundingSearch, id=id)
     
@@ -561,22 +643,14 @@ def funding_search_upload(request, id):
         file_type = expected_type
         
         try:
-            # Extract text from file
-            extracted_text = extract_text_from_file(uploaded_file, file_type)
-            
-            if not extracted_text:
-                messages.error(request, 'Could not extract text from file. File may be empty or corrupted.')
-                return redirect('companies:funding_search_detail', id=id)
-            
-            # Save file and extracted text
+            # Save file without extracting text
             funding_search.uploaded_file = uploaded_file
             funding_search.file_type = file_type
-            funding_search.project_description = extracted_text
             funding_search.save()
             
-            messages.success(request, f'File uploaded and text extracted successfully. ({len(extracted_text)} characters)')
+            messages.success(request, f'File uploaded successfully.')
         except Exception as e:
-            messages.error(request, f'Error processing file: {str(e)}')
+            messages.error(request, f'Error uploading file: {str(e)}')
     
     return redirect('companies:funding_search_detail', id=id)
 
@@ -596,9 +670,18 @@ def funding_search_match(request, id):
         return redirect('companies:funding_search_detail', id=id)
     
     if request.method == 'POST':
-        if not funding_search.project_description:
-            logger.warning(f"Funding search {id} has no project description")
-            messages.error(request, 'Please provide project description or upload a file first.')
+        # Check if there are any input sources selected
+        has_sources = (
+            funding_search.selected_company_files.exists() or
+            funding_search.selected_company_notes.exists() or
+            funding_search.use_company_website or
+            funding_search.uploaded_file or
+            funding_search.project_description
+        )
+        
+        if not has_sources:
+            logger.warning(f"Funding search {id} has no input sources")
+            messages.error(request, 'Please select input sources (company files, notes, website) or add a project description first.')
             return redirect('companies:funding_search_detail', id=id)
         
         if funding_search.matching_status == 'running':
@@ -613,14 +696,32 @@ def funding_search_match(request, id):
             messages.error(request, 'Background task service (Celery) is not available. Please check Redis connection.')
             return redirect('companies:funding_search_detail', id=id)
         
+        # Set status to running immediately so progress section shows
+        funding_search.matching_status = 'running'
+        funding_search.matching_progress = {
+            'current': 0,
+            'total': 0,
+            'percentage': 0,
+            'stage': 'processing_sources',
+            'stage_message': 'Processing input sources...'
+        }
+        funding_search.save()
+        
         # Trigger Celery task
         try:
             logger.info(f"Triggering matching task for funding search {id}")
             task = match_grants_with_chatgpt.delay(funding_search.id)
             logger.info(f"Matching task queued successfully. Task ID: {task.id}")
+            # Store task ID in progress for cancellation
+            funding_search.matching_progress['task_id'] = task.id
+            funding_search.save()
             messages.info(request, f'Matching job started (Task ID: {task.id}). Processing all grants... This may take 1-2 minutes.')
         except Exception as e:
             logger.error(f"Failed to trigger matching task for funding search {id}: {e}", exc_info=True)
+            # Reset status if task failed to start
+            funding_search.matching_status = 'pending'
+            funding_search.matching_error = f'Failed to start matching job: {str(e)}'
+            funding_search.save()
             messages.error(request, f'Failed to start matching job: {str(e)}')
     
     return redirect('companies:funding_search_detail', id=id)
@@ -645,6 +746,49 @@ def funding_search_status(request, id):
         'error': funding_search.matching_error,
         'last_matched_at': funding_search.last_matched_at.isoformat() if funding_search.last_matched_at else None,
     })
+
+
+@login_required
+def funding_search_cancel(request, id):
+    """Cancel a running matching job."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # SECURITY: Check authorization before loading data
+    funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to cancel matching (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to cancel matching for this funding search.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    if request.method == 'POST':
+        if funding_search.matching_status != 'running':
+            messages.info(request, 'No matching job is currently running.')
+            return redirect('companies:funding_search_detail', id=id)
+        
+        # Try to revoke the Celery task if we have the task ID
+        try:
+            from celery.result import AsyncResult
+            progress = funding_search.matching_progress or {}
+            task_id = progress.get('task_id')
+            
+            if task_id:
+                task = AsyncResult(task_id)
+                task.revoke(terminate=True)
+                logger.info(f"Cancelled Celery task {task_id} for funding search {id}")
+        except Exception as e:
+            logger.warning(f"Could not cancel Celery task for funding search {id}: {e}")
+        
+        # Update funding search status
+        funding_search.matching_status = 'cancelled'
+        funding_search.matching_error = 'Matching job cancelled by user.'
+        funding_search.save()
+        
+        logger.info(f"Matching job cancelled for funding search {id}")
+        messages.success(request, 'Matching job cancelled successfully.')
+    
+    return redirect('companies:funding_search_detail', id=id)
 
 
 @login_required

@@ -470,10 +470,15 @@ FUNDING OPPORTUNITIES:
 {grants_text}
 
 For EACH grant, provide:
-1. Match score: A float from 0.0 to 1.0 (1.0 = perfect match, 0.0 = no match)
-2. Explanation: 2-3 sentences explaining the match quality
-3. Top 3 alignment points: What matches well
-4. Top 2 concerns: Potential issues or mismatches
+1. Eligibility score: A float from 0.0 to 1.0 (1.0 = fully eligible, 0.0 = not eligible)
+   - Assess how well the project meets the grant's eligibility criteria (sector, company type, location, size, etc.)
+   - Consider: Does the project qualify? Are there any disqualifying factors?
+2. Competitiveness score: A float from 0.0 to 1.0 (1.0 = highly competitive, 0.0 = not competitive)
+   - Assess how competitive the project is for this specific grant opportunity
+   - Consider: Alignment with grant objectives, innovation level, market potential, team strength, feasibility
+3. Explanation: 2-3 sentences explaining the match quality and scores
+4. Top 3 alignment points: What matches well
+5. Top 2 concerns: Potential issues or mismatches
 
 IMPORTANT: Respond with a valid JSON object containing an array called "matches" with exactly {len(grants_batch)} items.
 
@@ -482,14 +487,16 @@ Format:
     "matches": [
         {{
             "grant_index": 0,
-            "score": 0.85,
+            "eligibility_score": 0.90,
+            "competitiveness_score": 0.80,
             "explanation": "This grant is highly relevant because...",
             "alignment_points": ["Both focus on AI", "TRL levels align", "Deadline is feasible"],
             "concerns": ["May need additional partners", "Budget might be tight"]
         }},
         {{
             "grant_index": 1,
-            "score": 0.45,
+            "eligibility_score": 0.70,
+            "competitiveness_score": 0.40,
             "explanation": "...",
             "alignment_points": [...],
             "concerns": [...]

@@ -19,19 +19,41 @@
             fetch(`/companies/funding_searches/${fundingSearchId}/status`)
                 .then(response => response.json())
                 .then(data => {
-                    // Update progress bar
-                    const progressBar = document.getElementById('matching-progress-bar');
-                    const progressText = document.getElementById('matching-progress-text');
-                    const statusAlert = document.getElementById('matching-status-alert');
+                    // Update button text with progress
+                    const buttonText = document.getElementById('matching-button-text');
+                    const cancelForm = document.getElementById('cancel-matching-form');
                     
-                    if (progressBar && progressText) {
+                    if (buttonText) {
                         const percentage = data.progress.percentage || 0;
                         const current = data.progress.current || 0;
                         const total = data.progress.total || 0;
+                        const stage = data.progress.stage || 'matching';
                         
-                        progressBar.style.width = percentage + '%';
-                        progressBar.setAttribute('aria-valuenow', percentage);
-                        progressText.textContent = `${current} of ${total} grants checked (${percentage.toFixed(1)}%)`;
+                        // Update button text - show progress during matching stage
+                        if (stage === 'matching' && total > 0) {
+                            buttonText.textContent = `Matching in progress... ${current} of ${total} grants checked (${percentage.toFixed(1)}%)`;
+                        } else if (stage === 'processing_sources' || stage === 'ready_to_match') {
+                            buttonText.textContent = 'Matching in progress...';
+                        } else {
+                            buttonText.textContent = `Matching in progress... ${current} of ${total} grants checked (${percentage.toFixed(1)}%)`;
+                        }
+                    }
+                    
+                    // Show cancel button if running and not already visible
+                    if (data.status === 'running' && !cancelForm) {
+                        const matchingForm = document.getElementById('matching-form');
+                        if (matchingForm) {
+                            const formContainer = matchingForm.parentElement;
+                            if (formContainer) {
+                                const cancelFormHtml = `
+                                    <form method="post" action="{% url 'companies:funding_search_cancel' funding_search.id %}" id="cancel-matching-form">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-error btn-lg" id="cancel-matching-btn">Cancel</button>
+                                    </form>
+                                `;
+                                formContainer.insertAdjacentHTML('beforeend', cancelFormHtml);
+                            }
+                        }
                     }
                     
                     // If status changed from 'running', stop polling and reload page
@@ -40,9 +62,9 @@
                         progressPollInterval = null;
                         
                         // Reload page to show final results
-                        if (data.status === 'completed' || data.status === 'error') {
+                        if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
                             setTimeout(() => {
-        window.location.reload();
+                                window.location.reload();
                             }, 500);
                         }
                     }
@@ -59,6 +81,28 @@
         startProgressPolling({{ funding_search.id }});
     });
     {% endif %}
+    
+    // Auto-upload file when selected
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileInput = document.getElementById('file-input');
+        const fileForm = document.getElementById('file-upload-form');
+        
+        if (fileInput && fileForm) {
+            fileInput.addEventListener('change', function() {
+                if (this.files && this.files.length > 0) {
+                    // Show loading state
+                    const button = this.closest('form').querySelector('button');
+                    if (button) {
+                        button.disabled = true;
+                        button.innerHTML = '<span class="loading loading-spinner loading-sm"></span>';
+                    }
+                    
+                    // Submit form automatically
+                    fileForm.submit();
+                }
+            });
+        }
+    });
 </script>
 <div class="mb-6">
     <a href="{% url 'companies:detail' funding_search.company.id %}" class="btn btn-ghost btn-sm">
@@ -69,7 +113,26 @@
 <div class="card bg-base-200 border border-base-300">
     <div class="card-body">
         <div class="flex justify-between items-start mb-6">
-            <h1 class="card-title text-3xl">{{ funding_search.name }}</h1>
+            <div class="flex-1">
+                <div class="flex items-center gap-2 group" id="name-editor-container">
+                    <h1 class="card-title text-3xl" id="funding-search-name">{{ funding_search.name }}</h1>
+                    {% if can_edit %}
+                    <button 
+                        type="button" 
+                        class="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100 transition-opacity" 
+                        id="edit-name-btn"
+                        onclick="editName()"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </button>
+                    {% endif %}
+                </div>
+                <a href="{% url 'companies:detail' funding_search.company.id %}" class="link link-hover text-base-content/70 hover:text-primary mt-1 block">
+                    {{ funding_search.company.name }}
+                </a>
+            </div>
             {% if can_edit %}
             <a href="{% url 'companies:funding_search_delete' funding_search.id %}" class="btn btn-error btn-sm">
                 Delete
@@ -77,108 +140,190 @@
             {% endif %}
         </div>
         
-        <div class="mb-6">
-            <div class="text-sm font-semibold mb-1">Company</div>
-            <a href="{% url 'companies:detail' funding_search.company.id %}" class="link link-primary">
-                {{ funding_search.company.name }}
-            </a>
-        </div>
         
-        {% if can_edit %}
-        <form method="post">
-            {% csrf_token %}
-            <div class="space-y-4">
-                <div class="form-control">
-                    <label class="label" for="id_name">
-                        <span class="label-text">Name</span>
-                    </label>
-                    <input 
-                        type="text" 
-                        name="name" 
-                        id="id_name" 
-                        value="{{ funding_search.name }}" 
-                        required
-                        class="input input-bordered"
-                    >
-                </div>
-                <div class="form-control">
-                    <label class="label" for="id_trl_level">
-                        <span class="label-text">TRL Level</span>
-                    </label>
-                    <select name="trl_level" id="id_trl_level" class="select select-bordered">
-                        <option value="">Select TRL Level</option>
-                        {% for value, label in trl_levels %}
-                        <option value="{{ value }}" {% if funding_search.trl_level == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-control">
-                    <label class="label" for="id_notes">
-                        <span class="label-text">Notes</span>
-                    </label>
-                    <textarea 
-                        name="notes" 
-                        id="id_notes" 
-                        rows="6"
-                        class="textarea textarea-bordered"
-                    >{{ funding_search.notes|default:'' }}</textarea>
-                </div>
-                <div class="form-control">
-                    <label class="label" for="id_project_description">
-                        <span class="label-text">Project Description</span>
-                        <span class="label-text-alt">Describe your project, roadmap, or product for grant matching</span>
-                    </label>
-                    <textarea 
-                        name="project_description" 
-                        id="id_project_description" 
-                        rows="10"
-                        class="textarea textarea-bordered"
-                        placeholder="Enter a detailed description of your project, including objectives, technology, target market, and funding needs..."
-                    >{{ funding_search.project_description|default:'' }}</textarea>
-                </div>
-                <div class="form-control mt-6">
-                    <button type="submit" class="btn btn-primary">Update Funding Search</button>
-                </div>
-            </div>
-        </form>
-        
-        <!-- File Upload Section -->
-        <div class="divider">OR</div>
+        <!-- Selected Sources Section -->
         <div class="card bg-base-100 border border-base-300">
             <div class="card-body">
-                <h2 class="card-title text-xl">Upload Project Document</h2>
-                <p class="text-sm text-base-content/70 mb-4">
-                    Upload a PDF, DOCX, or TXT file containing your project description. 
-                    The system will extract text automatically.
-                </p>
-                <form method="post" enctype="multipart/form-data" action="{% url 'companies:funding_search_upload' funding_search.id %}">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="card-title text-xl">Input Sources</h2>
+                    {% if can_edit %}
+                    <div class="flex gap-2 items-center">
+                        <form method="post" enctype="multipart/form-data" action="{% url 'companies:funding_search_upload' funding_search.id %}" id="file-upload-form" class="inline-block">
                     {% csrf_token %}
-                    <div class="form-control">
                         <input 
                             type="file" 
                             name="file" 
                             accept=".pdf,.docx,.txt" 
-                            class="file-input file-input-bordered file-input-primary w-full"
-                            required
-                        >
-                        <label class="label">
-                            <span class="label-text-alt">Maximum file size: 10MB</span>
-                        </label>
+                                id="file-input"
+                                class="hidden"
+                            >
+                            <button 
+                                type="button" 
+                                class="btn btn-circle btn-primary btn-sm"
+                                onclick="document.getElementById('file-input').click()"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                </svg>
+                            </button>
+                        </form>
+                        <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="btn btn-sm btn-outline">
+                            Edit Sources
+                        </a>
                     </div>
-                    <div class="form-control mt-4">
-                        <button type="submit" class="btn btn-outline btn-primary">Upload & Extract Text</button>
+                    {% endif %}
+                </div>
+                <p class="text-sm text-base-content/70 mb-4">
+                    Company data that will be used as input for this funding search.
+                </p>
+                
+                <!-- TRL Levels Selection -->
+                {% if can_edit %}
+                <form method="post" id="trl-levels-form">
+                    {% csrf_token %}
+                    <div class="form-control mb-6">
+                        <label class="label" for="trl-levels-dropdown">
+                            <span class="label-text">TRL Levels</span>
+                        </label>
+                        <div class="trl-levels-dropdown-container dropdown w-full">
+                            <div role="button" class="btn btn-outline w-full justify-between" id="trl-levels-dropdown">
+                                <span id="trl-levels-display">Select TRL Levels</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                            <ul class="trl-levels-dropdown-content dropdown-content bg-base-200 border border-base-300 rounded-box w-full p-2 shadow-lg z-[1] max-h-64 overflow-y-auto" style="display: flex; flex-direction: column;">
+                                {% for value, label in trl_levels %}
+                                <li class="w-full">
+                                    <label class="label cursor-pointer justify-start gap-3 py-2 w-full">
+                                        <input 
+                                            type="checkbox" 
+                                            class="checkbox checkbox-sm trl-level-checkbox" 
+                                            value="{{ value }}"
+                                            name="trl_levels"
+                                            {% if value in funding_search.trl_levels or funding_search.trl_level == value %}checked{% endif %}
+                                        >
+                                        <span class="label-text">{{ label }}</span>
+                                    </label>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                    </div>
+                        <div id="trl-levels-selected" class="flex flex-col gap-2 mt-2"></div>
                     </div>
                 </form>
+                {% else %}
+                <!-- Display TRL levels for non-editors -->
+                {% if funding_search.trl_levels or funding_search.trl_level %}
+                <div class="mb-6">
+                    <div class="text-sm font-semibold mb-2">TRL Levels</div>
+                    <div class="flex flex-wrap gap-2">
+                        {% for trl_value in funding_search.trl_levels %}
+                            {% for value, label in trl_levels %}
+                                {% if value == trl_value %}
+                                <span class="badge badge-primary">{{ label }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                        {% if funding_search.trl_level and funding_search.trl_level not in funding_search.trl_levels %}
+                            {% for value, label in trl_levels %}
+                                {% if value == funding_search.trl_level %}
+                                <span class="badge badge-primary">{{ label }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endif %}
+                
+                {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
+                <div class="space-y-4">
+                    <!-- Company Website -->
+                    {% if funding_search.use_company_website and funding_search.company.website %}
+                    <div class="border border-base-300 rounded-lg p-4 bg-base-200">
+                        <div class="flex items-start gap-3">
+                            <div class="badge badge-primary">Website</div>
+                            <div class="flex-1">
+                                <div class="font-semibold mb-1">Company Website</div>
+                                <a href="{{ funding_search.company.website }}" target="_blank" class="link link-primary text-sm">
+                                    {{ funding_search.company.website }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Uploaded File -->
                 {% if funding_search.uploaded_file %}
-                <div class="alert alert-info mt-4">
-                    <span>📄 Uploaded: {{ funding_search.uploaded_file.name }} ({{ funding_search.file_type|upper }})</span>
+                    <div class="border border-base-300 rounded-lg p-4 bg-base-200">
+                        <div class="flex items-start gap-3">
+                            <div class="badge badge-primary">File</div>
+                            <div class="flex-1">
+                                <div class="font-semibold mb-1">{{ funding_search.uploaded_file.name }}</div>
+                                <div class="text-xs text-base-content/60">Type: {{ funding_search.file_type|upper }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Selected Company Files -->
+                    {% if selected_files %}
+                    <div class="border border-base-300 rounded-lg p-4">
+                        <div class="font-semibold mb-3">Company Files ({{ selected_files|length }})</div>
+                        <div class="space-y-2">
+                            {% for file in selected_files %}
+                            <div class="flex items-center gap-3 p-2 bg-base-200 rounded">
+                                <div class="badge badge-outline">File</div>
+                                <div class="flex-1">
+                                    <div class="font-medium text-sm">{{ file.original_name|default:file.file.name }}</div>
+                                    <div class="text-xs text-base-content/60">
+                                        Uploaded {{ file.created_at|date:"M d, Y" }} by {{ file.uploaded_by.name|default:file.uploaded_by.email }}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Selected Company Notes -->
+                    {% if selected_notes %}
+                    <div class="border border-base-300 rounded-lg p-4">
+                        <div class="font-semibold mb-3">Company Notes ({{ selected_notes|length }})</div>
+                        <div class="space-y-3">
+                            {% for note in selected_notes %}
+                            <div class="p-3 bg-base-200 rounded">
+                                <div class="flex items-start gap-2 mb-2">
+                                    <div class="badge badge-outline">Note</div>
+                                    {% if note.title %}
+                                    <div class="font-medium text-sm">{{ note.title }}</div>
+                                    {% endif %}
+                                </div>
+                                <p class="text-sm text-base-content/70 mb-2">{{ note.body|truncatewords:30 }}</p>
+                                <div class="text-xs text-base-content/60">
+                                    Created {{ note.created_at|date:"M d, Y" }} by {{ note.user.name|default:note.user.email }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <span>No input sources selected. 
+                    {% if can_edit %}
+                    <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="link">Select company data</a> to use as input.
+                    {% else %}
+                    Select company data to use as input.
+                    {% endif %}
+                    </span>
                 </div>
                 {% endif %}
             </div>
         </div>
         
         <!-- Matching Section -->
-        {% if funding_search.project_description %}
+        {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
         <div class="divider"></div>
         <div class="card bg-base-100 border border-base-300">
             <div class="card-body">
@@ -187,61 +332,90 @@
                     Match your project against all available grants using AI-powered analysis.
                 </p>
                 
-                <form method="post" action="{% url 'companies:funding_search_match' funding_search.id %}">
-                    {% csrf_token %}
-                    <button 
-                        type="submit" 
-                        class="btn btn-primary btn-lg w-full" 
-                        {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                    >
-                        {% if funding_search.matching_status == 'running' %}
-                            <span class="loading loading-spinner loading-md"></span>
-                            Matching in progress... This may take 1-2 minutes
-                        {% elif funding_search.matching_status == 'completed' %}
-                            Run Matching Job Again
-                        {% else %}
-                            Run Matching Job
-                        {% endif %}
-                    </button>
-                </form>
-                
-                {% if funding_search.matching_status == 'running' %}
-                <div id="matching-status-alert" class="alert alert-info mt-4">
-                    <span>Status: Processing grants... This may take 1-2 minutes.</span>
-                    {% if funding_search.matching_progress %}
-                    <div class="mt-4">
-                        <div class="flex justify-between text-sm mb-2">
-                            <span id="matching-progress-text">
-                                {{ funding_search.matching_progress.current|default:0 }} of {{ funding_search.matching_progress.total|default:0 }} grants checked 
-                                ({{ funding_search.matching_progress.percentage|default:0 }}%)
-                            </span>
-                        </div>
-                        <progress 
-                            id="matching-progress-bar"
-                            class="progress progress-primary w-full" 
-                            value="{{ funding_search.matching_progress.percentage|default:0 }}" 
-                            max="100"
-                            aria-valuenow="{{ funding_search.matching_progress.percentage|default:0 }}"
-                            aria-valuemin="0"
-                            aria-valuemax="100"
-                        ></progress>
-                    </div>
-                    {% else %}
-                    <div class="mt-4">
-                        <div class="flex justify-between text-sm mb-2">
-                            <span id="matching-progress-text">Initializing...</span>
-                        </div>
-                        <progress 
-                            id="matching-progress-bar"
-                            class="progress progress-primary w-full" 
-                            value="0" 
-                            max="100"
-                            aria-valuenow="0"
-                        ></progress>
-                    </div>
+                <div class="flex gap-2">
+                    <form method="post" action="{% url 'companies:funding_search_match' funding_search.id %}" id="matching-form" class="flex-1">
+                        {% csrf_token %}
+                        <button 
+                            type="submit" 
+                            class="btn btn-primary btn-lg w-full" 
+                            {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                            id="run-matching-btn"
+                        >
+                            {% if funding_search.matching_status == 'running' %}
+                                <span class="loading loading-spinner loading-md"></span>
+                                <span id="matching-button-text">
+                                    {% if funding_search.matching_progress %}
+                                        Matching in progress... {{ funding_search.matching_progress.current|default:0 }} of {{ funding_search.matching_progress.total|default:0 }} grants checked ({{ funding_search.matching_progress.percentage|default:0 }}%)
+                                    {% else %}
+                                        Matching in progress...
+                                    {% endif %}
+                                </span>
+                            {% elif funding_search.matching_status == 'completed' %}
+                                Run Matching Job Again
+                            {% else %}
+                                Run Matching Job
+                            {% endif %}
+                        </button>
+                    </form>
+                    {% if funding_search.matching_status == 'running' %}
+                    <form method="post" action="{% url 'companies:funding_search_cancel' funding_search.id %}" id="cancel-matching-form">
+                        {% csrf_token %}
+                        <button 
+                            type="submit" 
+                            class="btn btn-error btn-lg"
+                            id="cancel-matching-btn"
+                        >
+                            Cancel
+                        </button>
+                    </form>
                     {% endif %}
                 </div>
-                {% elif funding_search.matching_status == 'error' %}
+                
+                <script>
+                // Show progress section immediately when form is submitted
+                (function() {
+                    const matchingForm = document.getElementById('matching-form');
+                    if (matchingForm) {
+                        matchingForm.addEventListener('submit', function() {
+                            // Disable the button and show initial state
+                            const btn = document.getElementById('run-matching-btn');
+                            if (btn) {
+                                btn.disabled = true;
+                                const buttonText = document.getElementById('matching-button-text');
+                                if (buttonText) {
+                                    buttonText.textContent = 'Matching in progress...';
+                                } else {
+                                    btn.innerHTML = '<span class="loading loading-spinner loading-md"></span> <span id="matching-button-text">Matching in progress...</span>';
+                                }
+                            }
+                            
+                            // Show cancel button
+                            const cancelForm = document.getElementById('cancel-matching-form');
+                            if (!cancelForm) {
+                                const formContainer = matchingForm.parentElement;
+                                if (formContainer) {
+                                    const cancelFormHtml = `
+                                        <form method="post" action="{% url 'companies:funding_search_cancel' funding_search.id %}" id="cancel-matching-form">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-error btn-lg" id="cancel-matching-btn">Cancel</button>
+                                        </form>
+                                    `;
+                                    formContainer.insertAdjacentHTML('beforeend', cancelFormHtml);
+                                }
+                            }
+                            
+                            // Start polling immediately
+                            setTimeout(function() {
+                                if (typeof startProgressPolling === 'function') {
+                                    startProgressPolling({{ funding_search.id }});
+                                }
+                            }, 500);
+                        });
+                    }
+                })();
+                </script>
+                
+                {% if funding_search.matching_status == 'error' %}
                 <div class="alert alert-error mt-4">
                     <span>Error: An error occurred during matching. Please try again.</span>
                     {% if funding_search.matching_error %}
@@ -261,22 +435,8 @@
         {% else %}
         <div class="divider"></div>
         <div class="alert alert-warning">
-            <span>Warning: Please provide a project description or upload a file before running matching.</span>
+            <span>Warning: Please select input sources before running matching.</span>
         </div>
-        {% endif %}
-        {% else %}
-        {% if funding_search.trl_level %}
-        <div class="mb-4">
-            <div class="text-sm font-semibold mb-1">TRL Level</div>
-            <div class="badge badge-outline">{{ funding_search.trl_level }}</div>
-        </div>
-        {% endif %}
-        {% if funding_search.notes %}
-        <div class="mb-4">
-            <div class="text-sm font-semibold mb-1">Notes</div>
-            <div class="whitespace-pre-wrap">{{ funding_search.notes }}</div>
-        </div>
-        {% endif %}
         {% endif %}
     </div>
 </div>
@@ -293,11 +453,12 @@
             {% endif %}
         </p>
         
+        <!-- Top 5 Results -->
         <div class="space-y-4">
-            {% for match in match_results %}
+            {% for match in match_results|slice:":5" %}
             <div class="card bg-base-100 border border-base-300 {% if forloop.first %}border-2 border-primary{% endif %}">
                 <div class="card-body">
-                    <div class="flex justify-between items-start mb-2">
+                    <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
                         <div class="flex-1">
                             <h3 class="card-title text-lg">
                                 <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary">
@@ -319,9 +480,36 @@
                             <p class="text-base-content/80 mt-3 text-sm">{{ match.grant.summary|truncatewords:30 }}</p>
                             {% endif %}
                         </div>
-                        <div class="text-right ml-4">
+                        <div class="lg:text-right lg:ml-4 min-w-[200px]">
                             <div class="stat-value text-primary text-3xl">{{ match.match_score|percentage }}%</div>
-                            <div class="stat-desc text-xs">Match Score</div>
+                            <div class="stat-desc text-xs mb-3">Overall Match</div>
+                            {% if match.eligibility_score is not None or match.competitiveness_score is not None %}
+                            <div class="border-t border-base-300 pt-3 mt-3">
+                                <div class="text-sm font-semibold text-base-content/80 mb-2">Score Breakdown</div>
+                                <div class="space-y-2">
+                                    {% if match.eligibility_score is not None %}
+                                    <div>
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="text-sm text-base-content/70">Eligibility</span>
+                                            <span class="text-sm font-semibold">{{ match.eligibility_score|percentage }}%</span>
+                                        </div>
+                                        <progress class="progress progress-info h-2 w-full" value="{{ match.eligibility_score|percentage }}" max="100"></progress>
+                                    </div>
+                                    {% endif %}
+                                    {% if match.competitiveness_score is not None %}
+                                    <div>
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="text-sm text-base-content/70">Competitiveness</span>
+                                            <span class="text-sm font-semibold">{{ match.competitiveness_score|percentage }}%</span>
+                                        </div>
+                                        <progress class="progress progress-success h-2 w-full" value="{{ match.competitiveness_score|floatformat:0 }}" max="100"></progress>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="text-xs text-base-content/50 mt-2">Score breakdown not available</div>
+                            {% endif %}
                         </div>
                     </div>
                     
@@ -362,15 +550,334 @@
             </div>
             {% endfor %}
         </div>
+        
+        <!-- Remaining Results (Expandable) -->
+        {% if match_results|length > 5 %}
+        {% with remaining_count=match_results|length|add:"-5" %}
+        <div class="mt-6">
+            <button 
+                id="toggle-remaining-grants" 
+                class="btn btn-outline btn-primary w-full"
+                onclick="toggleRemainingGrants()"
+                data-remaining-count="{{ remaining_count }}"
+            >
+                <span id="toggle-text">View All {{ remaining_count }} Remaining Grant{{ remaining_count|pluralize }}</span>
+                <svg id="toggle-icon" class="w-5 h-5 ml-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            
+            <div id="remaining-grants-section" class="hidden mt-4">
+                <div class="border border-base-300 rounded-lg p-4 bg-base-100" style="max-height: 600px; overflow-y: auto;">
+                    <div class="space-y-4">
+                        {% for match in match_results|slice:"5:" %}
+                        <div class="card bg-base-100 border border-base-300">
+                            <div class="card-body">
+                                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
+                                    <div class="flex-1">
+                                        <h3 class="card-title text-lg">
+                                            <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary">
+                                                {{ match.grant.title }}
+                                            </a>
+                                        </h3>
+                                        <div class="flex gap-2 mt-2 flex-wrap">
+                                            <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
+                                            {% if match.grant.status == 'open' %}
+                                            <span class="badge badge-success">Open</span>
+                                            {% else %}
+                                            <span class="badge badge-error">Closed</span>
+                                            {% endif %}
+                                            {% if match.grant.deadline %}
+                                            <span class="badge badge-info">Deadline: {{ match.grant.deadline|date:"M d, Y" }}</span>
+                                            {% endif %}
+                                        </div>
+                                        {% if match.grant.summary %}
+                                        <p class="text-base-content/80 mt-3 text-sm">{{ match.grant.summary|truncatewords:30 }}</p>
+                                        {% endif %}
+                                    </div>
+                                    <div class="lg:text-right lg:ml-4 min-w-[200px]">
+                                        <div class="stat-value text-primary text-3xl">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-desc text-xs mb-3">Overall Match</div>
+                                        {% if match.eligibility_score is not None or match.competitiveness_score is not None %}
+                                        <div class="border-t border-base-300 pt-3 mt-3">
+                                            <div class="text-sm font-semibold text-base-content/80 mb-2">Score Breakdown</div>
+                                            <div class="space-y-2">
+                                                {% if match.eligibility_score is not None %}
+                                                <div>
+                                                    <div class="flex justify-between items-center mb-1">
+                                                        <span class="text-sm text-base-content/70">Eligibility</span>
+                                                        <span class="text-sm font-semibold">{{ match.eligibility_score|percentage }}%</span>
+                                                    </div>
+                                                    <progress class="progress progress-info h-2 w-full" value="{{ match.eligibility_score|percentage }}" max="100"></progress>
+                                                </div>
+                                                {% endif %}
+                                                {% if match.competitiveness_score is not None %}
+                                                <div>
+                                                    <div class="flex justify-between items-center mb-1">
+                                                        <span class="text-sm text-base-content/70">Competitiveness</span>
+                                                        <span class="text-sm font-semibold">{{ match.competitiveness_score|percentage }}%</span>
+                                                    </div>
+                                                    <progress class="progress progress-success h-2 w-full" value="{{ match.competitiveness_score|percentage }}" max="100"></progress>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% else %}
+                                        <div class="text-xs text-base-content/50 mt-2">Score breakdown not available</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                {% if match.match_reasons.explanation %}
+                                <div class="mt-4">
+                                    <p class="text-base-content/90 text-sm">
+                                        <strong>Why this matches:</strong> {{ match.match_reasons.explanation }}
+                                    </p>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.alignment_points %}
+                                <div class="mt-4">
+                                    <div class="flex flex-wrap gap-2">
+                                        {% for point in match.match_reasons.alignment_points %}
+                                        <span class="badge badge-success badge-outline">✓ {{ point }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.concerns %}
+                                <div class="mt-3">
+                                    <div class="flex flex-wrap gap-2">
+                                        {% for concern in match.match_reasons.concerns %}
+                                        <span class="badge badge-warning badge-outline">Warning: {{ concern }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="card-actions justify-end mt-4">
+                                    <a href="{% url 'grants:detail' match.grant.slug %}" class="btn btn-primary btn-sm">
+                                        View Grant Details
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endwith %}
+        {% endif %}
     </div>
 </div>
 {% elif funding_search.matching_status == 'completed' %}
 <div class="card bg-base-200 border border-base-300 mt-6">
     <div class="card-body">
         <div class="alert alert-info">
-            <span>No matching grants found above the threshold. Try adjusting your project description or run the matching again.</span>
+            <span>No matching grants found above the threshold. Try adjusting your input sources or run the matching again.</span>
         </div>
     </div>
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.trl-level-checkbox, input[name="trl_levels"]');
+    const displaySpan = document.getElementById('trl-levels-display');
+    const selectedContainer = document.getElementById('trl-levels-selected');
+    const dropdown = document.querySelector('.trl-levels-dropdown-container');
+    
+    if (!checkboxes.length || !displaySpan || !selectedContainer || !dropdown) {
+        return; // Elements not found
+    }
+    
+    if (!checkboxes.length || !displaySpan || !selectedContainer || !dropdown) {
+        return; // Elements not found (might be in view-only mode)
+    }
+    
+    function updateDisplay() {
+        const selected = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => {
+                const label = cb.closest('label').querySelector('.label-text').textContent;
+                return { value: cb.value, label: label };
+            });
+        
+        if (selected.length === 0) {
+            displaySpan.textContent = 'Select TRL Levels';
+            selectedContainer.innerHTML = '';
+        } else {
+            displaySpan.textContent = `${selected.length} TRL Level${selected.length > 1 ? 's' : ''} selected`;
+            selectedContainer.innerHTML = selected.map(item => 
+                `<div><span class="badge badge-primary">${item.label}</span></div>`
+            ).join('');
+        }
+    }
+    
+    // Initialize display with current selections
+    updateDisplay();
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateDisplay();
+            // Auto-submit form when TRL levels change
+            const form = document.getElementById('trl-levels-form');
+            if (form) {
+                form.submit();
+            }
+        });
+    });
+    
+    const dropdownButton = document.getElementById('trl-levels-dropdown');
+    let isDropdownOpen = false;
+    
+    // Toggle dropdown on button click
+    dropdownButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        isDropdownOpen = !isDropdownOpen;
+        if (isDropdownOpen) {
+            dropdown.classList.add('dropdown-open');
+        } else {
+            dropdown.classList.remove('dropdown-open');
+        }
+    });
+    
+    // Prevent dropdown from closing when clicking inside the dropdown content
+    const dropdownContent = dropdown.querySelector('.trl-levels-dropdown-content');
+    if (dropdownContent) {
+        dropdownContent.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+    
+    // Prevent any focus/blur events from affecting other dropdowns
+    dropdownButton.addEventListener('focus', function(e) {
+        e.stopPropagation();
+    });
+    
+    dropdownButton.addEventListener('blur', function(e) {
+        e.stopPropagation();
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!dropdown.contains(event.target)) {
+            dropdown.classList.remove('dropdown-open');
+            isDropdownOpen = false;
+        }
+    });
+});
+
+// Toggle remaining grants section
+function toggleRemainingGrants() {
+    const section = document.getElementById('remaining-grants-section');
+    const button = document.getElementById('toggle-remaining-grants');
+    const text = document.getElementById('toggle-text');
+    const icon = document.getElementById('toggle-icon');
+    
+    if (section && button && text && icon) {
+        const isHidden = section.classList.contains('hidden');
+        const remainingCount = parseInt(button.getAttribute('data-remaining-count')) || 0;
+        
+        if (isHidden) {
+            section.classList.remove('hidden');
+            text.textContent = 'Hide Remaining Grants';
+            icon.style.transform = 'rotate(180deg)';
+        } else {
+            section.classList.add('hidden');
+            text.textContent = `View All ${remainingCount} Remaining Grant${remainingCount !== 1 ? 's' : ''}`;
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
+// Inline name editing
+function editName() {
+    const nameElement = document.getElementById('funding-search-name');
+    const editBtn = document.getElementById('edit-name-btn');
+    if (!nameElement || !editBtn) return;
+    
+    const currentName = nameElement.textContent.trim();
+    
+    // Create input field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'input input-bordered text-3xl font-bold';
+    input.style.width = '100%';
+    input.style.maxWidth = '600px';
+    
+    // Replace name with input
+    nameElement.style.display = 'none';
+    editBtn.style.display = 'none';
+    nameElement.parentElement.insertBefore(input, nameElement);
+    input.focus();
+    input.select();
+    
+    // Save on Enter or blur
+    function saveName() {
+        const newName = input.value.trim();
+        if (newName && newName !== currentName) {
+            // Create form data
+            const formData = new FormData();
+            formData.append('name', newName);
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrfToken) {
+                formData.append('csrfmiddlewaretoken', csrfToken.value);
+            }
+            
+            // Submit via fetch
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    nameElement.textContent = newName;
+                    nameElement.style.display = '';
+                    editBtn.style.display = '';
+                    input.remove();
+                    // Reload page to show updated name
+                    window.location.reload();
+                } else {
+                    alert('Error updating name. Please try again.');
+                    nameElement.style.display = '';
+                    editBtn.style.display = '';
+                    input.remove();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating name. Please try again.');
+                nameElement.style.display = '';
+                editBtn.style.display = '';
+                input.remove();
+            });
+        } else {
+            // Cancel editing
+            nameElement.style.display = '';
+            editBtn.style.display = '';
+            input.remove();
+        }
+    }
+    
+    input.addEventListener('blur', saveName);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            nameElement.style.display = '';
+            editBtn.style.display = '';
+            input.remove();
+        }
+    });
+}
+</script>
 {% endblock %}

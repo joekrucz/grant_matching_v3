@@ -488,55 +488,11 @@ details[open] summary .collapse-indicator::after {
         </div>
         <div class="flex justify-between items-center mb-4">
             <div></div>
-            <button onclick="document.getElementById('funding-search-form').classList.toggle('hidden')" 
-                    class="btn btn-primary btn-sm">
+            <a href="{% url 'companies:funding_search_create' company.id %}" 
+               target="_blank"
+               class="btn btn-primary btn-sm">
                 Add Funding Search
-            </button>
-        </div>
-        
-        <div id="funding-search-form" class="hidden mb-6">
-            <div class="card bg-base-300 border border-base-300">
-                <form method="post" action="{% url 'companies:funding_search_create' company.id %}" class="card-body">
-                    {% csrf_token %}
-                    <div class="form-control">
-                        <label class="label" for="id_name">
-                            <span class="label-text">Name</span>
-                        </label>
-                        <input 
-                            type="text" 
-                            name="name" 
-                            id="id_name" 
-                            required 
-                            class="input input-bordered"
-                        >
-                    </div>
-                    <div class="form-control">
-                        <label class="label" for="id_trl_level">
-                            <span class="label-text">TRL Level</span>
-                        </label>
-                        <select name="trl_level" id="id_trl_level" class="select select-bordered">
-                            <option value="">Select TRL Level</option>
-                            {% for value, label in trl_levels %}
-                            <option value="{{ value }}">{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-control">
-                        <label class="label" for="id_notes">
-                            <span class="label-text">Notes</span>
-                        </label>
-                        <textarea 
-                            name="notes" 
-                            id="id_notes" 
-                            rows="3"
-                            class="textarea textarea-bordered"
-                        ></textarea>
-                    </div>
-                    <div class="form-control mt-4">
-                        <button type="submit" class="btn btn-success">Create Funding Search</button>
-                    </div>
-                </form>
-            </div>
+            </a>
         </div>
         
         {% if funding_searches %}
@@ -547,8 +503,16 @@ details[open] summary .collapse-indicator::after {
                     <a href="{% url 'companies:funding_search_detail' search.id %}" class="card-title text-lg link link-primary">
                         {{ search.name }}
                     </a>
-                    {% if search.trl_level %}
-                    <div class="badge badge-outline">{{ search.trl_level }}</div>
+                    {% if search.trl_levels or search.trl_level %}
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        {% if search.trl_levels %}
+                            {% for trl in search.trl_levels %}
+                            <div class="badge badge-outline">{{ trl }}</div>
+                            {% endfor %}
+                        {% elif search.trl_level %}
+                            <div class="badge badge-outline">{{ search.trl_level }}</div>
+                        {% endif %}
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -579,5 +543,6 @@ details[open] summary .collapse-indicator::after {
 
     </div>
 </div>
+
 
 {% endblock %}
