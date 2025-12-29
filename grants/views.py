@@ -1,14 +1,20 @@
 """
 Grant views.
 """
+import json
 import re
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django_ratelimit.decorators import ratelimit
 from .models import Grant
+from admin_panel.ai_client import build_grant_context, AiAssistantClient, AiAssistantError
 
 
+@login_required
 def index(request):
     """Dashboard/landing page."""
     return render(request, 'grants/index.html')
@@ -114,8 +120,9 @@ def grants_list(request):
     return render(request, 'grants/list.html', context)
 
 
+@login_required
 def grant_detail(request, slug):
-    """Grant detail page (public)."""
+    """Grant detail page."""
     grant = get_object_or_404(Grant, slug=slug)
     
     # Prepare sections for Catapult and NIHR grants if available
@@ -180,4 +187,45 @@ def grant_detail(request, slug):
         'sections_list': sections_list,
     }
     return render(request, 'grants/detail.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+@ratelimit(key='user_or_ip', rate='30/h', block=True)
+def eligibility_checklist(request):
+    """API endpoint: generate eligibility checklist for a grant."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON payload"}, status=400)
+    
+    grant_id = payload.get("grant_id")
+    if not grant_id:
+        return JsonResponse({"error": "grant_id is required"}, status=400)
+    
+    grant = get_object_or_404(Grant, id=grant_id)
+    
+    try:
+        client = AiAssistantClient()
+    except AiAssistantError as e:
+        return JsonResponse({"error": str(e)}, status=503)
+    
+    grant_ctx = build_grant_context(grant)
+    parsed, raw_meta, latency_ms = client.eligibility_checklist(grant_ctx)
+    
+    checklist_items = parsed.get("checklist_items") or []
+    notes = parsed.get("notes") or []
+    missing_info = parsed.get("missing_info") or []
+    
+    return JsonResponse({
+        "checklist_items": checklist_items,
+        "notes": notes,
+        "missing_info": missing_info,
+        "meta": {
+            "model": raw_meta.get("model"),
+            "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+            "latency_ms": latency_ms,
+        },
+    })
 

@@ -441,4 +441,34 @@ class AiAssistantClient:
         }
         return self._call_json_model(system_prompt, payload, max_tokens=1200)
 
+    def eligibility_checklist(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Generate an eligibility checklist from grant information."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a single grant object with fields such as "
+            "`title`, `summary`, `description`, `eligibility`, `deadline`, "
+            "`funding_amount`, `status`, `source`, `url`.\n"
+            "Your task is to:\n"
+            "- Extract all eligibility requirements and criteria from the grant information.\n"
+            "- Create a comprehensive checklist of eligibility requirements that applicants must meet.\n"
+            "- Organize the checklist into clear, actionable items.\n"
+            "- Include requirements such as: organization type, sector/industry, location, company size, "
+            "funding stage, project type, collaboration requirements, and any other specific criteria mentioned.\n"
+            "- If eligibility information is missing or unclear, note that in the checklist.\n"
+            "Rules:\n"
+            "- Use only the information in the provided grant object.\n"
+            "- Extract requirements from all relevant fields (eligibility, description, summary, etc.).\n"
+            "- Be specific and actionable - each checklist item should be a clear requirement.\n"
+            "- If important information is missing, explicitly mention that instead of guessing.\n"
+            "- Keep language clear and non-technical.\n"
+            "- Do not invent requirements that are not present in the grant information.\n"
+            "Always respond with a single JSON object: "
+            '{"checklist_items": [string], "notes": [string], "missing_info": [string]}.'
+        )
+        payload = {
+            "task": "eligibility_checklist",
+            "grant": grant_ctx,
+        }
+        return self._call_json_model(system_prompt, payload, max_tokens=800)
+
 

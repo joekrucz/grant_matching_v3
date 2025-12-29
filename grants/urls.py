@@ -10,5 +10,6 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('grants', views.grants_list, name='list'),
     path('grants/<slug:slug>/', views.grant_detail, name='detail'),
+    path('grants/eligibility_checklist', views.eligibility_checklist, name='eligibility_checklist'),
 ]
 

@@ -29,13 +29,26 @@
             </div>
         </div>
         
-        {% if grant.url %}
-        <div class="mb-4">
+        <div class="mb-4 flex gap-2">
+            {% if grant.url %}
             <a href="{{ grant.url }}" target="_blank" class="btn btn-outline btn-primary btn-sm">
                 View Original Grant →
             </a>
+            {% endif %}
+            <button id="generate-checklist-btn" class="btn btn-primary btn-sm" onclick="generateEligibilityChecklist()">
+                <span id="checklist-btn-text">Generate Eligibility Checklist</span>
+                <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
         </div>
-        {% endif %}
+        
+        <div id="eligibility-checklist-container" class="hidden mb-6">
+            <div class="card bg-base-100 border border-primary">
+                <div class="card-body">
+                    <h2 class="card-title text-2xl mb-4">Eligibility Checklist</h2>
+                    <div id="checklist-content"></div>
+                </div>
+            </div>
+        </div>
         
         <div class="stats mb-6">
             {% if grant.funding_amount %}
@@ -136,16 +149,123 @@
             {% endif %}
         </div>
         {% endif %}
-        
-        <div class="collapse collapse-arrow bg-base-300">
-            <input type="checkbox" />
-            <div class="collapse-title text-lg font-medium">
-                View Raw Data
-            </div>
-            <div class="collapse-content">
-                <pre class="p-4 bg-base-100 rounded text-xs overflow-auto">{{ grant.raw_data|json_pretty }}</pre>
-            </div>
-        </div>
     </div>
 </div>
+
+<script>
+async function generateEligibilityChecklist() {
+    const btn = document.getElementById('generate-checklist-btn');
+    const btnText = document.getElementById('checklist-btn-text');
+    const btnLoading = document.getElementById('checklist-btn-loading');
+    const container = document.getElementById('eligibility-checklist-container');
+    const content = document.getElementById('checklist-content');
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    btnLoading.classList.remove('hidden');
+    container.classList.add('hidden');
+    content.innerHTML = '';
+    
+    try {
+        const grantId = document.getElementById('page-context').dataset.grantId;
+        if (!grantId) {
+            throw new Error('Grant ID not found');
+        }
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || getCookie('csrftoken');
+        
+        const response = await fetch('{% url "grants:eligibility_checklist" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+                grant_id: parseInt(grantId),
+            }),
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to generate checklist');
+        }
+        
+        const data = await response.json();
+        
+        // Build HTML content
+        let html = '';
+        
+        if (data.checklist_items && data.checklist_items.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">Requirements:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.checklist_items.forEach(item => {
+                html += `<li class="text-base-content/90">${escapeHtml(item)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.notes && data.notes.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">Notes:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.notes.forEach(note => {
+                html += `<li class="text-base-content/80">${escapeHtml(note)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.missing_info && data.missing_info.length > 0) {
+            html += '<div class="alert alert-warning">';
+            html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.missing_info.forEach(info => {
+                html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (!html) {
+            html = '<p class="text-base-content/70">No eligibility information could be extracted from this grant.</p>';
+        }
+        
+        content.innerHTML = html;
+        container.classList.remove('hidden');
+        
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;
+        container.classList.remove('hidden');
+    } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnLoading.classList.add('hidden');
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
 {% endblock %}
