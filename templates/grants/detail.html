@@ -36,16 +36,49 @@
             </a>
             {% endif %}
             <button id="generate-checklist-btn" class="btn btn-primary btn-sm" onclick="generateEligibilityChecklist()">
-                <span id="checklist-btn-text">Generate Eligibility Checklist</span>
+                <span id="checklist-btn-text">{% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Eligibility Checklist</span>
                 <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
             </button>
         </div>
         
-        <div id="eligibility-checklist-container" class="hidden mb-6">
+        <div id="eligibility-checklist-container" class="{% if not grant.eligibility_checklist or not grant.eligibility_checklist.checklist_items %}hidden{% endif %} mb-6">
             <div class="card bg-base-100 border border-primary">
                 <div class="card-body">
                     <h2 class="card-title text-2xl mb-4">Eligibility Checklist</h2>
-                    <div id="checklist-content"></div>
+                    <div id="checklist-content">
+                        {% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}
+                            {% if grant.eligibility_checklist.checklist_items %}
+                            <div class="space-y-2 mb-4">
+                                <h3 class="font-semibold text-lg mb-2">Requirements:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for item in grant.eligibility_checklist.checklist_items %}
+                                    <li class="text-base-content/90">{{ item }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if grant.eligibility_checklist.notes %}
+                            <div class="space-y-2 mb-4">
+                                <h3 class="font-semibold text-lg mb-2">Notes:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for note in grant.eligibility_checklist.notes %}
+                                    <li class="text-base-content/80">{{ note }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if grant.eligibility_checklist.missing_info %}
+                            <div class="alert alert-warning">
+                                <h3 class="font-semibold mb-2">Missing Information:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for info in grant.eligibility_checklist.missing_info %}
+                                    <li class="text-base-content/90">{{ info }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -193,7 +226,7 @@ async function generateEligibilityChecklist() {
         
         const data = await response.json();
         
-        // Build HTML content
+        // Build HTML content (same format as server-side template)
         let html = '';
         
         if (data.checklist_items && data.checklist_items.length > 0) {
@@ -235,6 +268,10 @@ async function generateEligibilityChecklist() {
         
         content.innerHTML = html;
         container.classList.remove('hidden');
+        
+        // Update button text to "Regenerate"
+        const btnText = document.getElementById('checklist-btn-text');
+        btnText.textContent = 'Regenerate Eligibility Checklist';
         
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;

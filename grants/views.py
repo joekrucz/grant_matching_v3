@@ -217,6 +217,21 @@ def eligibility_checklist(request):
     notes = parsed.get("notes") or []
     missing_info = parsed.get("missing_info") or []
     
+    # Save checklist to grant
+    checklist_data = {
+        "checklist_items": checklist_items,
+        "notes": notes,
+        "missing_info": missing_info,
+        "meta": {
+            "model": raw_meta.get("model"),
+            "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+            "latency_ms": latency_ms,
+        },
+    }
+    grant.eligibility_checklist = checklist_data
+    grant.save(update_fields=['eligibility_checklist'])
+    
     return JsonResponse({
         "checklist_items": checklist_items,
         "notes": notes,

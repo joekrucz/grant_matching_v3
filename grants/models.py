@@ -41,6 +41,7 @@ class Grant(models.Model):
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
     status = models.CharField(max_length=50, choices=GRANT_STATUSES, default='unknown', db_index=True)
     raw_data = models.JSONField(default=dict, blank=True)
+    eligibility_checklist = models.JSONField(default=dict, blank=True, null=True)
     scraped_at = models.DateTimeField(blank=True, null=True)
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_changed_at = models.DateTimeField(blank=True, null=True)
