@@ -25,17 +25,18 @@ except Exception as e:
 
 if CELERY_TASKS_AVAILABLE:
     @shared_task(bind=True)
-    def match_grants_with_chatgpt(self, funding_search_id):
+    def match_grants_with_chatgpt(self, funding_search_id, limit=None):
         """
-        Match all grants using ChatGPT API with batch processing.
+        Match grants using ChatGPT API with batch processing.
         
         Args:
             funding_search_id: ID of the FundingSearch to match grants for
+            limit: Optional limit on number of grants to match (for testing)
         
         Returns:
             dict with status, matches_created, grants_processed
         """
-        logger.info(f"match_grants_with_chatgpt task started for funding_search_id: {funding_search_id}")
+        logger.info(f"match_grants_with_chatgpt task started for funding_search_id: {funding_search_id}, limit: {limit}")
         
         funding_search = FundingSearch.objects.get(id=funding_search_id)
         
@@ -69,13 +70,24 @@ if CELERY_TASKS_AVAILABLE:
             }
             funding_search.save()
             
-            # Get ALL grants (170 grants)
+            # Get grants (with optional limit for testing and source filtering)
             grants = Grant.objects.all().order_by('-created_at')
+            
+            # Filter by selected grant sources if specified (if empty list, match all sources)
+            selected_sources = funding_search.selected_grant_sources
+            if selected_sources and len(selected_sources) > 0:
+                grants = grants.filter(source__in=selected_sources)
+                logger.info(f"Filtering grants by sources: {selected_sources}")
+            else:
+                logger.info("No source filter applied - matching against all grant sources")
+            
+            if limit:
+                grants = grants[:limit]
             grants_list = list(grants.values(
                 'id', 'title', 'source', 'summary', 'description',
                 'funding_amount', 'deadline', 'status', 'slug'
             ))
-            logger.info(f"Found {len(grants_list)} grants to match against")
+            logger.info(f"Found {len(grants_list)} grants to match against" + (f" (limited to {limit})" if limit else ""))
             
             # Initialize matcher
             try:
@@ -131,35 +143,40 @@ if CELERY_TASKS_AVAILABLE:
                     competitiveness_score = result.get('competitiveness_score')
                     overall_score = result.get('score')
                     
+                    # Log if scores are missing for debugging
+                    if eligibility_score is None or competitiveness_score is None:
+                        logger.warning(f"Missing component scores for grant {grant_data.get('id')}. Result keys: {list(result.keys())}. Eligibility: {eligibility_score}, Competitiveness: {competitiveness_score}, Overall: {overall_score}")
+                    
                     # Calculate overall score from components if available, otherwise use provided score
                     if eligibility_score is not None and competitiveness_score is not None:
                         calculated_score = (eligibility_score + competitiveness_score) / 2.0
                     else:
                         calculated_score = overall_score if overall_score is not None else 0.0
                     
-                    # Only save matches above threshold
-                    if calculated_score > 0.2:  # Lower threshold since we're processing all grants
-                        # Use update_or_create to handle duplicates gracefully
-                        match_obj, created = GrantMatchResult.objects.update_or_create(
-                            funding_search=funding_search,
-                            grant=grant,
-                            defaults={
-                                'match_score': calculated_score,
-                                'eligibility_score': eligibility_score,
-                                'competitiveness_score': competitiveness_score,
-                                'match_reasons': {
-                                    'explanation': result.get('explanation', ''),
-                                    'alignment_points': result.get('alignment_points', []),
-                                    'concerns': result.get('concerns', []),
-                                    'matched_via': 'chatgpt',
-                                    'batch_processed': True,
-                                }
+                    # Save all matches regardless of score (no threshold)
+                    # Use update_or_create to handle duplicates gracefully
+                    match_obj, created = GrantMatchResult.objects.update_or_create(
+                        funding_search=funding_search,
+                        grant=grant,
+                        defaults={
+                            'match_score': calculated_score,
+                            'eligibility_score': eligibility_score,
+                            'competitiveness_score': competitiveness_score,
+                            'match_reasons': {
+                                'explanation': result.get('explanation', ''),
+                                'eligibility_checklist': result.get('eligibility_checklist', []),
+                                'competitiveness_checklist': result.get('competitiveness_checklist', []),
+                                'alignment_points': result.get('alignment_points', []),  # Keep for backward compatibility
+                                'concerns': result.get('concerns', []),  # Keep for backward compatibility
+                                'matched_via': 'chatgpt',
+                                'batch_processed': True,
                             }
-                        )
-                        if created:
-                            matches_created += 1
-                        else:
-                            matches_updated += 1
+                        }
+                    )
+                    if created:
+                        matches_created += 1
+                    else:
+                        matches_updated += 1
             
             # Update funding search
             funding_search.matching_status = 'completed'

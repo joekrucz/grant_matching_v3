@@ -18,7 +18,7 @@ from .services import (
     ThreeSixtyGivingError,
 )
 from grants_aggregator import CELERY_AVAILABLE
-from grants.models import Grant
+from grants.models import Grant, GRANT_SOURCES, GRANT_SOURCES
 
 # Import tasks only if Celery is available
 if CELERY_AVAILABLE:
@@ -421,13 +421,17 @@ def funding_search_detail(request, id):
             messages.error(request, 'You do not have permission to edit this funding search.')
             return redirect('companies:funding_search_detail', id=id)
         
-        # Handle regular form submission (name, notes, trl_levels)
+        # Handle regular form submission (name, notes, trl_levels, grant_sources)
         funding_search.name = request.POST.get('name', funding_search.name)
         funding_search.notes = request.POST.get('notes', funding_search.notes)
         # Get multiple TRL levels from form
         trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
         trl_levels = [level for level in trl_levels if level]  # Remove empty values
         funding_search.trl_levels = trl_levels
+        # Get selected grant sources from form
+        grant_sources = request.POST.getlist('grant_sources')  # getlist for multiple values
+        grant_sources = [source for source in grant_sources if source]  # Remove empty values
+        funding_search.selected_grant_sources = grant_sources if grant_sources else []  # Default to empty list if none selected
         funding_search.save()
         
         messages.success(request, 'Funding search updated successfully.')
@@ -446,11 +450,36 @@ def funding_search_detail(request, id):
         'funding_search': funding_search,
         'can_edit': can_edit,
         'trl_levels': TRL_LEVELS,
+        'grant_sources': GRANT_SOURCES,
         'match_results': match_results,
         'selected_files': selected_files,
         'selected_notes': selected_notes,
     }
     return render(request, 'companies/funding_search_detail.html', context)
+
+
+@login_required
+def funding_search_clear_results(request, id):
+    """Clear all match results for a funding search."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # SECURITY: Check authorization before loading data
+    funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to clear results (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to clear results for this funding search.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    if request.method == 'POST':
+        # Clear all match results for this funding search
+        count = GrantMatchResult.objects.filter(funding_search=funding_search).delete()[0]
+        logger.info(f"Cleared {count} match results for funding search {id}")
+        result_text = "result" if count == 1 else "results"
+        messages.success(request, f'Cleared {count} matching {result_text} successfully.')
+    
+    return redirect('companies:funding_search_detail', id=id)
 
 
 @login_required
@@ -723,6 +752,79 @@ def funding_search_match(request, id):
             funding_search.matching_error = f'Failed to start matching job: {str(e)}'
             funding_search.save()
             messages.error(request, f'Failed to start matching job: {str(e)}')
+    
+    return redirect('companies:funding_search_detail', id=id)
+
+
+@login_required
+def funding_search_match_test(request, id):
+    """Trigger test matching job (first 20 grants only)."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # SECURITY: Check authorization before loading data
+    funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to run matching (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to run matching for this funding search.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    if request.method == 'POST':
+        # Check if there are any input sources selected
+        has_sources = (
+            funding_search.selected_company_files.exists() or
+            funding_search.selected_company_notes.exists() or
+            funding_search.use_company_website or
+            funding_search.uploaded_file or
+            funding_search.project_description
+        )
+        
+        if not has_sources:
+            logger.warning(f"Funding search {id} has no input sources")
+            messages.error(request, 'Please select input sources (company files, notes, website) or add a project description first.')
+            return redirect('companies:funding_search_detail', id=id)
+        
+        if funding_search.matching_status == 'running':
+            logger.info(f"Funding search {id} matching already running")
+            messages.info(request, 'Matching job is already running.')
+            return redirect('companies:funding_search_detail', id=id)
+        
+        # Check if Celery is available
+        logger.info(f"Checking Celery availability. CELERY_AVAILABLE={CELERY_AVAILABLE}, match_grants_with_chatgpt={match_grants_with_chatgpt}")
+        if not CELERY_AVAILABLE or match_grants_with_chatgpt is None:
+            logger.error(f"Celery not available for funding search {id}")
+            messages.error(request, 'Background task service (Celery) is not available. Please check Redis connection.')
+            return redirect('companies:funding_search_detail', id=id)
+        
+        # Set status to running immediately so progress section shows
+        funding_search.matching_status = 'running'
+        funding_search.matching_progress = {
+            'current': 0,
+            'total': 0,
+            'percentage': 0,
+            'stage': 'processing_sources',
+            'stage_message': 'Processing input sources...',
+            'test_mode': True  # Flag to indicate this is a test run
+        }
+        funding_search.save()
+        
+        # Trigger Celery task with limit of 20 grants
+        try:
+            logger.info(f"Triggering test matching task for funding search {id} (20 grants)")
+            task = match_grants_with_chatgpt.delay(funding_search.id, limit=20)
+            logger.info(f"Test matching task queued successfully. Task ID: {task.id}")
+            # Store task ID in progress for cancellation
+            funding_search.matching_progress['task_id'] = task.id
+            funding_search.save()
+            messages.info(request, f'Test matching job started (Task ID: {task.id}). Processing first 20 grants for testing...')
+        except Exception as e:
+            logger.error(f"Failed to trigger test matching task for funding search {id}: {e}", exc_info=True)
+            # Reset status if task failed to start
+            funding_search.matching_status = 'pending'
+            funding_search.matching_error = f'Failed to start test matching job: {str(e)}'
+            funding_search.save()
+            messages.error(request, f'Failed to start test matching job: {str(e)}')
     
     return redirect('companies:funding_search_detail', id=id)
 

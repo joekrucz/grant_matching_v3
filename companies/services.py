@@ -469,18 +469,23 @@ PROJECT DESCRIPTION:
 FUNDING OPPORTUNITIES:
 {grants_text}
 
-For EACH grant, provide:
-1. Eligibility score: A float from 0.0 to 1.0 (1.0 = fully eligible, 0.0 = not eligible)
-   - Assess how well the project meets the grant's eligibility criteria (sector, company type, location, size, etc.)
-   - Consider: Does the project qualify? Are there any disqualifying factors?
-2. Competitiveness score: A float from 0.0 to 1.0 (1.0 = highly competitive, 0.0 = not competitive)
-   - Assess how competitive the project is for this specific grant opportunity
-   - Consider: Alignment with grant objectives, innovation level, market potential, team strength, feasibility
-3. Explanation: 2-3 sentences explaining the match quality and scores
-4. Top 3 alignment points: What matches well
-5. Top 2 concerns: Potential issues or mismatches
+For EACH grant, you must:
+1. Extract ALL eligibility criteria from the grant description, title, summary, and any requirements mentioned. Create a comprehensive eligibility_checklist that covers EVERY eligibility requirement stated or implied in the grant information.
+2. Extract ALL competitiveness factors from the grant description, including selection criteria, evaluation criteria, priorities, and any factors that would make a project more competitive. Create a comprehensive competitiveness_checklist that covers EVERY factor mentioned.
+3. For EACH checklist item, evaluate if the company/project meets the criterion based ONLY on the input source material provided
+4. Assign a status: "yes" (meets criterion), "no" (does not meet), or "don't know" (insufficient information in input sources)
+5. Provide a brief reason for each status
+6. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist
+7. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist
+8. Provide an overall explanation (2-3 sentences)
 
-IMPORTANT: Respond with a valid JSON object containing an array called "matches" with exactly {len(grants_batch)} items.
+CRITICAL REQUIREMENTS:
+- Extract EVERY eligibility requirement from the grant - do not limit the number of items. If a grant mentions location, company size, sector, stage, partnership requirements, etc., include ALL of them.
+- Extract EVERY competitiveness factor from the grant - innovation requirements, market potential, team strength, impact, feasibility, alignment with priorities, etc. Include ALL factors mentioned.
+- The number of checklist items will vary significantly between grants - some may have 3 items, others may have 10+ items. This is expected and correct.
+- Base your evaluation ONLY on the input source material provided. If information is not available, use "don't know"
+- Be specific and actionable in your checklist items - each should be a distinct, evaluable criterion
+- Respond with a valid JSON object containing an array called "matches" with exactly {len(grants_batch)} items
 
 Format:
 {{
@@ -489,17 +494,20 @@ Format:
             "grant_index": 0,
             "eligibility_score": 0.90,
             "competitiveness_score": 0.80,
-            "explanation": "This grant is highly relevant because...",
-            "alignment_points": ["Both focus on AI", "TRL levels align", "Deadline is feasible"],
-            "concerns": ["May need additional partners", "Budget might be tight"]
-        }},
-        {{
-            "grant_index": 1,
-            "eligibility_score": 0.70,
-            "competitiveness_score": 0.40,
-            "explanation": "...",
-            "alignment_points": [...],
-            "concerns": [...]
+            "eligibility_checklist": [
+                {{"criterion": "Company must be UK-based", "status": "yes", "reason": "Company address shows UK location"}},
+                {{"criterion": "Company must be SME (under 250 employees)", "status": "don't know", "reason": "No employee count information in provided sources"}},
+                {{"criterion": "Project must be in healthcare sector", "status": "yes", "reason": "Project description focuses on medical device development"}},
+                {{"criterion": "Must have at least one academic partner", "status": "no", "reason": "No academic partnerships mentioned in input sources"}}
+            ],
+            "competitiveness_checklist": [
+                {{"criterion": "Project demonstrates innovation", "status": "yes", "reason": "Input sources describe novel approach"}},
+                {{"criterion": "Clear market potential", "status": "no", "reason": "Market analysis not provided in input sources"}},
+                {{"criterion": "Strong team with relevant expertise", "status": "don't know", "reason": "Team information not available in provided sources"}},
+                {{"criterion": "Project addresses key priority areas", "status": "yes", "reason": "Project aligns with grant priorities mentioned"}},
+                {{"criterion": "Demonstrates clear impact pathway", "status": "don't know", "reason": "Impact pathway not detailed in provided sources"}}
+            ],
+            "explanation": "This grant is highly relevant because..."
         }},
         ...
     ]
@@ -512,17 +520,36 @@ Format:
                 messages=[
                     {
                         "role": "system", 
-                        "content": "You are a grant matching expert. Always respond with valid JSON. Be precise with scores."
+                        "content": "You are a grant matching expert. Always respond with valid JSON. For each grant, you MUST:\n1. Extract ALL eligibility criteria from the grant (title, description, requirements) - create a comprehensive 'eligibility_checklist' array covering EVERY eligibility requirement\n2. Extract ALL competitiveness factors from the grant (selection criteria, priorities, evaluation factors) - create a comprehensive 'competitiveness_checklist' array covering EVERY factor\n3. The number of checklist items will vary - extract ALL criteria, do not limit to a fixed number\n4. For each checklist item, evaluate based ONLY on the provided input sources and assign status: 'yes' (meets), 'no' (does not meet), or 'don't know' (insufficient information)\n5. Calculate eligibility_score and competitiveness_score (0.0-1.0) based on percentage of 'yes' answers\n6. Provide a brief explanation. Do NOT use 'score' - use the two component scores instead."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,  # Lower for consistent scoring
                 response_format={"type": "json_object"},
-                max_tokens=4000,  # Enough for 10 grants with explanations
+                max_tokens=6000,  # Increased for detailed checklists (eligibility + competitiveness for 10 grants)
             )
             
             result = json.loads(response.choices[0].message.content)
-            return result.get('matches', [])
+            matches = result.get('matches', [])
+            
+            # Log first match to verify structure
+            if matches:
+                first_match = matches[0]
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"Sample match result structure: {list(first_match.keys())}")
+                if 'eligibility_score' not in first_match or 'competitiveness_score' not in first_match:
+                    logger.warning(f"Match result missing component scores. Keys: {list(first_match.keys())}")
+                if 'eligibility_checklist' not in first_match:
+                    logger.warning(f"Match result missing eligibility_checklist. Keys: {list(first_match.keys())}")
+                else:
+                    logger.info(f"Eligibility checklist has {len(first_match.get('eligibility_checklist', []))} items")
+                if 'competitiveness_checklist' not in first_match:
+                    logger.warning(f"Match result missing competitiveness_checklist. Keys: {list(first_match.keys())}")
+                else:
+                    logger.info(f"Competitiveness checklist has {len(first_match.get('competitiveness_checklist', []))} items")
+            
+            return matches
             
         except (RateLimitError, APIError) as e:
             # Will be handled by retry logic

@@ -66,6 +66,7 @@
     </main>
 
     {% if user.is_authenticated and user.admin %}
+        {% if request.path|slice:":10" == "/companies/" and request.path|length > 11 or request.path|slice:":8" == "/grants/" and request.path|length > 8 %}
     <!-- Admin AI Assistant Popup -->
     <div id="admin-ai-assistant"
          class="fixed bottom-4 right-4 z-40">
@@ -1145,6 +1146,7 @@
             };
         })();
     </script>
+        {% endif %}
     {% endif %}
 
     <footer class="footer footer-center bg-base-200 text-base-content border-t border-base-300 mt-12 p-6">

@@ -340,6 +340,9 @@ class FundingSearch(models.Model):
     selected_company_notes = models.ManyToManyField('CompanyNote', blank=True, related_name='funding_searches')
     use_company_website = models.BooleanField(default=False)  # Whether to use company website as a source
     
+    # Grant source selection for matching
+    selected_grant_sources = models.JSONField(default=list, blank=True)  # List of grant source codes to match against (e.g., ['ukri', 'nihr'])
+    
     last_matched_at = models.DateTimeField(blank=True, null=True)
     matching_status = models.CharField(max_length=50, default='pending', choices=MATCHING_STATUS_CHOICES, db_index=True)
     matching_error = models.TextField(blank=True, null=True)  # Store error message if matching fails
