@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Grants Aggregator{% endblock %}</title>
+    <title>{% block title %}Trellis{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <meta name="csrf-token" content="{{ csrf_token }}">
@@ -18,17 +18,17 @@
     <div class="navbar bg-base-200 border-b border-base-300">
         <div class="navbar-start">
             <a href="/" class="btn btn-ghost text-xl font-bold">
-                Grants Aggregator
+                Trellis
             </a>
         </div>
         <div class="navbar-center hidden lg:flex">
             {% if user.is_authenticated %}
-            <ul class="menu menu-horizontal px-1">
-                <li><a href="{% url 'grants:list' %}" class="btn btn-ghost">Grants</a></li>
-                <li><a href="{% url 'companies:list' %}" class="btn btn-ghost">Companies</a></li>
+            <ul class="menu menu-horizontal px-1 gap-4">
+                <li><a href="{% url 'grants:list' %}" class="link link-hover">Grants</a></li>
+                <li><a href="{% url 'companies:list' %}" class="link link-hover">Companies</a></li>
                 {% if user.admin %}
-                <li><a href="{% url 'admin_panel:dashboard' %}" class="btn btn-ghost">Admin</a></li>
-                <li><a href="{% url 'admin_panel:conversations_page' %}" class="btn btn-ghost">Conversations</a></li>
+                <li><a href="{% url 'admin_panel:dashboard' %}" class="link link-hover">Admin</a></li>
+                <li><a href="{% url 'admin_panel:conversations_page' %}" class="link link-hover">Conversations</a></li>
                 {% endif %}
             </ul>
             {% endif %}

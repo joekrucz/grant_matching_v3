@@ -471,4 +471,36 @@ class AiAssistantClient:
         }
         return self._call_json_model(system_prompt, payload, max_tokens=800)
 
+    def competitiveness_checklist(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Generate a competitiveness checklist from grant information."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a single grant object with fields such as "
+            "`title`, `summary`, `description`, `eligibility`, `deadline`, "
+            "`funding_amount`, `status`, `source`, `url`.\n"
+            "Your task is to:\n"
+            "- Analyze the grant information to identify what makes an application competitive.\n"
+            "- Create a comprehensive checklist of factors that would make an applicant more competitive for this grant.\n"
+            "- Focus on: project quality indicators, team/company strengths, innovation level, market potential, "
+            "collaboration opportunities, track record requirements, impact potential, and alignment with grant objectives.\n"
+            "- Identify what the grant assessors are likely looking for based on the grant description and requirements.\n"
+            "- Note any specific competitive advantages mentioned in the grant information.\n"
+            "- If competitiveness factors are unclear, note that in the checklist.\n"
+            "Rules:\n"
+            "- Use only the information in the provided grant object.\n"
+            "- Analyze all relevant fields (description, summary, eligibility, etc.) to infer competitiveness factors.\n"
+            "- Be specific and actionable - each checklist item should be a clear factor that improves competitiveness.\n"
+            "- Focus on what applicants should demonstrate or have to be competitive, not just basic eligibility.\n"
+            "- If important information is missing, explicitly mention that instead of guessing.\n"
+            "- Keep language clear and non-technical.\n"
+            "- Do not invent factors that are not supported by the grant information.\n"
+            "Always respond with a single JSON object: "
+            '{"checklist_items": [string], "notes": [string], "missing_info": [string]}.'
+        )
+        payload = {
+            "task": "competitiveness_checklist",
+            "grant": grant_ctx,
+        }
+        return self._call_json_model(system_prompt, payload, max_tokens=800)
+
 

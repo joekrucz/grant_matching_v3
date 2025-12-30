@@ -379,7 +379,179 @@ if CELERY_TASKS_AVAILABLE:
         
         logger.info(f"Refresh completed: {updated_count} updated, {error_count} errors")
         return result
+
+
+if CELERY_TASKS_AVAILABLE:
+    @shared_task(bind=True)
+    def generate_checklists_for_all_grants(self, checklist_type='both'):
+        """
+        Generate eligibility and/or competitiveness checklists for all grants.
+        
+        Args:
+            checklist_type: 'eligibility', 'competitiveness', or 'both'
+        
+        Returns:
+            dict with status, total, processed, success, errors
+        """
+        from grants.models import Grant
+        from admin_panel.ai_client import AiAssistantClient, build_grant_context, AiAssistantError
+        
+        logger.info(f"generate_checklists_for_all_grants task started for type: {checklist_type}")
+        
+        # Get all grants
+        grants = Grant.objects.all()
+        total_grants = grants.count()
+        logger.info(f"Found {total_grants} grants to process")
+        
+        processed_count = 0
+        success_count = 0
+        skipped_count = 0
+        error_count = 0
+        errors = []
+        
+        try:
+            client = AiAssistantClient()
+        except AiAssistantError as e:
+            error_msg = f"Failed to initialize AI client: {str(e)}"
+            logger.error(error_msg)
+            return {
+                'status': 'error',
+                'error': error_msg,
+                'total': total_grants,
+                'processed': 0,
+                'success': 0,
+                'skipped': 0,
+                'errors': 1
+            }
+        
+        # Progress tracking function
+        def progress_callback(current, total):
+            percentage = (current / total) * 100 if total > 0 else 0
+            self.update_state(
+                state='PROGRESS',
+                meta={
+                    'current': current,
+                    'total': total,
+                    'percentage': round(percentage, 1),
+                    'processed': processed_count,
+                    'success': success_count,
+                    'skipped': skipped_count,
+                    'errors': error_count
+                }
+            )
+        
+        for idx, grant in enumerate(grants):
+            try:
+                # Check if checklist already exists and skip if it does
+                skip_eligibility = False
+                skip_competitiveness = False
+                
+                if checklist_type in ['eligibility', 'both']:
+                    if grant.eligibility_checklist and grant.eligibility_checklist.get('checklist_items'):
+                        skip_eligibility = True
+                
+                if checklist_type in ['competitiveness', 'both']:
+                    if grant.competitiveness_checklist and grant.competitiveness_checklist.get('checklist_items'):
+                        skip_competitiveness = True
+                
+                # Skip this grant if all requested checklists already exist
+                if checklist_type == 'eligibility' and skip_eligibility:
+                    skipped_count += 1
+                    processed_count += 1
+                    progress_callback(processed_count, total_grants)
+                    continue
+                elif checklist_type == 'competitiveness' and skip_competitiveness:
+                    skipped_count += 1
+                    processed_count += 1
+                    progress_callback(processed_count, total_grants)
+                    continue
+                elif checklist_type == 'both' and skip_eligibility and skip_competitiveness:
+                    skipped_count += 1
+                    processed_count += 1
+                    progress_callback(processed_count, total_grants)
+                    continue
+                
+                grant_ctx = build_grant_context(grant)
+                
+                if checklist_type in ['eligibility', 'both'] and not skip_eligibility:
+                    try:
+                        parsed, raw_meta, latency_ms = client.eligibility_checklist(grant_ctx)
+                        checklist_data = {
+                            "checklist_items": parsed.get("checklist_items") or [],
+                            "notes": parsed.get("notes") or [],
+                            "missing_info": parsed.get("missing_info") or [],
+                            "meta": {
+                                "model": raw_meta.get("model"),
+                                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                                "latency_ms": latency_ms,
+                            },
+                        }
+                        grant.eligibility_checklist = checklist_data
+                        grant.save(update_fields=['eligibility_checklist'])
+                        logger.debug(f"Generated eligibility checklist for grant {grant.id}")
+                    except Exception as e:
+                        error_msg = f"Grant {grant.id} (eligibility): {str(e)}"
+                        errors.append(error_msg)
+                        logger.error(error_msg)
+                elif skip_eligibility:
+                    logger.debug(f"Skipped eligibility checklist for grant {grant.id} (already exists)")
+                
+                if checklist_type in ['competitiveness', 'both'] and not skip_competitiveness:
+                    try:
+                        parsed, raw_meta, latency_ms = client.competitiveness_checklist(grant_ctx)
+                        checklist_data = {
+                            "checklist_items": parsed.get("checklist_items") or [],
+                            "notes": parsed.get("notes") or [],
+                            "missing_info": parsed.get("missing_info") or [],
+                            "meta": {
+                                "model": raw_meta.get("model"),
+                                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                                "latency_ms": latency_ms,
+                            },
+                        }
+                        grant.competitiveness_checklist = checklist_data
+                        grant.save(update_fields=['competitiveness_checklist'])
+                        logger.debug(f"Generated competitiveness checklist for grant {grant.id}")
+                    except Exception as e:
+                        error_msg = f"Grant {grant.id} (competitiveness): {str(e)}"
+                        errors.append(error_msg)
+                        logger.error(error_msg)
+                elif skip_competitiveness:
+                    logger.debug(f"Skipped competitiveness checklist for grant {grant.id} (already exists)")
+                
+                # Only count as success if we actually generated at least one checklist
+                if (checklist_type == 'eligibility' and not skip_eligibility) or \
+                   (checklist_type == 'competitiveness' and not skip_competitiveness) or \
+                   (checklist_type == 'both' and (not skip_eligibility or not skip_competitiveness)):
+                    success_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                error_msg = f"Grant {grant.id}: Unexpected error - {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg, exc_info=True)
+            
+            processed_count += 1
+            progress_callback(processed_count, total_grants)
+        
+        result = {
+            'status': 'completed',
+            'total': total_grants,
+            'processed': processed_count,
+            'success': success_count,
+            'skipped': skipped_count,
+            'errors': error_count,
+            'error_messages': errors[:10]  # Limit to first 10 errors
+        }
+        
+        logger.info(f"Checklist generation completed: {success_count} successful, {skipped_count} skipped, {error_count} errors")
+        return result
 else:
     def refresh_companies_house_data():
+        raise Exception("Celery is not available")
+    
+    def generate_checklists_for_all_grants():
         raise Exception("Celery is not available")
 

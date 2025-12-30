@@ -21,6 +21,8 @@ urlpatterns = [
     path('users/<int:id>/delete', views.user_delete, name='user_delete'),
     path('refresh_companies', views.refresh_companies, name='refresh_companies'),
     path('companies_refresh_status', views.companies_refresh_status, name='companies_refresh_status'),
+    path('generate_checklists', views.generate_checklists, name='generate_checklists'),
+    path('checklist_generation_status', views.checklist_generation_status, name='checklist_generation_status'),
     # Admin AI assistant endpoints (admin-only, JSON)
     path('ai/summarise_grant', views.ai_summarise_grant, name='ai_summarise_grant'),
     path('ai/summarise_company', views.ai_summarise_company, name='ai_summarise_company'),

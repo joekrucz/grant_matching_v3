@@ -39,6 +39,10 @@
                 <span id="checklist-btn-text">{% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Eligibility Checklist</span>
                 <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
             </button>
+            <button id="generate-competitiveness-btn" class="btn btn-secondary btn-sm" onclick="generateCompetitivenessChecklist()">
+                <span id="competitiveness-btn-text">{% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Competitiveness Checklist</span>
+                <span id="competitiveness-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
         </div>
         
         <div id="eligibility-checklist-container" class="{% if not grant.eligibility_checklist or not grant.eligibility_checklist.checklist_items %}hidden{% endif %} mb-6">
@@ -83,22 +87,71 @@
             </div>
         </div>
         
-        <div class="stats mb-6">
-            {% if grant.funding_amount %}
-            <div class="stat">
-                <div class="stat-title">Funding Amount</div>
-                <div class="stat-value text-primary">{{ grant.funding_amount }}</div>
+        <div id="competitiveness-checklist-container" class="{% if not grant.competitiveness_checklist or not grant.competitiveness_checklist.checklist_items %}hidden{% endif %} mb-6">
+            <div class="card bg-base-100 border border-secondary">
+                <div class="card-body">
+                    <h2 class="card-title text-2xl mb-4">Competitiveness Checklist</h2>
+                    <div id="competitiveness-content">
+                        {% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}
+                            {% if grant.competitiveness_checklist.checklist_items %}
+                            <div class="space-y-2 mb-4">
+                                <h3 class="font-semibold text-lg mb-2">Competitive Factors:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for item in grant.competitiveness_checklist.checklist_items %}
+                                    <li class="text-base-content/90">{{ item }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if grant.competitiveness_checklist.notes %}
+                            <div class="space-y-2 mb-4">
+                                <h3 class="font-semibold text-lg mb-2">Notes:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for note in grant.competitiveness_checklist.notes %}
+                                    <li class="text-base-content/80">{{ note }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if grant.competitiveness_checklist.missing_info %}
+                            <div class="alert alert-warning">
+                                <h3 class="font-semibold mb-2">Missing Information:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for info in grant.competitiveness_checklist.missing_info %}
+                                    <li class="text-base-content/90">{{ info }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-            {% endif %}
-            {% if grant.deadline %}
-            <div class="stat">
-                <div class="stat-title">Deadline</div>
-                <div class="stat-value text-secondary">{{ grant.deadline|date:"F d, Y" }}</div>
-            </div>
-            {% endif %}
         </div>
-        {% if grant.description %}
-        <div class="mb-6 space-y-3">
+        
+        <div class="collapse collapse-arrow bg-base-100 border border-base-300 mb-6">
+            <input type="checkbox" />
+            <div class="collapse-title text-2xl font-bold">
+                Grant Information
+            </div>
+            <div class="collapse-content">
+                <div class="stats mb-6">
+                    {% if grant.funding_amount %}
+                    <div class="stat">
+                        <div class="stat-title">Funding Amount</div>
+                        <div class="stat-value text-primary">{{ grant.funding_amount }}</div>
+                    </div>
+                    {% endif %}
+                    {% if grant.deadline %}
+                    <div class="stat">
+                        <div class="stat-title">Deadline</div>
+                        <div class="stat-value text-secondary">{{ grant.deadline|date:"F d, Y" }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if grant.description %}
+                <div class="mb-6 space-y-3">
             {% if sections_list %}
                 {# Render grants with structured sections (Catapult, NIHR, etc.) #}
                 <div class="space-y-3">
@@ -180,8 +233,10 @@
                 {# Default rendering for other sources #}
                 <div class="whitespace-pre-wrap bg-base-100 p-4 rounded-lg border border-base-300 leading-relaxed">{{ grant.description }}</div>
             {% endif %}
+                </div>
+                {% endif %}
+            </div>
         </div>
-        {% endif %}
     </div>
 </div>
 
@@ -272,6 +327,103 @@ async function generateEligibilityChecklist() {
         // Update button text to "Regenerate"
         const btnText = document.getElementById('checklist-btn-text');
         btnText.textContent = 'Regenerate Eligibility Checklist';
+        
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;
+        container.classList.remove('hidden');
+    } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnLoading.classList.add('hidden');
+    }
+}
+
+async function generateCompetitivenessChecklist() {
+    const btn = document.getElementById('generate-competitiveness-btn');
+    const btnText = document.getElementById('competitiveness-btn-text');
+    const btnLoading = document.getElementById('competitiveness-btn-loading');
+    const container = document.getElementById('competitiveness-checklist-container');
+    const content = document.getElementById('competitiveness-content');
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    btnLoading.classList.remove('hidden');
+    container.classList.add('hidden');
+    content.innerHTML = '';
+    
+    try {
+        const grantId = document.getElementById('page-context').dataset.grantId;
+        if (!grantId) {
+            throw new Error('Grant ID not found');
+        }
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || getCookie('csrftoken');
+        
+        const response = await fetch('{% url "grants:competitiveness_checklist" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+                grant_id: parseInt(grantId),
+            }),
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to generate checklist');
+        }
+        
+        const data = await response.json();
+        
+        // Build HTML content (same format as server-side template)
+        let html = '';
+        
+        if (data.checklist_items && data.checklist_items.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">Competitive Factors:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.checklist_items.forEach(item => {
+                html += `<li class="text-base-content/90">${escapeHtml(item)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.notes && data.notes.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">Notes:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.notes.forEach(note => {
+                html += `<li class="text-base-content/80">${escapeHtml(note)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.missing_info && data.missing_info.length > 0) {
+            html += '<div class="alert alert-warning">';
+            html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.missing_info.forEach(info => {
+                html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (!html) {
+            html = '<p class="text-base-content/70">No competitiveness information could be extracted from this grant.</p>';
+        }
+        
+        content.innerHTML = html;
+        container.classList.remove('hidden');
+        
+        // Update button text to "Regenerate"
+        btnText.textContent = 'Regenerate Competitiveness Checklist';
         
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;

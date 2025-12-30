@@ -32,6 +32,7 @@ if CELERY_AVAILABLE:
         trigger_catapult_scrape,
         trigger_innovate_uk_scrape,
         refresh_companies_house_data,
+        generate_checklists_for_all_grants,
     )
 else:
     trigger_ukri_scrape = None
@@ -39,6 +40,7 @@ else:
     trigger_catapult_scrape = None
     trigger_innovate_uk_scrape = None
     refresh_companies_house_data = None
+    generate_checklists_for_all_grants = None
 
 
 def admin_required(view_func):
@@ -128,6 +130,27 @@ def dashboard(request):
         celery_status = "Celery not available"
         celery_details = "Celery is not initialized. Check Redis connection and web service logs."
     
+    # Calculate checklist statistics
+    # Count grants that have non-empty eligibility checklists
+    # Using JSONField lookups to check if checklist_items array exists and is not empty
+    grants_with_eligibility = Grant.objects.filter(
+        eligibility_checklist__checklist_items__0__isnull=False
+    ).count()
+    
+    grants_with_competitiveness = Grant.objects.filter(
+        competitiveness_checklist__checklist_items__0__isnull=False
+    ).count()
+    
+    grants_with_both = Grant.objects.filter(
+        eligibility_checklist__checklist_items__0__isnull=False,
+        competitiveness_checklist__checklist_items__0__isnull=False
+    ).count()
+    
+    # Calculate user statistics
+    total_users = User.objects.count()
+    admin_users = User.objects.filter(admin=True).count()
+    active_users = User.objects.filter(is_active=True).count()
+    
     context = {
         'total_grants': total_grants,
         'open_grants': open_grants,
@@ -135,6 +158,12 @@ def dashboard(request):
         'celery_status': celery_status,
         'celery_details': celery_details,
         'last_refresh_task': last_refresh_task,
+        'grants_with_eligibility': grants_with_eligibility,
+        'grants_with_competitiveness': grants_with_competitiveness,
+        'grants_with_both': grants_with_both,
+        'total_users': total_users,
+        'admin_users': admin_users,
+        'active_users': active_users,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
@@ -1454,6 +1483,120 @@ def companies_refresh_status(request):
                 'total': result.get('total', 0),
                 'percentage': 100,
                 'updated': result.get('updated', 0),
+                'errors': result.get('errors', 0),
+                'error_messages': result.get('error_messages', [])
+            }
+        elif task_result.state == 'FAILURE':
+            status = 'error'
+            progress = {
+                'current': 0,
+                'total': 0,
+                'percentage': 0,
+                'error': str(task_result.info)
+            }
+        else:
+            status = 'unknown'
+            progress = {'current': 0, 'total': 0, 'percentage': 0}
+        
+        return JsonResponse({
+            'status': status,
+            'progress': progress,
+            'task_id': task_id
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'progress': {'current': 0, 'total': 0, 'percentage': 0},
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@admin_required
+def generate_checklists(request):
+    """Trigger checklist generation for all grants."""
+    if request.method == 'POST':
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        checklist_type = request.POST.get('checklist_type', 'both')  # 'eligibility', 'competitiveness', or 'both'
+        
+        if not CELERY_AVAILABLE or generate_checklists_for_all_grants is None:
+            error_msg = 'Background task service (Celery) is not available. Please check Redis connection.'
+            logger.error(error_msg)
+            messages.error(request, error_msg)
+            return redirect('admin_panel:dashboard')
+        
+        try:
+            # Trigger the checklist generation task
+            logger.info(f"Calling generate_checklists_for_all_grants.delay() with type: {checklist_type}...")
+            result = generate_checklists_for_all_grants.delay(checklist_type)
+            logger.info(f"Task queued successfully. Task ID: {result.id}")
+            messages.success(request, f'Checklist generation started (Task ID: {result.id}).')
+            
+            # Store task ID in cache for later retrieval
+            from django.core.cache import cache
+            cache_key = f'last_checklist_generation_task_id_{checklist_type}'
+            cache.set(cache_key, result.id, timeout=3600)  # 1 hour
+            
+            # Return JSON response with task ID for AJAX handling
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'task_id': result.id, 'status': 'started', 'checklist_type': checklist_type})
+            
+            # Redirect with task ID for non-AJAX requests
+            return redirect(f"{reverse('admin_panel:dashboard')}?checklist_task_id={result.id}&checklist_type={checklist_type}")
+        except Exception as e:
+            error_msg = f'Failed to start checklist generation: {str(e)}'
+            logger.error(f"Error triggering checklist generation: {e}", exc_info=True)
+            messages.error(request, error_msg)
+        
+        return redirect('admin_panel:dashboard')
+    
+    return redirect('admin_panel:dashboard')
+
+
+@login_required
+@admin_required
+def checklist_generation_status(request):
+    """API endpoint to get checklist generation status and progress (for AJAX polling)."""
+    from celery.result import AsyncResult
+    
+    # Get task ID from request
+    task_id = request.GET.get('task_id')
+    if not task_id:
+        return JsonResponse({
+            'status': 'idle',
+            'progress': {'current': 0, 'total': 0, 'percentage': 0}
+        })
+    
+    try:
+        task_result = AsyncResult(task_id)
+        
+        if task_result.state == 'PENDING':
+            status = 'running'
+            progress = {'current': 0, 'total': 0, 'percentage': 0}
+        elif task_result.state == 'PROGRESS':
+            status = 'running'
+            meta = task_result.info or {}
+            progress = {
+                'current': meta.get('current', 0),
+                'total': meta.get('total', 0),
+                'percentage': meta.get('percentage', 0),
+                'processed': meta.get('processed', 0),
+                'success': meta.get('success', 0),
+                'skipped': meta.get('skipped', 0),
+                'errors': meta.get('errors', 0)
+            }
+        elif task_result.state == 'SUCCESS':
+            status = 'completed'
+            result = task_result.result or {}
+            progress = {
+                'current': result.get('total', 0),
+                'total': result.get('total', 0),
+                'percentage': 100,
+                'processed': result.get('processed', 0),
+                'success': result.get('success', 0),
+                'skipped': result.get('skipped', 0),
                 'errors': result.get('errors', 0),
                 'error_messages': result.get('error_messages', [])
             }

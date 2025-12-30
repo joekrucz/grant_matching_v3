@@ -244,3 +244,59 @@ def eligibility_checklist(request):
         },
     })
 
+
+@login_required
+@require_http_methods(["POST"])
+@ratelimit(key='user_or_ip', rate='30/h', block=True)
+def competitiveness_checklist(request):
+    """API endpoint: generate competitiveness checklist for a grant."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON payload"}, status=400)
+    
+    grant_id = payload.get("grant_id")
+    if not grant_id:
+        return JsonResponse({"error": "grant_id is required"}, status=400)
+    
+    grant = get_object_or_404(Grant, id=grant_id)
+    
+    try:
+        client = AiAssistantClient()
+    except AiAssistantError as e:
+        return JsonResponse({"error": str(e)}, status=503)
+    
+    grant_ctx = build_grant_context(grant)
+    parsed, raw_meta, latency_ms = client.competitiveness_checklist(grant_ctx)
+    
+    checklist_items = parsed.get("checklist_items") or []
+    notes = parsed.get("notes") or []
+    missing_info = parsed.get("missing_info") or []
+    
+    # Save checklist to grant
+    checklist_data = {
+        "checklist_items": checklist_items,
+        "notes": notes,
+        "missing_info": missing_info,
+        "meta": {
+            "model": raw_meta.get("model"),
+            "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+            "latency_ms": latency_ms,
+        },
+    }
+    grant.competitiveness_checklist = checklist_data
+    grant.save(update_fields=['competitiveness_checklist'])
+    
+    return JsonResponse({
+        "checklist_items": checklist_items,
+        "notes": notes,
+        "missing_info": missing_info,
+        "meta": {
+            "model": raw_meta.get("model"),
+            "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+            "latency_ms": latency_ms,
+        },
+    })
+
