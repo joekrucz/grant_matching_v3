@@ -181,6 +181,12 @@
                 {% if can_edit %}
                 <form method="post" id="trl-levels-form">
                     {% csrf_token %}
+                    {# Preserve grant sources when submitting TRL levels form #}
+                    {% if funding_search.selected_grant_sources %}
+                        {% for source_code in funding_search.selected_grant_sources %}
+                            <input type="hidden" name="grant_sources" value="{{ source_code }}">
+                        {% endfor %}
+                    {% endif %}
                     <div class="form-control mb-6">
                         <label class="label" for="trl-levels-dropdown">
                             <span class="label-text">TRL Levels</span>
@@ -333,6 +339,12 @@
                 {% if can_edit %}
                 <form method="post" id="grant-sources-form">
                     {% csrf_token %}
+                    {# Preserve TRL levels when submitting grant sources form #}
+                    {% if funding_search.trl_levels %}
+                        {% for trl_level in funding_search.trl_levels %}
+                            <input type="hidden" name="trl_levels" value="{{ trl_level }}">
+                        {% endfor %}
+                    {% endif %}
                     <div class="flex flex-col gap-2">
                         {% for source_code, source_name in grant_sources %}
                         <label class="flex items-center gap-2 cursor-pointer">

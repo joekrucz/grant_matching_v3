@@ -61,12 +61,13 @@ if CELERY_TASKS_AVAILABLE:
             logger.info(f"Input sources compiled. Total text length: {len(project_text)} characters")
             
             # Update progress to show we're ready to match
+            total_grants = len(grants_list) if 'grants_list' in locals() else 0
             funding_search.matching_progress = {
                 'current': 0,
-                'total': 0,
+                'total': total_grants,
                 'percentage': 0,
                 'stage': 'ready_to_match',
-                'stage_message': 'Input sources processed. Starting grant matching...'
+                'stage_message': f'Input sources processed. Starting grant matching for {total_grants} grants...'
             }
             funding_search.save()
             
@@ -83,11 +84,34 @@ if CELERY_TASKS_AVAILABLE:
             
             if limit:
                 grants = grants[:limit]
-            grants_list = list(grants.values(
-                'id', 'title', 'source', 'summary', 'description',
-                'funding_amount', 'deadline', 'status', 'slug'
-            ))
+            # Get grants with their checklists
+            grants_list = []
+            for grant in grants:
+                grant_data = {
+                    'id': grant.id,
+                    'title': grant.title,
+                    'source': grant.source,
+                    'summary': grant.summary,
+                    'description': grant.description,
+                    'funding_amount': grant.funding_amount,
+                    'deadline': grant.deadline,
+                    'status': grant.status,
+                    'slug': grant.slug,
+                    'eligibility_checklist': grant.eligibility_checklist,
+                    'competitiveness_checklist': grant.competitiveness_checklist,
+                }
+                grants_list.append(grant_data)
             logger.info(f"Found {len(grants_list)} grants to match against" + (f" (limited to {limit})" if limit else ""))
+            
+            # Update progress with total grants count
+            funding_search.matching_progress = {
+                'current': 0,
+                'total': len(grants_list),
+                'percentage': 0,
+                'stage': 'ready_to_match',
+                'stage_message': f'Input sources processed. Starting grant matching for {len(grants_list)} grants...'
+            }
+            funding_search.save()
             
             # Initialize matcher
             try:
@@ -116,6 +140,7 @@ if CELERY_TASKS_AVAILABLE:
                         'stage_message': f'Matching grant {current} of {total}...'
                     }
                 )
+                logger.info(f"Progress update: {current}/{total} ({percentage:.1f}%)")
             
             # Clear old matches
             GrantMatchResult.objects.filter(funding_search=funding_search).delete()
@@ -153,6 +178,115 @@ if CELERY_TASKS_AVAILABLE:
                     else:
                         calculated_score = overall_score if overall_score is not None else 0.0
                     
+                    # Get original checklists from grant to preserve exact criterion text
+                    grant_eligibility_checklist = grant_data.get('eligibility_checklist', {})
+                    grant_eligibility_items = grant_eligibility_checklist.get('checklist_items', [])
+                    
+                    grant_competitiveness_checklist = grant_data.get('competitiveness_checklist', {})
+                    grant_competitiveness_items = grant_competitiveness_checklist.get('checklist_items', [])
+                    
+                    # Map ChatGPT evaluations to original checklist items
+                    # This ensures we preserve the exact criterion text from the grant page
+                    eligibility_checklist_result = []
+                    if grant_eligibility_items:
+                        # Use original items from grant
+                        chatgpt_evaluations = result.get('eligibility_checklist', [])
+                        
+                        # First, try to match by exact text
+                        chatgpt_by_text = {item.get('criterion', '').strip(): item for item in chatgpt_evaluations}
+                        
+                        # Also create index-based mapping in case order is preserved
+                        chatgpt_by_index = {i: item for i, item in enumerate(chatgpt_evaluations)}
+                        
+                        for idx, original_item in enumerate(grant_eligibility_items):
+                            original_text = original_item.strip()
+                            
+                            # Try exact match first
+                            evaluation = chatgpt_by_text.get(original_text)
+                            
+                            # Try by index if same length and no exact match
+                            if not evaluation and idx < len(chatgpt_evaluations):
+                                evaluation = chatgpt_by_index.get(idx)
+                                # Verify it's a reasonable match (at least partial text match)
+                                if evaluation:
+                                    eval_text = evaluation.get('criterion', '').strip()
+                                    if not (original_text.lower() in eval_text.lower() or eval_text.lower() in original_text.lower()):
+                                        evaluation = None
+                            
+                            # Try partial match as fallback
+                            if not evaluation:
+                                for key, val in chatgpt_by_text.items():
+                                    if original_text.lower() in key.lower() or key.lower() in original_text.lower():
+                                        evaluation = val
+                                        break
+                            
+                            if evaluation:
+                                eligibility_checklist_result.append({
+                                    'criterion': original_item,  # Use exact text from grant
+                                    'status': evaluation.get('status', 'don\'t know'),
+                                    'reason': evaluation.get('reason', '')
+                                })
+                            else:
+                                # If no evaluation found, mark as "don't know"
+                                eligibility_checklist_result.append({
+                                    'criterion': original_item,
+                                    'status': 'don\'t know',
+                                    'reason': 'Evaluation not provided'
+                                })
+                    else:
+                        # No pre-generated checklist, use ChatGPT's extracted items
+                        eligibility_checklist_result = result.get('eligibility_checklist', [])
+                    
+                    competitiveness_checklist_result = []
+                    if grant_competitiveness_items:
+                        # Use original items from grant
+                        chatgpt_evaluations = result.get('competitiveness_checklist', [])
+                        
+                        # First, try to match by exact text
+                        chatgpt_by_text = {item.get('criterion', '').strip(): item for item in chatgpt_evaluations}
+                        
+                        # Also create index-based mapping in case order is preserved
+                        chatgpt_by_index = {i: item for i, item in enumerate(chatgpt_evaluations)}
+                        
+                        for idx, original_item in enumerate(grant_competitiveness_items):
+                            original_text = original_item.strip()
+                            
+                            # Try exact match first
+                            evaluation = chatgpt_by_text.get(original_text)
+                            
+                            # Try by index if same length and no exact match
+                            if not evaluation and idx < len(chatgpt_evaluations):
+                                evaluation = chatgpt_by_index.get(idx)
+                                # Verify it's a reasonable match (at least partial text match)
+                                if evaluation:
+                                    eval_text = evaluation.get('criterion', '').strip()
+                                    if not (original_text.lower() in eval_text.lower() or eval_text.lower() in original_text.lower()):
+                                        evaluation = None
+                            
+                            # Try partial match as fallback
+                            if not evaluation:
+                                for key, val in chatgpt_by_text.items():
+                                    if original_text.lower() in key.lower() or key.lower() in original_text.lower():
+                                        evaluation = val
+                                        break
+                            
+                            if evaluation:
+                                competitiveness_checklist_result.append({
+                                    'criterion': original_item,  # Use exact text from grant
+                                    'status': evaluation.get('status', 'don\'t know'),
+                                    'reason': evaluation.get('reason', '')
+                                })
+                            else:
+                                # If no evaluation found, mark as "don't know"
+                                competitiveness_checklist_result.append({
+                                    'criterion': original_item,
+                                    'status': 'don\'t know',
+                                    'reason': 'Evaluation not provided'
+                                })
+                    else:
+                        # No pre-generated checklist, use ChatGPT's extracted items
+                        competitiveness_checklist_result = result.get('competitiveness_checklist', [])
+                    
                     # Save all matches regardless of score (no threshold)
                     # Use update_or_create to handle duplicates gracefully
                     match_obj, created = GrantMatchResult.objects.update_or_create(
@@ -164,8 +298,8 @@ if CELERY_TASKS_AVAILABLE:
                             'competitiveness_score': competitiveness_score,
                             'match_reasons': {
                                 'explanation': result.get('explanation', ''),
-                                'eligibility_checklist': result.get('eligibility_checklist', []),
-                                'competitiveness_checklist': result.get('competitiveness_checklist', []),
+                                'eligibility_checklist': eligibility_checklist_result,
+                                'competitiveness_checklist': competitiveness_checklist_result,
                                 'alignment_points': result.get('alignment_points', []),  # Keep for backward compatibility
                                 'concerns': result.get('concerns', []),  # Keep for backward compatibility
                                 'matched_via': 'chatgpt',

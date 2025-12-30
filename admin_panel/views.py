@@ -15,8 +15,15 @@ from django_ratelimit.decorators import ratelimit
 from grants.models import Grant, ScrapeLog
 from users.models import User
 from companies.models import Company
-from slack_bot.models import SlackBotLog
 from grants_aggregator import CELERY_AVAILABLE
+
+# Import SlackBotLog conditionally - may not be available in local dev
+try:
+    from slack_bot.models import SlackBotLog
+    SLACK_BOT_AVAILABLE = True
+except (ImportError, Exception):
+    SlackBotLog = None
+    SLACK_BOT_AVAILABLE = False
 from .ai_client import (
     AiAssistantClient,
     AiAssistantError,
@@ -153,12 +160,23 @@ def dashboard(request):
     admin_users = User.objects.filter(admin=True).count()
     active_users = User.objects.filter(is_active=True).count()
     
-    # Get recent bot logs (last 20)
-    recent_bot_logs = SlackBotLog.objects.all()[:20]
-    total_bot_messages = SlackBotLog.objects.count()
-    bot_messages_today = SlackBotLog.objects.filter(
-        created_at__date=timezone.now().date()
-    ).count()
+    # Get recent bot logs (last 20) - handle gracefully if Slack bot isn't configured
+    recent_bot_logs = []
+    total_bot_messages = 0
+    bot_messages_today = 0
+    if SLACK_BOT_AVAILABLE and SlackBotLog is not None:
+        try:
+            recent_bot_logs = list(SlackBotLog.objects.all()[:20])
+            total_bot_messages = SlackBotLog.objects.count()
+            bot_messages_today = SlackBotLog.objects.filter(
+                created_at__date=timezone.now().date()
+            ).count()
+        except Exception as e:
+            # Handle case where table doesn't exist (migrations not run) or other DB errors
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Slack bot logs not available (likely not configured for local dev): {e}")
+            # Use default values already set above
     
     context = {
         'total_grants': total_grants,

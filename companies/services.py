@@ -426,10 +426,10 @@ class ChatGPTMatchingService:
             raise GrantMatchingError("OPENAI_API_KEY not configured")
         self.client = OpenAI(api_key=api_key)
         self.model = "gpt-4o-mini"  # Cost-effective model
-        self.batch_size = 10  # Process 10 grants per API call
+        self.batch_size = 1  # Process 1 grant per API call for reliability
     
     def format_grant_for_batch(self, grant_data, index):
-        """Format a single grant for batch prompt."""
+        """Format a single grant for batch prompt, including checklists if available."""
         deadline_str = grant_data.get('deadline', 'N/A')
         if deadline_str and deadline_str != 'N/A':
             try:
@@ -440,7 +440,7 @@ class ChatGPTMatchingService:
             except:
                 pass
         
-        return f"""
+        grant_text = f"""
 Grant #{index + 1}:
 - Title: {grant_data['title']}
 - Source: {grant_data['source']}
@@ -450,68 +450,88 @@ Grant #{index + 1}:
 - Deadline: {deadline_str}
 - Status: {grant_data.get('status', 'unknown')}
 """
+        
+        # Add eligibility checklist if available
+        eligibility_checklist = grant_data.get('eligibility_checklist', {})
+        eligibility_items = eligibility_checklist.get('checklist_items', [])
+        if eligibility_items:
+            grant_text += "\nEligibility Checklist:\n"
+            for i, item in enumerate(eligibility_items, 1):
+                grant_text += f"  {i}. {item}\n"
+        else:
+            grant_text += "\nEligibility Checklist: Not available (will need to extract from grant description)\n"
+        
+        # Add competitiveness checklist if available
+        competitiveness_checklist = grant_data.get('competitiveness_checklist', {})
+        competitiveness_items = competitiveness_checklist.get('checklist_items', [])
+        if competitiveness_items:
+            grant_text += "\nCompetitiveness Checklist:\n"
+            for i, item in enumerate(competitiveness_items, 1):
+                grant_text += f"  {i}. {item}\n"
+        else:
+            grant_text += "\nCompetitiveness Checklist: Not available (will need to extract from grant description)\n"
+        
+        return grant_text
     
     def match_grants_batch(self, project_description, grants_batch):
         """
-        Match a batch of grants (10 at a time) against project.
+        Match a batch of grants (1 at a time) against project.
         Returns list of match results.
         """
-        grants_text = "\n".join([
-            self.format_grant_for_batch(grant, idx) 
-            for idx, grant in enumerate(grants_batch)
-        ])
+        # Since batch_size is 1, grants_batch will always have 1 grant
+        grant = grants_batch[0]
+        grant_text = self.format_grant_for_batch(grant, 0)
         
-        prompt = f"""You are an expert grant matching assistant. Analyze how well a research project aligns with {len(grants_batch)} funding opportunities.
+        prompt = f"""You are an expert grant matching assistant. Analyze how well a research project aligns with this funding opportunity.
 
 PROJECT DESCRIPTION:
 {project_description}
 
-FUNDING OPPORTUNITIES:
-{grants_text}
+FUNDING OPPORTUNITY:
+{grant_text}
 
-For EACH grant, you must:
-1. Extract ALL eligibility criteria from the grant description, title, summary, and any requirements mentioned. Create a comprehensive eligibility_checklist that covers EVERY eligibility requirement stated or implied in the grant information.
-2. Extract ALL competitiveness factors from the grant description, including selection criteria, evaluation criteria, priorities, and any factors that would make a project more competitive. Create a comprehensive competitiveness_checklist that covers EVERY factor mentioned.
-3. For EACH checklist item, evaluate if the company/project meets the criterion based ONLY on the input source material provided
-4. Assign a status: "yes" (meets criterion), "no" (does not meet), or "don't know" (insufficient information in input sources)
-5. Provide a brief reason for each status
-6. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist
-7. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist
-8. Provide an overall explanation (2-3 sentences)
+You must:
+1. If the grant has an "Eligibility Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
+2. If the grant has a "Competitiveness Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
+3. If checklists are not provided, extract eligibility criteria and competitiveness factors from the grant description.
+4. For EACH checklist item (whether provided or extracted), evaluate if the company/project meets the criterion based ONLY on the PROJECT DESCRIPTION provided above.
+5. Assign a status: "yes" (meets criterion), "no" (does not meet), or "don't know" (insufficient information in input sources).
+6. Provide a brief reason for each status.
+7. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist.
+8. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist.
+9. Provide an overall explanation (2-3 sentences).
 
 CRITICAL REQUIREMENTS:
-- Extract EVERY eligibility requirement from the grant - do not limit the number of items. If a grant mentions location, company size, sector, stage, partnership requirements, etc., include ALL of them.
-- Extract EVERY competitiveness factor from the grant - innovation requirements, market potential, team strength, impact, feasibility, alignment with priorities, etc. Include ALL factors mentioned.
-- The number of checklist items will vary significantly between grants - some may have 3 items, others may have 10+ items. This is expected and correct.
-- Base your evaluation ONLY on the input source material provided. If information is not available, use "don't know"
-- Be specific and actionable in your checklist items - each should be a distinct, evaluable criterion
-- Respond with a valid JSON object containing an array called "matches" with exactly {len(grants_batch)} items
+- If a grant provides checklists, you MUST copy the criterion text EXACTLY as shown - character for character, word for word. Do not modify, rephrase, or summarize the criterion text.
+- Return evaluations in the SAME ORDER as the provided checklists.
+- The "criterion" field in your response must match the original text EXACTLY.
+- If checklists are not provided, extract ALL eligibility requirements and competitiveness factors from the grant description.
+- For each checklist item, evaluate based ONLY on the provided PROJECT DESCRIPTION. If information is not available, use "don't know".
+- The evaluation should be consistent: "yes" means the project clearly meets the criterion, "no" means it clearly does not, "don't know" means there's insufficient information to determine.
+- Respond with a valid JSON object containing a single match result (not an array)
 
 Format:
 {{
-    "matches": [
-        {{
-            "grant_index": 0,
-            "eligibility_score": 0.90,
-            "competitiveness_score": 0.80,
-            "eligibility_checklist": [
-                {{"criterion": "Company must be UK-based", "status": "yes", "reason": "Company address shows UK location"}},
-                {{"criterion": "Company must be SME (under 250 employees)", "status": "don't know", "reason": "No employee count information in provided sources"}},
-                {{"criterion": "Project must be in healthcare sector", "status": "yes", "reason": "Project description focuses on medical device development"}},
-                {{"criterion": "Must have at least one academic partner", "status": "no", "reason": "No academic partnerships mentioned in input sources"}}
-            ],
-            "competitiveness_checklist": [
-                {{"criterion": "Project demonstrates innovation", "status": "yes", "reason": "Input sources describe novel approach"}},
-                {{"criterion": "Clear market potential", "status": "no", "reason": "Market analysis not provided in input sources"}},
-                {{"criterion": "Strong team with relevant expertise", "status": "don't know", "reason": "Team information not available in provided sources"}},
-                {{"criterion": "Project addresses key priority areas", "status": "yes", "reason": "Project aligns with grant priorities mentioned"}},
-                {{"criterion": "Demonstrates clear impact pathway", "status": "don't know", "reason": "Impact pathway not detailed in provided sources"}}
-            ],
-            "explanation": "This grant is highly relevant because..."
-        }},
-        ...
-    ]
+    "grant_index": 0,
+    "eligibility_score": 0.90,
+    "competitiveness_score": 0.80,
+    "eligibility_checklist": [
+        {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
+        {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}},
+        {{"criterion": "Third criterion", "status": "no", "reason": "Project does not meet this requirement"}}
+    ],
+    "competitiveness_checklist": [
+        {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
+        {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}}
+    ],
+    "explanation": "This grant is highly relevant because..."
 }}
+
+IMPORTANT: 
+- If the grant provides checklists, use the EXACT criterion text from those checklists. Do not modify or rephrase them.
+- For each criterion, evaluate if the project meets it based on the PROJECT DESCRIPTION provided above.
+- Status must be one of: "yes", "no", or "don't know"
+- Return a single match object, not an array
 """
         
         try:
@@ -520,17 +540,61 @@ Format:
                 messages=[
                     {
                         "role": "system", 
-                        "content": "You are a grant matching expert. Always respond with valid JSON. For each grant, you MUST:\n1. Extract ALL eligibility criteria from the grant (title, description, requirements) - create a comprehensive 'eligibility_checklist' array covering EVERY eligibility requirement\n2. Extract ALL competitiveness factors from the grant (selection criteria, priorities, evaluation factors) - create a comprehensive 'competitiveness_checklist' array covering EVERY factor\n3. The number of checklist items will vary - extract ALL criteria, do not limit to a fixed number\n4. For each checklist item, evaluate based ONLY on the provided input sources and assign status: 'yes' (meets), 'no' (does not meet), or 'don't know' (insufficient information)\n5. Calculate eligibility_score and competitiveness_score (0.0-1.0) based on percentage of 'yes' answers\n6. Provide a brief explanation. Do NOT use 'score' - use the two component scores instead."
+                        "content": "You are a grant matching expert. Always respond with valid JSON. For the grant:\n1. If the grant provides an Eligibility Checklist, you MUST copy the criterion text EXACTLY as shown - do not modify, rephrase, or summarize. Use those exact items in the exact order.\n2. If the grant provides a Competitiveness Checklist, you MUST copy the criterion text EXACTLY as shown - do not modify, rephrase, or summarize. Use those exact items in the exact order.\n3. If checklists are not provided, extract eligibility criteria and competitiveness factors from the grant description.\n4. For each checklist item (provided or extracted), evaluate based ONLY on the provided project description and assign status: 'yes' (meets), 'no' (does not meet), or 'don't know' (insufficient information).\n5. The 'criterion' field in your response must match the original text EXACTLY if provided in the checklist.\n6. Calculate eligibility_score and competitiveness_score (0.0-1.0) based on percentage of 'yes' answers in each checklist.\n7. Provide a brief explanation. Return a single JSON object (not an array) with grant_index: 0."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,  # Lower for consistent scoring
                 response_format={"type": "json_object"},
-                max_tokens=6000,  # Increased for detailed checklists (eligibility + competitiveness for 10 grants)
+                max_tokens=4000,  # Sufficient for single grant with detailed checklists and evaluations
             )
             
-            result = json.loads(response.choices[0].message.content)
-            matches = result.get('matches', [])
+            # Get response content
+            response_content = response.choices[0].message.content
+            if not response_content:
+                raise GrantMatchingError("Empty response from ChatGPT API")
+            
+            # Check if response was truncated (indicated by finish_reason)
+            finish_reason = response.choices[0].finish_reason
+            if finish_reason == 'length':
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"ChatGPT response was truncated (finish_reason=length). Response length: {len(response_content)}")
+                # Try to parse what we have, but log a warning
+                # The response might still be valid JSON if it was cut off mid-response
+            
+            try:
+                result = json.loads(response_content)
+            except json.JSONDecodeError as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"JSON decode error: {e}. Response length: {len(response_content)}. Finish reason: {finish_reason}")
+                logger.error(f"First 500 chars: {response_content[:500]}")
+                logger.error(f"Last 500 chars: {response_content[-500:]}")
+                
+                # If response was truncated, we need to retry with higher max_tokens
+                if finish_reason == 'length':
+                    raise GrantMatchingError(f"Response truncated - need higher max_tokens. Current: 16000")
+                
+                # Try to fix common JSON issues
+                # Remove any trailing incomplete strings
+                response_content_cleaned = response_content.rstrip()
+                # Try to close any unclosed strings/objects
+                if response_content_cleaned.count('{') > response_content_cleaned.count('}'):
+                    # Missing closing braces
+                    response_content_cleaned += '}' * (response_content_cleaned.count('{') - response_content_cleaned.count('}'))
+                try:
+                    result = json.loads(response_content_cleaned)
+                    logger.warning("Successfully parsed JSON after cleanup")
+                except json.JSONDecodeError:
+                    raise GrantMatchingError(f"Failed to parse ChatGPT response as JSON: {str(e)}")
+            
+            # Handle both single match object and matches array (for backward compatibility)
+            if 'matches' in result:
+                matches = result.get('matches', [])
+            else:
+                # Single match object - wrap in array
+                matches = [result]
             
             # Log first match to verify structure
             if matches:
@@ -569,61 +633,154 @@ Format:
         """
         all_results = []
         total_batches = (len(grants_data) + self.batch_size - 1) // self.batch_size
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Starting to match {len(grants_data)} grants in {total_batches} batches of {self.batch_size}")
         
         for batch_num in range(0, len(grants_data), self.batch_size):
             batch = grants_data[batch_num:batch_num + self.batch_size]
             batch_num_display = (batch_num // self.batch_size) + 1
-            
-            if progress_callback:
-                progress_callback(batch_num, len(grants_data))
+            logger.info(f"Processing batch {batch_num_display}/{total_batches} (grants {batch_num} to {min(batch_num + self.batch_size, len(grants_data)) - 1})")
             
             max_retries = 3
+            batch_success = False
             for attempt in range(max_retries):
                 try:
+                    # Update progress before processing batch
+                    if progress_callback:
+                        progress_callback(batch_num, len(grants_data))
+                    
+                    logger.info(f"Batch {batch_num_display}, attempt {attempt + 1}/{max_retries}: Calling match_grants_batch...")
                     batch_results = self.match_grants_batch(project_description, batch)
+                    logger.info(f"Batch {batch_num_display}: Got {len(batch_results)} results from match_grants_batch")
                     
                     # Adjust grant_index to match original position
                     for result in batch_results:
                         result['grant_index'] = batch_num + result['grant_index']
                     
                     all_results.extend(batch_results)
+                    batch_success = True
+                    logger.info(f"Batch {batch_num_display}: Successfully processed {len(batch)} grants. Total results so far: {len(all_results)}")
                     
-                    # Small delay between batches to respect rate limits
+                    # Update progress after successfully processing batch
+                    grants_processed = min(batch_num + len(batch), len(grants_data))
+                    if progress_callback:
+                        progress_callback(grants_processed, len(grants_data))
+                    
+                    # Small delay between requests to respect rate limits
                     if batch_num + self.batch_size < len(grants_data):
-                        time.sleep(1.5)  # 1.5 second delay between batches
+                        logger.info(f"Batch {batch_num_display}: Waiting 0.5s before next grant...")
+                        time.sleep(0.5)  # 0.5 second delay between grants
                     
                     break  # Success, exit retry loop
                     
-                except RateLimitError:
+                except RateLimitError as e:
+                    logger.warning(f"Batch {batch_num_display}, attempt {attempt + 1}: Rate limit hit: {e}")
                     if attempt < max_retries - 1:
                         wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s
-                        print(f"Rate limit hit. Waiting {wait_time}s before retry...")
+                        logger.info(f"Waiting {wait_time}s before retry...")
                         time.sleep(wait_time)
                     else:
+                        logger.error(f"Batch {batch_num_display}: Rate limit exceeded after {max_retries} retries")
                         raise GrantMatchingError(f"Rate limit exceeded after {max_retries} retries")
                 
                 except APIError as e:
+                    logger.warning(f"Batch {batch_num_display}, attempt {attempt + 1}: API error: {e}")
                     if attempt < max_retries - 1:
-                        print(f"API error: {e}. Retrying...")
+                        logger.info(f"Retrying in 2s...")
                         time.sleep(2)
                     else:
+                        logger.error(f"Batch {batch_num_display}: API error after {max_retries} retries: {e}")
                         raise GrantMatchingError(f"API error after {max_retries} retries: {e}")
                 
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {e}. Retrying...")
+                except GrantMatchingError as e:
+                    # If it's a truncation error, we should fail immediately rather than retry
+                    if "truncated" in str(e).lower() or "max_tokens" in str(e).lower():
+                        logger.error(f"Batch {batch_num_display}, attempt {attempt + 1}: Response truncation error: {e}")
+                        raise  # Re-raise to fail the task
+                    
+                    # For other GrantMatchingError, retry
+                    logger.warning(f"Batch {batch_num_display}, attempt {attempt + 1}: Grant matching error: {e}")
                     if attempt < max_retries - 1:
+                        logger.info(f"Retrying in 2s...")
+                        time.sleep(2)
+                    else:
+                        logger.error(f"Batch {batch_num_display}: Grant matching error after {max_retries} retries: {e}")
+                        raise
+                
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Batch {batch_num_display}, attempt {attempt + 1}: JSON decode error: {e}")
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying in 1s...")
                         time.sleep(1)
                     else:
                         # Last attempt failed, create placeholder results
-                        print("Creating placeholder results for failed batch")
+                        logger.error(f"Batch {batch_num_display}: JSON decode failed after all retries. Creating placeholder results for failed batch")
                         for idx in range(len(batch)):
                             all_results.append({
                                 'grant_index': batch_num + idx,
-                                'score': 0.0,
-                                'explanation': 'Error processing this grant',
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'explanation': 'Error processing this grant - JSON decode failed',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
                                 'alignment_points': [],
                                 'concerns': ['Processing error'],
                             })
+                        batch_success = True  # Mark as success so we continue to next batch
+                        # Update progress even for failed batch
+                        grants_processed = min(batch_num + len(batch), len(grants_data))
+                        if progress_callback:
+                            progress_callback(grants_processed, len(grants_data))
+                        break
+                
+                except Exception as e:
+                    # Catch any other unexpected exceptions
+                    logger.error(f"Batch {batch_num_display}, attempt {attempt + 1}: Unexpected error: {e}", exc_info=True)
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying in 2s...")
+                        time.sleep(2)
+                    else:
+                        # Last attempt failed, create placeholder results and continue
+                        logger.error(f"Batch {batch_num_display}: Unexpected error after {max_retries} retries. Creating placeholder results and continuing.")
+                        for idx in range(len(batch)):
+                            all_results.append({
+                                'grant_index': batch_num + idx,
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'explanation': f'Error processing this grant: {str(e)[:200]}',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
+                                'alignment_points': [],
+                                'concerns': ['Processing error'],
+                            })
+                        batch_success = True  # Mark as success so we continue to next batch
+                        # Update progress even for failed batch
+                        grants_processed = min(batch_num + len(batch), len(grants_data))
+                        if progress_callback:
+                            progress_callback(grants_processed, len(grants_data))
+                        break
+            
+            if not batch_success:
+                logger.error(f"Batch {batch_num_display}: Failed after {max_retries} retries. Creating placeholder results and continuing to next batch.")
+                # Create placeholder results for this batch and continue
+                for idx in range(len(batch)):
+                    all_results.append({
+                        'grant_index': batch_num + idx,
+                        'eligibility_score': 0.0,
+                        'competitiveness_score': 0.0,
+                        'explanation': 'Error processing this grant - batch failed after retries',
+                        'eligibility_checklist': [],
+                        'competitiveness_checklist': [],
+                        'alignment_points': [],
+                        'concerns': ['Processing error'],
+                    })
+                # Update progress
+                grants_processed = min(batch_num + len(batch), len(grants_data))
+                if progress_callback:
+                    progress_callback(grants_processed, len(grants_data))
+                # Continue to next batch instead of breaking
         
+        logger.info(f"Completed matching. Processed {len(all_results)} results from {len(grants_data)} grants")
         return all_results
 
