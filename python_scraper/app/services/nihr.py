@@ -27,16 +27,21 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
   
   session = create_session()
   # NIHR may block automated requests - try to establish session by visiting homepage first
+  # This helps establish cookies and session state that may be required for subsequent requests
   try:
     print("Establishing session with NIHR homepage...")
     homepage_resp = session.get("https://www.nihr.ac.uk/", timeout=15)
     if homepage_resp.status_code == 200:
       print("  Session established successfully")
+      # Store cookies from homepage
+      if homepage_resp.cookies:
+        print(f"  Received {len(homepage_resp.cookies)} cookies")
       time.sleep(2)  # Small delay to seem more human-like
     else:
       print(f"  Warning: Homepage returned status {homepage_resp.status_code}")
   except Exception as e:
     print(f"  Warning: Could not establish session: {e}")
+    # Continue anyway - the fetch_with_retry function will handle retries
   
   existing_count = len(existing_grants)
   if existing_count > 0:
@@ -67,7 +72,11 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           time.sleep(3)  # Longer delay between pages
         
         # Use browser-like headers with proper referer chain
-        referer_url = listing_url if page == 1 else f"{listing_url}?page={page - 2}"
+        # For first page, use homepage as referer; for subsequent pages, use previous page
+        if page == 1:
+          referer_url = "https://www.nihr.ac.uk/"  # Refer to homepage for first page
+        else:
+          referer_url = f"{listing_url}?page={page - 2}" if page > 2 else listing_url
         resp = fetch_with_retry(session, url_to_fetch, referer=referer_url, timeout=30)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")

@@ -3,6 +3,7 @@ HTTP client utilities for making browser-like requests.
 """
 import time
 from typing import Optional
+from urllib.parse import urlparse
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -73,6 +74,20 @@ def fetch_with_retry(
     headers = {}
     if referer:
         headers["Referer"] = referer
+        # Set Sec-Fetch-Site based on referer
+        # Extract base URL from current URL and referer
+        try:
+            current_netloc = urlparse(url).netloc
+            referer_netloc = urlparse(referer).netloc
+            if current_netloc == referer_netloc:
+                headers["Sec-Fetch-Site"] = "same-origin"
+            else:
+                headers["Sec-Fetch-Site"] = "cross-site"
+        except:
+            # Fallback: assume same-origin if we can't parse
+            headers["Sec-Fetch-Site"] = "same-origin"
+    else:
+        headers["Sec-Fetch-Site"] = "none"
     
     for attempt in range(max_retries):
         try:
@@ -80,7 +95,8 @@ def fetch_with_retry(
             response.raise_for_status()
             return response
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 403:
+            status_code = e.response.status_code
+            if status_code == 403:
                 # For 403, try with a delay and different approach
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 2  # Exponential backoff: 2s, 4s, 6s
@@ -97,6 +113,24 @@ def fetch_with_retry(
                     continue
                 else:
                     raise Exception(f"403 Forbidden after {max_retries} attempts. The website may be blocking automated requests. URL: {url}")
+            elif status_code == 405:
+                # For 405 Method Not Allowed, try establishing session first
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    print(f"Got 405 Method Not Allowed for {url}, establishing session and retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    # Try visiting the homepage first to establish session and get cookies
+                    try:
+                        base_url = "/".join(url.split("/")[:3])
+                        homepage_resp = session.get(base_url, timeout=10)
+                        if homepage_resp.status_code == 200:
+                            print(f"  Successfully established session with {base_url}")
+                            time.sleep(2)  # Wait a bit to seem more human-like
+                    except Exception as session_error:
+                        print(f"  Warning: Could not establish session: {session_error}")
+                    continue
+                else:
+                    raise Exception(f"405 Method Not Allowed after {max_retries} attempts. The website may be blocking automated requests or requiring specific session state. URL: {url}")
             else:
                 raise
         except requests.exceptions.RequestException as e:
