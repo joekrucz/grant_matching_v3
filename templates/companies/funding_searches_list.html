@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}Funding Searches - Trellis{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <div>
+        <h1 class="text-3xl font-bold">Funding Searches</h1>
+        <p class="text-sm text-base-content/70 mt-1">
+            {{ page_obj.paginator.count }} funding search{{ page_obj.paginator.count|pluralize:"es" }}
+        </p>
+    </div>
+</div>
+
+<div class="space-y-4">
+    {% for funding_search in page_obj %}
+    <div class="card bg-base-200 border border-base-300">
+        <div class="card-body p-4">
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex-1">
+                    <h2 class="card-title text-lg">
+                        <a href="{% url 'companies:funding_search_detail' funding_search.id %}"
+                           class="text-base-content no-underline hover:underline hover:text-primary transition-colors">
+                            {{ funding_search.name }}
+                        </a>
+                    </h2>
+                    <div class="flex items-center gap-2 mt-2 text-sm text-base-content/70">
+                        <span>Company:</span>
+                        <a href="{% url 'companies:detail' funding_search.company.id %}" class="link link-hover">
+                            {{ funding_search.company.name }}
+                        </a>
+                    </div>
+                    {% if funding_search.trl_levels or funding_search.trl_level %}
+                    <div class="flex flex-wrap gap-1 mt-2">
+                        {% if funding_search.trl_levels %}
+                            {% for trl in funding_search.trl_levels %}
+                            <div class="badge badge-outline">{{ trl }}</div>
+                            {% endfor %}
+                        {% elif funding_search.trl_level %}
+                            <div class="badge badge-outline">{{ funding_search.trl_level }}</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    <div class="flex items-center gap-4 mt-2 text-xs text-base-content/60">
+                        <span>Created: {{ funding_search.created_at|date:"M d, Y" }}</span>
+                        {% if funding_search.last_matched_at %}
+                        <span>Last matched: {{ funding_search.last_matched_at|date:"M d, Y" }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex flex-col items-end gap-2">
+                    {% if funding_search.matching_status == 'running' %}
+                    <div class="badge badge-warning">Running</div>
+                    {% elif funding_search.matching_status == 'completed' %}
+                    <div class="badge badge-success">Completed</div>
+                    {% elif funding_search.matching_status == 'error' %}
+                    <div class="badge badge-error">Error</div>
+                    {% elif funding_search.matching_status == 'cancelled' %}
+                    <div class="badge badge-ghost">Cancelled</div>
+                    {% else %}
+                    <div class="badge badge-outline">Pending</div>
+                    {% endif %}
+                    {% if funding_search.match_results.exists %}
+                    <div class="text-xs text-base-content/70">
+                        {{ funding_search.match_results.count }} match{{ funding_search.match_results.count|pluralize:"es" }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info">
+        <span>No funding searches found. <a href="{% url 'companies:list' %}" class="link">Create one from a company page</a></span>
+    </div>
+    {% endfor %}
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="join flex justify-center mt-6">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}" class="join-item btn">Previous</a>
+    {% endif %}
+    <button class="join-item btn btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}" class="join-item btn">Next</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+

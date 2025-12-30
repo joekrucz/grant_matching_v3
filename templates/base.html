@@ -26,6 +26,7 @@
             <ul class="menu menu-horizontal px-1 gap-4">
                 <li><a href="{% url 'grants:list' %}" class="link link-hover">Grants</a></li>
                 <li><a href="{% url 'companies:list' %}" class="link link-hover">Companies</a></li>
+                <li><a href="{% url 'companies:funding_searches_list' %}" class="link link-hover">Funding Searches</a></li>
                 {% if user.admin %}
                 <li><a href="{% url 'admin_panel:dashboard' %}" class="link link-hover">Admin</a></li>
                 <li><a href="{% url 'admin_panel:conversations_page' %}" class="link link-hover">Conversations</a></li>

@@ -9,6 +9,7 @@ app_name = 'companies'
 urlpatterns = [
     path('', views.companies_list, name='list'),
     path('new', views.company_create, name='create'),
+    path('funding_searches', views.funding_searches_list, name='funding_searches_list'),
     path('<int:id>/', views.company_detail, name='detail'),
     path('<int:id>/delete', views.company_delete, name='delete'),
     path('<int:id>/grants/refresh', views.company_refresh_grants, name='grants_refresh'),

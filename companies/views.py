@@ -47,6 +47,25 @@ def companies_list(request):
 
 
 @login_required
+def funding_searches_list(request):
+    """List all funding searches for the current user."""
+    # SECURITY: Only show funding searches owned by the current user (unless admin)
+    if request.user.admin:
+        # Admins can see all funding searches
+        funding_searches = FundingSearch.objects.all().select_related('user', 'company').prefetch_related('match_results').order_by('-created_at')
+    else:
+        # Regular users only see their own funding searches
+        funding_searches = FundingSearch.objects.filter(user=request.user).select_related('user', 'company').prefetch_related('match_results').order_by('-created_at')
+    
+    # Pagination
+    paginator = Paginator(funding_searches, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'companies/funding_searches_list.html', {'page_obj': page_obj})
+
+
+@login_required
 def company_detail(request, id):
     """Company detail page."""
     from .models import TRL_LEVELS
@@ -758,7 +777,7 @@ def funding_search_match(request, id):
 
 @login_required
 def funding_search_match_test(request, id):
-    """Trigger test matching job (first 20 grants only)."""
+    """Trigger test matching job (first 5 grants only)."""
     import logging
     logger = logging.getLogger(__name__)
     
@@ -809,15 +828,15 @@ def funding_search_match_test(request, id):
         }
         funding_search.save()
         
-        # Trigger Celery task with limit of 20 grants
+        # Trigger Celery task with limit of 5 grants
         try:
-            logger.info(f"Triggering test matching task for funding search {id} (20 grants)")
-            task = match_grants_with_chatgpt.delay(funding_search.id, limit=20)
+            logger.info(f"Triggering test matching task for funding search {id} (5 grants)")
+            task = match_grants_with_chatgpt.delay(funding_search.id, limit=5)
             logger.info(f"Test matching task queued successfully. Task ID: {task.id}")
             # Store task ID in progress for cancellation
             funding_search.matching_progress['task_id'] = task.id
             funding_search.save()
-            messages.info(request, f'Test matching job started (Task ID: {task.id}). Processing first 20 grants for testing...')
+            messages.info(request, f'Test matching job started (Task ID: {task.id}). Processing first 5 grants for testing...')
         except Exception as e:
             logger.error(f"Failed to trigger test matching task for funding search {id}: {e}", exc_info=True)
             # Reset status if task failed to start
