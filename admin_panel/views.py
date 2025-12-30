@@ -9,11 +9,13 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.urls import reverse
+from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 
 from grants.models import Grant, ScrapeLog
 from users.models import User
 from companies.models import Company
+from slack_bot.models import SlackBotLog
 from grants_aggregator import CELERY_AVAILABLE
 from .ai_client import (
     AiAssistantClient,
@@ -151,6 +153,13 @@ def dashboard(request):
     admin_users = User.objects.filter(admin=True).count()
     active_users = User.objects.filter(is_active=True).count()
     
+    # Get recent bot logs (last 20)
+    recent_bot_logs = SlackBotLog.objects.all()[:20]
+    total_bot_messages = SlackBotLog.objects.count()
+    bot_messages_today = SlackBotLog.objects.filter(
+        created_at__date=timezone.now().date()
+    ).count()
+    
     context = {
         'total_grants': total_grants,
         'open_grants': open_grants,
@@ -164,6 +173,9 @@ def dashboard(request):
         'total_users': total_users,
         'admin_users': admin_users,
         'active_users': active_users,
+        'recent_bot_logs': recent_bot_logs,
+        'total_bot_messages': total_bot_messages,
+        'bot_messages_today': bot_messages_today,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 

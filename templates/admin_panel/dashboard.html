@@ -530,6 +530,70 @@
             </div>
         </div>
     </div>
+    
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title">Slack Bot Logs</h2>
+            <div class="mb-4">
+                <div class="text-sm space-y-1">
+                    <div class="flex justify-between">
+                        <span class="font-semibold">Total Messages:</span>
+                        <span>{{ total_bot_messages }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Messages Today:</span>
+                        <span>{{ bot_messages_today }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-zebra table-sm">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>User</th>
+                            <th>Company #</th>
+                            <th>Status</th>
+                            <th>Response</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in recent_bot_logs %}
+                        <tr>
+                            <td class="text-xs">{{ log.created_at|date:"M d, H:i" }}</td>
+                            <td>
+                                <span class="badge badge-sm badge-ghost">{{ log.get_message_type_display }}</span>
+                            </td>
+                            <td class="text-xs">{{ log.slack_username|default:log.slack_user_id|truncatechars:15 }}</td>
+                            <td class="text-xs">{{ log.company_number|default:"-" }}</td>
+                            <td>
+                                {% if log.status == 'processed' %}
+                                    <span class="badge badge-sm badge-success">Processed</span>
+                                {% elif log.status == 'error' %}
+                                    <span class="badge badge-sm badge-error">Error</span>
+                                {% else %}
+                                    <span class="badge badge-sm badge-warning">Received</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.response_sent %}
+                                    <span class="badge badge-sm badge-success">Yes</span>
+                                {% else %}
+                                    <span class="badge badge-sm badge-ghost">No</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-base-content/60">No bot messages yet</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
