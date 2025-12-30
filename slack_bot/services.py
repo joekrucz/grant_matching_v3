@@ -10,7 +10,6 @@ from slack_sdk.errors import SlackApiError
 from companies.services import CompaniesHouseService, CompaniesHouseError, ThreeSixtyGivingService
 from companies.models import Company
 from grants.models import Grant
-from .utils import is_company_number
 
 logger = logging.getLogger(__name__)
 
@@ -73,47 +72,6 @@ class SlackService:
 
 class CompanyInfoService:
     """Service to fetch and format company information."""
-    
-    @staticmethod
-    def search_company_by_name(company_name: str) -> Dict:
-        """
-        Search for a company by name and return the first match or list of matches.
-        
-        Args:
-            company_name: Company name to search for
-            
-        Returns:
-            dict with keys: company_number, matches, error
-        """
-        result = {
-            'company_number': None,
-            'matches': [],
-            'error': None
-        }
-        
-        try:
-            # Search for companies
-            matches = CompaniesHouseService.search_companies(company_name, items_per_page=10)
-            
-            if not matches:
-                result['error'] = f"No companies found matching '{company_name}'"
-                return result
-            
-            result['matches'] = matches
-            
-            # If only one match, return it
-            if len(matches) == 1:
-                result['company_number'] = matches[0]['company_number']
-            # If multiple matches, return the list for user to choose
-            
-        except CompaniesHouseError as e:
-            result['error'] = str(e)
-            logger.error(f"Error searching for company '{company_name}': {e}")
-        except Exception as e:
-            result['error'] = f"Unexpected error: {str(e)}"
-            logger.error(f"Unexpected error searching for company '{company_name}': {e}", exc_info=True)
-        
-        return result
     
     @staticmethod
     def get_company_info(company_number: str, user=None) -> Dict:
