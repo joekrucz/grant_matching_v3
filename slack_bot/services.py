@@ -7,7 +7,7 @@ from django.conf import settings
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from companies.services import CompaniesHouseService, CompaniesHouseError
+from companies.services import CompaniesHouseService, CompaniesHouseError, ThreeSixtyGivingService
 from companies.models import Company
 from grants.models import Grant
 
@@ -74,38 +74,111 @@ class CompanyInfoService:
     """Service to fetch and format company information."""
     
     @staticmethod
-    def get_company_info(company_number: str) -> Dict:
+    def get_company_info(company_number: str, user=None) -> Dict:
         """
         Get comprehensive company information.
+        Creates company in database if it doesn't exist.
         
         Args:
             company_number: Companies House company number
+            user: Optional user to associate with the company (for Slack bot, can be None)
             
         Returns:
-            dict with keys: company_data, filings, grants, error
+            dict with keys: company_data, filings, grants, company_obj, error
         """
         result = {
             'company_data': None,
             'filings': None,
             'grants': [],
+            'company_obj': None,
             'error': None
         }
         
         try:
-            # Fetch company data from Companies House
-            company_data = CompaniesHouseService.fetch_company(company_number)
-            result['company_data'] = company_data
-            
-            # Fetch filing history
+            # Check if company exists in database
+            company_obj = None
             try:
-                filings = CompaniesHouseService.fetch_filing_history(company_number)
-                result['filings'] = filings
-            except CompaniesHouseError as e:
-                logger.warning(f"Could not fetch filing history for {company_number}: {e}")
-                result['filings'] = {'items': [], 'total_count': 0}
+                company_obj = Company.objects.get(company_number=company_number)
+                logger.info(f"Company {company_number} already exists in database")
+            except Company.DoesNotExist:
+                # Company doesn't exist - create it
+                logger.info(f"Company {company_number} not found, creating new company")
+                
+                # Fetch company data from Companies House
+                api_data = CompaniesHouseService.fetch_company(company_number)
+                
+                # Fetch filing history
+                try:
+                    filing_history = CompaniesHouseService.fetch_filing_history(company_number)
+                except CompaniesHouseError as e:
+                    logger.warning(f"Could not fetch filing history for {company_number}: {e}")
+                    filing_history = None
+                
+                # Normalize data
+                normalized_data = CompaniesHouseService.normalize_company_data(api_data, filing_history)
+                
+                # Create company - use first admin user if no user provided
+                if not user:
+                    from users.models import User
+                    admin_user = User.objects.filter(admin=True).first()
+                    if admin_user:
+                        user = admin_user
+                    else:
+                        # Fallback to first user
+                        user = User.objects.first()
+                
+                if not user:
+                    raise ValueError("No user available to create company")
+                
+                # Create company with registered status
+                company_obj = Company.objects.create(
+                    user=user,
+                    is_registered=True,
+                    registration_status='registered',
+                    **normalized_data
+                )
+                logger.info(f"Created new company {company_number} in database")
+                
+                # Attempt to enrich with historical grants from 360Giving (non-blocking)
+                try:
+                    grants_received = ThreeSixtyGivingService.fetch_grants_received(company_obj.company_number)
+                    company_obj.grants_received_360 = grants_received
+                    company_obj.save(update_fields=['grants_received_360'])
+                except Exception as e:
+                    logger.info(f"360Giving lookup skipped for {company_number}: {e}")
             
-            # Get grants from database
-            result['grants'] = CompanyInfoService.get_company_grants(company_number)
+            # Use company object data
+            result['company_obj'] = company_obj
+            result['company_data'] = company_obj.raw_data if company_obj.raw_data else {
+                'company_name': company_obj.name,
+                'company_number': company_obj.company_number,
+                'company_status': company_obj.status,
+                'company_type': company_obj.company_type,
+                'date_of_creation': str(company_obj.date_of_creation) if company_obj.date_of_creation else None,
+                'sic_codes': company_obj.sic_codes_array() if company_obj.sic_codes else [],
+                'registered_office_address': company_obj.address if company_obj.address else {},
+            }
+            
+            # Get account filings using the company's method
+            account_filings = company_obj.get_account_filings()
+            result['filings'] = {
+                'account_filings': account_filings,
+                'total_count': len(account_filings)
+            }
+            
+            # Get grants - check both 360Giving and CompanyGrant relationships
+            grants_360 = company_obj.grants_received_360.get('grants', []) if company_obj.grants_received_360 else []
+            
+            # Get grants from CompanyGrant relationships
+            company_grants = Grant.objects.filter(
+                company_grants__company=company_obj
+            ).select_related().order_by('-created_at')[:10]
+            
+            # Combine grants (360Giving grants are dicts, CompanyGrant grants are objects)
+            result['grants'] = {
+                'grants_360': grants_360[:5],  # Last 5 from 360Giving
+                'company_grants': list(company_grants),  # Grants linked via CompanyGrant
+            }
             
         except CompaniesHouseError as e:
             result['error'] = str(e)
@@ -116,31 +189,9 @@ class CompanyInfoService:
         
         return result
     
-    @staticmethod
-    def get_company_grants(company_number: str) -> List[Grant]:
-        """
-        Get grants associated with a company.
-        
-        Args:
-            company_number: Companies House company number
-            
-        Returns:
-            List of Grant objects
-        """
-        try:
-            company = Company.objects.get(company_number=company_number)
-            grants = Grant.objects.filter(
-                company_grants__company=company
-            ).select_related().order_by('-created_at')[:10]
-            return list(grants)
-        except Company.DoesNotExist:
-            return []
-        except Exception as e:
-            logger.error(f"Error fetching grants for company {company_number}: {e}")
-            return []
     
     @staticmethod
-    def format_slack_blocks(company_data: Dict, filings: Dict, grants: List[Grant]) -> List[Dict]:
+    def format_slack_blocks(company_data: Dict, filings: Dict, grants: Dict, company_obj: Company = None) -> List[Dict]:
         """
         Format company information as Slack Block Kit blocks.
         
@@ -216,14 +267,18 @@ class CompanyInfoService:
         
         blocks.append({"type": "divider"})
         
-        # Recent filings
-        if filings and filings.get('items'):
-            filing_items = filings['items'][:5]  # Last 5 filings
-            filing_text = "*Recent Filings:*\n"
-            for filing in filing_items:
-                description = filing.get('description', 'Unknown')
-                date = filing.get('date', '')
-                filing_text += f"• {description} ({date})\n"
+        # Account filings (using get_account_filings format)
+        account_filings = filings.get('account_filings', []) if filings else []
+        if account_filings:
+            filing_text = "*Recent Account Filings:*\n"
+            for filing in account_filings[:5]:  # Last 5 account filings
+                financial_year = filing.get('financial_year', 'N/A')
+                made_up_to = filing.get('made_up_to_date', 'N/A')
+                account_type = filing.get('account_type', 'Unknown')
+                filing_status = filing.get('filing_status', '')
+                
+                filing_text += f"• *{financial_year}* - Made up to: {made_up_to}\n"
+                filing_text += f"  Type: {account_type}, Status: {filing_status}\n"
             
             blocks.append({
                 "type": "section",
@@ -237,18 +292,48 @@ class CompanyInfoService:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Recent Filings:* No filings found"
+                    "text": "*Recent Account Filings:* No account filings found"
                 }
             })
         
         blocks.append({"type": "divider"})
         
-        # Previous grants
-        if grants:
-            grants_text = "*Previous Grants:*\n"
-            for grant in grants[:5]:  # Last 5 grants
+        # Grants - show both 360Giving and linked grants
+        grants_360 = grants.get('grants_360', []) if grants else []
+        company_grants = grants.get('company_grants', []) if grants else []
+        
+        grants_text = ""
+        has_grants = False
+        
+        # 360Giving grants
+        if grants_360:
+            has_grants = True
+            grants_text += "*Historic Grants (360Giving):*\n"
+            for grant in grants_360[:5]:
+                title = grant.get('title', grant.get('grant_title', 'Unknown'))
+                amount = grant.get('amount_awarded', grant.get('amount', ''))
+                date = grant.get('award_date', grant.get('date', ''))
+                if amount:
+                    if isinstance(amount, (int, float)):
+                        grants_text += f"• {title} - £{amount:,.0f}"
+                    else:
+                        grants_text += f"• {title} - {amount}"
+                else:
+                    grants_text += f"• {title}"
+                if date:
+                    grants_text += f" ({date})"
+                grants_text += "\n"
+        
+        # CompanyGrant linked grants
+        if company_grants:
+            has_grants = True
+            if grants_text:
+                grants_text += "\n"
+            grants_text += "*Linked Grants:*\n"
+            for grant in company_grants[:5]:
                 grants_text += f"• {grant.title} ({grant.source})\n"
-            
+        
+        if has_grants:
             blocks.append({
                 "type": "section",
                 "text": {
@@ -261,7 +346,7 @@ class CompanyInfoService:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Previous Grants:* No grants found for this company"
+                    "text": "*Grants:* No grants found for this company"
                 }
             })
         

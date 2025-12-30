@@ -61,9 +61,14 @@ def slack_events(request):
             return handle_app_mention(event)
         
         # Handle direct messages
-        if event_type == 'message' and event.get('channel_type') == 'im':
-            # Ignore bot messages
-            if event.get('subtype') == 'bot_message' or event.get('bot_id'):
+        # Check for DMs: channel_type == 'im' or channel starts with 'D' (DM channel ID format)
+        channel = event.get('channel', '')
+        channel_type = event.get('channel_type')
+        is_dm = channel_type == 'im' or (channel and channel.startswith('D'))
+        
+        if event_type == 'message' and is_dm:
+            # Ignore bot messages and message subtypes
+            if event.get('subtype') or event.get('bot_id'):
                 return JsonResponse({'status': 'ok'})
             return handle_direct_message(event)
     
@@ -116,7 +121,7 @@ def slack_commands(request):
     # Process company lookup (async response via response_url)
     try:
         slack_service = SlackService()
-        company_info = CompanyInfoService.get_company_info(company_number)
+        company_info = CompanyInfoService.get_company_info(company_number, user=None)
         
         if company_info.get('error'):
             error_msg = company_info['error']
@@ -184,7 +189,7 @@ def handle_app_mention(event):
     # Process company lookup
     try:
         slack_service = SlackService()
-        company_info = CompanyInfoService.get_company_info(company_number)
+        company_info = CompanyInfoService.get_company_info(company_number, user=None)
         
         if company_info.get('error'):
             error_msg = company_info['error']
@@ -204,7 +209,8 @@ def handle_app_mention(event):
         blocks = CompanyInfoService.format_slack_blocks(
             company_info['company_data'],
             company_info['filings'],
-            company_info['grants']
+            company_info['grants'],
+            company_info.get('company_obj')
         )
         
         slack_service.send_message(
@@ -249,7 +255,7 @@ def handle_direct_message(event):
     # Process company lookup
     try:
         slack_service = SlackService()
-        company_info = CompanyInfoService.get_company_info(company_number)
+        company_info = CompanyInfoService.get_company_info(company_number, user=None)
         
         if company_info.get('error'):
             error_msg = company_info['error']
@@ -269,7 +275,8 @@ def handle_direct_message(event):
         blocks = CompanyInfoService.format_slack_blocks(
             company_info['company_data'],
             company_info['filings'],
-            company_info['grants']
+            company_info['grants'],
+            company_info.get('company_obj')
         )
         
         slack_service.send_message(
