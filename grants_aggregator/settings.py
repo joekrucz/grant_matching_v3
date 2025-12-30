@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'grants',
     'companies',
     'admin_panel',
+    'slack_bot',
 ]
 
 MIDDLEWARE = [
@@ -231,6 +232,10 @@ CELERY_BROKER_CONNECTION_RETRY_DELAY = 5.0
 
 # Companies House API
 COMPANIES_HOUSE_API_KEY = env('COMPANIES_HOUSE_API_KEY', default='')
+
+# Slack Bot Configuration
+SLACK_SIGNING_SECRET = env('SLACK_SIGNING_SECRET', default='')
+SLACK_BOT_TOKEN = env('SLACK_BOT_TOKEN', default='')
 
 # OpenAI API (for grant matching)
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')

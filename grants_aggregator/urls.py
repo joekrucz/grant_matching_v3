@@ -17,6 +17,7 @@ urlpatterns = [
     # Custom admin panel lives under /admin-panel to avoid clashing with Django admin
     path('admin-panel/', include('admin_panel.urls')),
     path('api/', include('grants.api_urls')),
+    path('', include('slack_bot.urls')),  # Slack bot webhooks
 ]
 
 # SECURITY: Serve media files with authentication in production
