@@ -8,10 +8,67 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 
-from .utils import verify_slack_signature, extract_company_number
+from .utils import verify_slack_signature, extract_company_number, is_company_number
 from .services import SlackService, CompanyInfoService
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_company_identifier(text: str) -> Dict:
+    """
+    Resolve company identifier from text (company number or name).
+    
+    Args:
+        text: Company number or company name
+        
+    Returns:
+        dict with keys: company_number, error, matches
+    """
+    result = {
+        'company_number': None,
+        'error': None,
+        'matches': []
+    }
+    
+    if not text or not text.strip():
+        result['error'] = 'Please provide a company number or company name.'
+        return result
+    
+    text = text.strip()
+    
+    # Check if it's a company number
+    if is_company_number(text):
+        result['company_number'] = text.upper()
+        return result
+    
+    # Try to extract company number from text
+    company_number = extract_company_number(text)
+    if company_number:
+        result['company_number'] = company_number
+        return result
+    
+    # Search by company name
+    search_result = CompanyInfoService.search_company_by_name(text)
+    
+    if search_result.get('error'):
+        result['error'] = search_result['error']
+        return result
+    
+    matches = search_result.get('matches', [])
+    result['matches'] = matches
+    
+    if not matches:
+        result['error'] = f"No companies found matching '{text}'. Please try a different search term or provide a company number."
+        return result
+    
+    # If multiple matches, return them for user to choose
+    if len(matches) > 1:
+        result['error'] = 'multiple_matches'  # Special error code
+        return result
+    
+    # Single match - use it
+    result['company_number'] = matches[0]['company_number']
+    return result
 
 
 @csrf_exempt
@@ -109,14 +166,33 @@ def slack_commands(request):
             'text': 'Error processing command. Please try again.'
         })
     
-    # Extract company number
-    company_number = extract_company_number(text) if text else None
+    # Resolve company identifier (number or name)
+    text = text.strip() if text else ""
+    resolve_result = resolve_company_identifier(text)
     
-    if not company_number:
+    if resolve_result.get('error'):
+        error = resolve_result['error']
+        
+        # Handle multiple matches
+        if error == 'multiple_matches':
+            matches = resolve_result.get('matches', [])
+            matches_text = f"*Found {len(matches)} companies matching '{text}':*\n\n"
+            for idx, match in enumerate(matches[:10], 1):  # Show first 10
+                matches_text += f"{idx}. {match['title']} ({match['company_number']}) - {match.get('company_status', 'Unknown')}\n"
+            
+            matches_text += f"\nPlease provide the company number (e.g., {matches[0]['company_number']}) or be more specific with the company name."
+            
+            return JsonResponse({
+                'response_type': 'ephemeral',
+                'text': matches_text
+            })
+        
         return JsonResponse({
             'response_type': 'ephemeral',
-            'text': 'Please provide a valid company number.\nUsage: `/company-info 12345678` or `/company-info AB123456`'
+            'text': error
         })
+    
+    company_number = resolve_result['company_number']
     
     # Process company lookup (async response via response_url)
     try:
@@ -139,7 +215,8 @@ def slack_commands(request):
         blocks = CompanyInfoService.format_slack_blocks(
             company_info['company_data'],
             company_info['filings'],
-            company_info['grants']
+            company_info['grants'],
+            company_info.get('company_obj')
         )
         
         # Send response via response_url (allows for delayed responses)
@@ -172,19 +249,45 @@ def handle_app_mention(event):
     channel = event.get('channel')
     user = event.get('user')
     
-    # Extract company number
-    company_number = extract_company_number(text)
+    # Remove bot mention from text
+    # Slack mentions look like <@U123456> or similar
+    import re
+    text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
     
-    if not company_number:
+    # Resolve company identifier (number or name)
+    resolve_result = resolve_company_identifier(text)
+    
+    if resolve_result.get('error'):
+        error = resolve_result['error']
+        
+        # Handle multiple matches
+        if error == 'multiple_matches':
+            matches = resolve_result.get('matches', [])
+            matches_text = f"*Found {len(matches)} companies matching '{text}':*\n\n"
+            for idx, match in enumerate(matches[:10], 1):
+                matches_text += f"{idx}. {match['title']} ({match['company_number']}) - {match.get('company_status', 'Unknown')}\n"
+            
+            matches_text += f"\nPlease provide the company number (e.g., {matches[0]['company_number']}) or be more specific."
+            
+            try:
+                slack_service = SlackService()
+                slack_service.send_message(channel=channel, text=matches_text)
+            except Exception as e:
+                logger.error(f"Error sending message: {e}")
+            return JsonResponse({'status': 'ok'})
+        
+        # Other errors
         try:
             slack_service = SlackService()
             slack_service.send_message(
                 channel=channel,
-                text=f"Hi! Please provide a company number. For example: `@trellis-bot 12345678`"
+                text=f"Hi! {error}\n\nYou can search by company number (e.g., `12345678`) or company name (e.g., `Acme Corp Ltd`)."
             )
         except Exception as e:
             logger.error(f"Error sending message: {e}")
         return JsonResponse({'status': 'ok'})
+    
+    company_number = resolve_result['company_number']
     
     # Process company lookup
     try:
@@ -238,19 +341,40 @@ def handle_direct_message(event):
     channel = event.get('channel')
     user = event.get('user')
     
-    # Extract company number
-    company_number = extract_company_number(text)
+    # Resolve company identifier (number or name)
+    resolve_result = resolve_company_identifier(text)
     
-    if not company_number:
+    if resolve_result.get('error'):
+        error = resolve_result['error']
+        
+        # Handle multiple matches
+        if error == 'multiple_matches':
+            matches = resolve_result.get('matches', [])
+            matches_text = f"*Found {len(matches)} companies matching '{text}':*\n\n"
+            for idx, match in enumerate(matches[:10], 1):
+                matches_text += f"{idx}. {match['title']} ({match['company_number']}) - {match.get('company_status', 'Unknown')}\n"
+            
+            matches_text += f"\nPlease provide the company number (e.g., {matches[0]['company_number']}) or be more specific with the company name."
+            
+            try:
+                slack_service = SlackService()
+                slack_service.send_message(channel=channel, text=matches_text)
+            except Exception as e:
+                logger.error(f"Error sending message: {e}")
+            return JsonResponse({'status': 'ok'})
+        
+        # Other errors
         try:
             slack_service = SlackService()
             slack_service.send_message(
                 channel=channel,
-                text="Hi! Please send me a company number and I'll fetch the company information, filings, and previous grants.\n\nExample: `12345678` or `AB123456`"
+                text=f"Hi! {error}\n\nYou can search by company number (e.g., `12345678`) or company name (e.g., `Acme Corp Ltd`)."
             )
         except Exception as e:
             logger.error(f"Error sending message: {e}")
         return JsonResponse({'status': 'ok'})
+    
+    company_number = resolve_result['company_number']
     
     # Process company lookup
     try:

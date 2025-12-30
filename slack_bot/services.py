@@ -10,6 +10,7 @@ from slack_sdk.errors import SlackApiError
 from companies.services import CompaniesHouseService, CompaniesHouseError, ThreeSixtyGivingService
 from companies.models import Company
 from grants.models import Grant
+from .utils import is_company_number
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,47 @@ class SlackService:
 
 class CompanyInfoService:
     """Service to fetch and format company information."""
+    
+    @staticmethod
+    def search_company_by_name(company_name: str) -> Dict:
+        """
+        Search for a company by name and return the first match or list of matches.
+        
+        Args:
+            company_name: Company name to search for
+            
+        Returns:
+            dict with keys: company_number, matches, error
+        """
+        result = {
+            'company_number': None,
+            'matches': [],
+            'error': None
+        }
+        
+        try:
+            # Search for companies
+            matches = CompaniesHouseService.search_companies(company_name, items_per_page=10)
+            
+            if not matches:
+                result['error'] = f"No companies found matching '{company_name}'"
+                return result
+            
+            result['matches'] = matches
+            
+            # If only one match, return it
+            if len(matches) == 1:
+                result['company_number'] = matches[0]['company_number']
+            # If multiple matches, return the list for user to choose
+            
+        except CompaniesHouseError as e:
+            result['error'] = str(e)
+            logger.error(f"Error searching for company '{company_name}': {e}")
+        except Exception as e:
+            result['error'] = f"Unexpected error: {str(e)}"
+            logger.error(f"Unexpected error searching for company '{company_name}': {e}", exc_info=True)
+        
+        return result
     
     @staticmethod
     def get_company_info(company_number: str, user=None) -> Dict:
@@ -169,15 +211,15 @@ class CompanyInfoService:
             # Get grants - check both 360Giving and CompanyGrant relationships
             grants_360 = company_obj.grants_received_360.get('grants', []) if company_obj.grants_received_360 else []
             
-            # Get grants from CompanyGrant relationships
+            # Get grants from CompanyGrant relationships (all grants, not limited)
             company_grants = Grant.objects.filter(
                 company_grants__company=company_obj
-            ).select_related().order_by('-created_at')[:10]
+            ).select_related().order_by('-created_at')
             
             # Combine grants (360Giving grants are dicts, CompanyGrant grants are objects)
             result['grants'] = {
-                'grants_360': grants_360[:5],  # Last 5 from 360Giving
-                'company_grants': list(company_grants),  # Grants linked via CompanyGrant
+                'grants_360': grants_360,  # All 360Giving grants
+                'company_grants': list(company_grants),  # All grants linked via CompanyGrant
             }
             
         except CompaniesHouseError as e:
@@ -298,49 +340,82 @@ class CompanyInfoService:
         
         blocks.append({"type": "divider"})
         
-        # Grants - show both 360Giving and linked grants
+        # Grants - show both 360Giving and linked grants (all grants, not limited)
         grants_360 = grants.get('grants_360', []) if grants else []
         company_grants = grants.get('company_grants', []) if grants else []
         
         grants_text = ""
         has_grants = False
         
-        # 360Giving grants
+        # 360Giving grants (all grants)
         if grants_360:
             has_grants = True
-            grants_text += "*Historic Grants (360Giving):*\n"
-            for grant in grants_360[:5]:
+            grants_text += f"*Historic Grants (360Giving) - {len(grants_360)} total:*\n"
+            for grant in grants_360:
                 title = grant.get('title', grant.get('grant_title', 'Unknown'))
-                amount = grant.get('amount_awarded', grant.get('amount', ''))
-                date = grant.get('award_date', grant.get('date', ''))
+                amount = grant.get('amountAwarded', grant.get('amount_awarded', grant.get('amount', '')))
+                award_date = grant.get('awardDate', grant.get('award_date', grant.get('date', '')))
+                
+                grant_line = f"• {title}"
                 if amount:
                     if isinstance(amount, (int, float)):
-                        grants_text += f"• {title} - £{amount:,.0f}"
+                        grant_line += f" - £{amount:,.0f}"
                     else:
-                        grants_text += f"• {title} - {amount}"
-                else:
-                    grants_text += f"• {title}"
-                if date:
-                    grants_text += f" ({date})"
-                grants_text += "\n"
+                        grant_line += f" - {amount}"
+                if award_date:
+                    grant_line += f" (Awarded: {award_date})"
+                grants_text += grant_line + "\n"
         
-        # CompanyGrant linked grants
+        # CompanyGrant linked grants (all grants)
         if company_grants:
             has_grants = True
             if grants_text:
                 grants_text += "\n"
-            grants_text += "*Linked Grants:*\n"
-            for grant in company_grants[:5]:
-                grants_text += f"• {grant.title} ({grant.source})\n"
+            grants_text += f"*Linked Grants - {len(company_grants)} total:*\n"
+            for grant in company_grants:
+                grant_line = f"• {grant.title} ({grant.source})"
+                # Add deadline if available (closest thing to grant date for these)
+                if grant.deadline:
+                    from django.utils import dateformat
+                    grant_line += f" - Deadline: {dateformat.format(grant.deadline, 'M d, Y')}"
+                elif grant.created_at:
+                    from django.utils import dateformat
+                    grant_line += f" - Added: {dateformat.format(grant.created_at, 'M d, Y')}"
+                grants_text += grant_line + "\n"
         
         if has_grants:
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": grants_text
-                }
-            })
+            # Split into multiple blocks if text is too long (Slack has limits)
+            # Slack block text limit is 3000 characters, but we'll split at 2000 to be safe
+            if len(grants_text) > 2000:
+                # Split into chunks
+                chunks = []
+                current_chunk = ""
+                for line in grants_text.split('\n'):
+                    if len(current_chunk) + len(line) + 1 > 2000:
+                        if current_chunk:
+                            chunks.append(current_chunk)
+                        current_chunk = line + "\n"
+                    else:
+                        current_chunk += line + "\n"
+                if current_chunk:
+                    chunks.append(current_chunk)
+                
+                for chunk in chunks:
+                    blocks.append({
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": chunk
+                        }
+                    })
+            else:
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": grants_text
+                    }
+                })
         else:
             blocks.append({
                 "type": "section",

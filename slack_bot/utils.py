@@ -75,3 +75,29 @@ def extract_company_number(text):
     
     return None
 
+
+def is_company_number(text):
+    """
+    Check if text looks like a company number.
+    
+    Args:
+        text: Text to check
+        
+    Returns:
+        bool: True if text matches company number pattern
+    """
+    if not text:
+        return False
+    
+    text = text.upper().strip()
+    patterns = [
+        r'^[0-9]{8}$',  # 8 digits
+        r'^[A-Z]{2}[0-9]{6}$',  # 2 letters + 6 digits
+    ]
+    
+    for pattern in patterns:
+        if re.match(pattern, text):
+            return True
+    
+    return False
+
