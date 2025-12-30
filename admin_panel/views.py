@@ -1624,3 +1624,42 @@ def checklist_generation_status(request):
             'error': str(e)
         }, status=500)
 
+
+@login_required
+@admin_required
+def cancel_checklist_generation(request):
+    """Cancel a running checklist generation job."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if request.method == 'POST':
+        # Get task ID from request
+        task_id = request.POST.get('task_id') or request.GET.get('task_id')
+        if not task_id:
+            # Try to get from cache
+            from django.core.cache import cache
+            checklist_type = request.POST.get('checklist_type', 'both')
+            cache_key = f'last_checklist_generation_task_id_{checklist_type}'
+            task_id = cache.get(cache_key)
+        
+        if not task_id:
+            messages.error(request, 'No checklist generation job found to cancel.')
+            return redirect('admin_panel:dashboard')
+        
+        try:
+            from celery.result import AsyncResult
+            task = AsyncResult(task_id)
+            
+            # Check if task is still running
+            if task.state in ['PENDING', 'PROGRESS']:
+                task.revoke(terminate=True)
+                logger.info(f"Cancelled checklist generation task {task_id}")
+                messages.success(request, 'Checklist generation job cancelled successfully.')
+            else:
+                messages.info(request, 'Checklist generation job is not running.')
+        except Exception as e:
+            logger.warning(f"Could not cancel checklist generation task {task_id}: {e}")
+            messages.error(request, f'Failed to cancel checklist generation job: {str(e)}')
+    
+    return redirect('admin_panel:dashboard')
+

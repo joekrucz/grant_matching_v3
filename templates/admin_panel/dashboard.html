@@ -351,12 +351,12 @@
             </div>
             <div class="mt-4 flex gap-2">
                 <div class="max-w-xs">
-                    <form method="post" action="{% url 'admin_panel:wipe_grants' %}" id="wipe-grants-form">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-error btn-outline w-full" id="wipe-grants-btn">
-                            Wipe All Grants
-                        </button>
-                    </form>
+                <form method="post" action="{% url 'admin_panel:wipe_grants' %}" id="wipe-grants-form">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-error btn-outline w-full" id="wipe-grants-btn">
+                        Wipe All Grants
+                    </button>
+                </form>
                 </div>
                 <a href="{% url 'admin_panel:scrape_logs' %}" class="btn btn-ghost">Scrape Logs</a>
             </div>
@@ -478,7 +478,17 @@
             
             <!-- Progress indicator (hidden by default) -->
             <div id="checklist-generation-status-alert" class="alert alert-info mt-4 hidden">
-                <span id="checklist-generation-status-text">Status: Generating checklists... This may take several minutes.</span>
+                <div class="flex justify-between items-center">
+                    <span id="checklist-generation-status-text">Status: Generating checklists... This may take several minutes.</span>
+                    <form method="post" action="{% url 'admin_panel:cancel_checklist_generation' %}" id="cancel-checklist-generation-form" class="hidden">
+                        {% csrf_token %}
+                        <input type="hidden" name="task_id" id="cancel-checklist-task-id">
+                        <input type="hidden" name="checklist_type" id="cancel-checklist-type">
+                        <button type="submit" class="btn btn-error btn-sm" onclick="return confirm('Are you sure you want to cancel the checklist generation job?');">
+                            Cancel
+                        </button>
+                    </form>
+                </div>
                 <div class="mt-4">
                     <div class="flex justify-between text-sm mb-2">
                         <span id="checklist-generation-progress-text">Initializing...</span>
@@ -594,6 +604,20 @@
         const statusAlert = document.getElementById('checklist-generation-status-alert');
         const statusText = document.getElementById('checklist-generation-status-text');
         const details = document.getElementById('checklist-generation-details');
+        const cancelForm = document.getElementById('cancel-checklist-generation-form');
+        const cancelTaskIdInput = document.getElementById('cancel-checklist-task-id');
+        const cancelChecklistTypeInput = document.getElementById('cancel-checklist-type');
+        
+        // Show/hide cancel button based on status
+        if (cancelForm && cancelTaskIdInput && cancelChecklistTypeInput) {
+            if (data.status === 'running' && data.task_id) {
+                cancelTaskIdInput.value = data.task_id;
+                cancelChecklistTypeInput.value = checklistGenerationType || 'both';
+                cancelForm.classList.remove('hidden');
+            } else {
+                cancelForm.classList.add('hidden');
+            }
+        }
         
         if (progressBar && progressText) {
             const percentage = data.progress.percentage || 0;
