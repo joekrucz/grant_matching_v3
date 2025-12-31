@@ -142,10 +142,15 @@
         
         
         <!-- Selected Sources Section -->
-        <div class="card bg-base-100 border border-base-300">
+        <div class="card bg-base-100 border border-base-300 {% if funding_search.matching_status == 'running' %}opacity-60{% endif %}">
             <div class="card-body">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="card-title text-xl">Input Sources</h2>
+                    <div class="flex items-center gap-2">
+                        <h2 class="card-title text-xl">Input Sources</h2>
+                        {% if funding_search.matching_status == 'running' %}
+                        <div class="badge badge-warning">Locked - Matching in progress</div>
+                        {% endif %}
+                    </div>
         {% if can_edit %}
                     <div class="flex gap-2 items-center">
                         <form method="post" enctype="multipart/form-data" action="{% url 'companies:funding_search_upload' funding_search.id %}" id="file-upload-form" class="inline-block">
@@ -156,18 +161,20 @@
                             accept=".pdf,.docx,.txt" 
                                 id="file-input"
                                 class="hidden"
+                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
                             >
                             <button 
                                 type="button" 
                                 class="btn btn-circle btn-primary btn-sm"
                                 onclick="document.getElementById('file-input').click()"
+                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                 </svg>
                             </button>
                         </form>
-                        <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="btn btn-sm btn-outline">
+                        <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="btn btn-sm btn-outline {% if funding_search.matching_status == 'running' %}btn-disabled{% endif %}">
                             Edit Sources
                         </a>
                     </div>
@@ -179,7 +186,7 @@
                 
                 <!-- TRL Levels Selection -->
                 {% if can_edit %}
-                <form method="post" id="trl-levels-form">
+                <form method="post" id="trl-levels-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %}>
                     {% csrf_token %}
                     {# Preserve grant sources when submitting TRL levels form #}
                     {% if funding_search.selected_grant_sources %}
@@ -192,7 +199,7 @@
                             <span class="label-text">TRL Levels</span>
                         </label>
                         <div class="trl-levels-dropdown-container dropdown w-full">
-                            <div role="button" class="btn btn-outline w-full justify-between" id="trl-levels-dropdown">
+                            <div role="button" class="btn btn-outline w-full justify-between {% if funding_search.matching_status == 'running' %}btn-disabled{% endif %}" id="trl-levels-dropdown" {% if funding_search.matching_status == 'running' %}style="pointer-events: none;"{% endif %}>
                                 <span id="trl-levels-display">Select TRL Levels</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                             </div>
@@ -206,6 +213,7 @@
                                             value="{{ value }}"
                                             name="trl_levels"
                                             {% if value in funding_search.trl_levels or funding_search.trl_level == value %}checked{% endif %}
+                                            {% if funding_search.matching_status == 'running' %}disabled{% endif %}
                                         >
                                         <span class="label-text">{{ label }}</span>
                     </label>
@@ -330,14 +338,19 @@
         
         <!-- Grant Sources Selection Section -->
         <div class="divider"></div>
-        <div class="card bg-base-100 border border-base-300">
+        <div class="card bg-base-100 border border-base-300 {% if funding_search.matching_status == 'running' %}opacity-60{% endif %}">
             <div class="card-body">
-                <h2 class="card-title text-xl mb-4">Grant Sources</h2>
+                <div class="flex items-center gap-2 mb-4">
+                    <h2 class="card-title text-xl">Grant Sources</h2>
+                    {% if funding_search.matching_status == 'running' %}
+                    <div class="badge badge-warning">Locked - Matching in progress</div>
+                    {% endif %}
+                </div>
                 <p class="text-sm text-base-content/70 mb-4">
                     Select which grant sources to match against.
                 </p>
                 {% if can_edit %}
-                <form method="post" id="grant-sources-form">
+                <form method="post" id="grant-sources-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %}>
                     {% csrf_token %}
                     {# Preserve TRL levels when submitting grant sources form #}
                     {% if funding_search.trl_levels %}
@@ -347,14 +360,14 @@
                     {% endif %}
                     <div class="flex flex-col gap-2">
                         {% for source_code, source_name in grant_sources %}
-                        <label class="flex items-center gap-2 cursor-pointer">
+                        <label class="flex items-center gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
                         <input 
                                 type="checkbox" 
                                 name="grant_sources" 
                                 value="{{ source_code }}"
                                 class="checkbox checkbox-primary"
                                 {% if source_code in funding_search.selected_grant_sources %}checked{% endif %}
-                                onchange="document.getElementById('grant-sources-form').submit()"
+                                {% if funding_search.matching_status == 'running' %}disabled{% else %}onchange="document.getElementById('grant-sources-form').submit()"{% endif %}
                             >
                             <span class="label-text">{{ source_name }}</span>
                         </label>
@@ -922,6 +935,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedContainer = document.getElementById('trl-levels-selected');
     const dropdown = document.querySelector('.trl-levels-dropdown-container');
     
+    // Check if matching is running
+    const isMatchingRunning = {% if funding_search.matching_status == 'running' %}true{% else %}false{% endif %};
+    
     if (!checkboxes.length || !displaySpan || !selectedContainer || !dropdown) {
         return; // Elements not found
     }
@@ -954,6 +970,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
+            if (isMatchingRunning) {
+                // Prevent changes when matching is running
+                this.checked = !this.checked; // Revert the change
+                return;
+            }
             updateDisplay();
             // Auto-submit form when TRL levels change
             const form = document.getElementById('trl-levels-form');
@@ -968,6 +989,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Toggle dropdown on button click
     dropdownButton.addEventListener('click', function(e) {
+        if (isMatchingRunning) {
+            e.preventDefault();
+            e.stopPropagation();
+            return; // Prevent dropdown from opening when matching is running
+        }
         e.stopPropagation();
         isDropdownOpen = !isDropdownOpen;
         if (isDropdownOpen) {
