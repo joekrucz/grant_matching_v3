@@ -1249,17 +1249,7 @@ def run_scrapers(request):
             result = trigger_ukri_scrape.delay()
             logger.info(f"Task queued successfully. Task ID: {result.id}")
             logger.info(f"Task state: {result.state}")
-            # Store task_id in the most recent ScrapeLog
-            try:
-                from grants.models import ScrapeLog
-                scrape_log = ScrapeLog.objects.filter(source='ukri').order_by('-started_at').first()
-                if scrape_log and scrape_log.status == 'running':
-                    if scrape_log.metadata is None:
-                        scrape_log.metadata = {}
-                    scrape_log.metadata['task_id'] = result.id
-                    scrape_log.save(update_fields=['metadata'])
-            except Exception as e:
-                logger.warning(f"Could not store task_id in ScrapeLog: {e}")
+            # Note: task_id is stored in ScrapeLog metadata when the task starts executing
             messages.success(request, f'Scrapers triggered (Task ID: {result.id}).')
         except Exception as e:
             error_msg = f'Failed to trigger scrapers: {str(e)}'
@@ -1281,17 +1271,7 @@ def _queue_single_scraper(request, task, source_label):
         return redirect('admin_panel:dashboard')
     try:
         result = task.delay(None, False)  # chain_started_at_str=None, continue_chain=False
-        # Store task_id in the most recent ScrapeLog for this source
-        try:
-            from grants.models import ScrapeLog
-            scrape_log = ScrapeLog.objects.filter(source=source_label.lower()).order_by('-started_at').first()
-            if scrape_log and scrape_log.status == 'running':
-                if scrape_log.metadata is None:
-                    scrape_log.metadata = {}
-                scrape_log.metadata['task_id'] = result.id
-                scrape_log.save(update_fields=['metadata'])
-        except Exception as e:
-            logger.warning(f"Could not store task_id in ScrapeLog: {e}")
+        # Note: task_id is stored in ScrapeLog metadata when the task starts executing
         messages.success(request, f'{source_label} scraper triggered (Task ID: {result.id}).')
     except Exception as e:
         logger.error(f"Error triggering {source_label} scraper: {e}", exc_info=True)
@@ -1381,11 +1361,11 @@ def cancel_scraper_job(request, log_id):
     """Cancel a running scraper job by revoking its Celery task."""
     if request.method != 'POST':
         messages.error(request, 'Invalid request method.')
-        return redirect('admin_panel:scrape_logs')
+        return redirect('admin_panel:dashboard')
     
     if not CELERY_AVAILABLE:
         messages.error(request, 'Celery is not available.')
-        return redirect('admin_panel:scrape_logs')
+        return redirect('admin_panel:dashboard')
     
     try:
         from grants.models import ScrapeLog
@@ -1395,17 +1375,65 @@ def cancel_scraper_job(request, log_id):
         
         if scrape_log.status != 'running':
             messages.warning(request, f'Scraper job is not running (status: {scrape_log.get_status_display()}).')
-            return redirect('admin_panel:scrape_logs')
+            return redirect('admin_panel:dashboard')
         
         # Get task_id from metadata
         task_id = scrape_log.metadata.get('task_id') if scrape_log.metadata else None
         
         if not task_id:
-            messages.error(request, 'No task ID found for this scraper job.')
-            return redirect('admin_panel:scrape_logs')
+            # If no task_id in metadata, try to find all running scrapers and cancel them
+            # This handles the case where the ScrapeLog was created but task_id wasn't set yet
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"No task_id found in ScrapeLog {log_id} metadata. Trying to find running scrapers...")
+            
+            # Find all running scrapers (in case they're in a chain)
+            running_logs = ScrapeLog.objects.filter(status='running').order_by('-started_at')
+            
+            # Try to cancel all running scrapers
+            cancelled_count = 0
+            for log in running_logs:
+                log_task_id = log.metadata.get('task_id') if log.metadata else None
+                if log_task_id:
+                    try:
+                        current_app.control.revoke(log_task_id, terminate=True)
+                        log.status = 'cancelled'
+                        log.completed_at = timezone.now()
+                        log.error_message = 'Cancelled by administrator'
+                        log.save()
+                        cancelled_count += 1
+                    except Exception as e:
+                        logger.error(f"Error cancelling task {log_task_id}: {e}")
+            
+            if cancelled_count > 0:
+                messages.success(request, f'Cancelled {cancelled_count} scraper job(s).')
+            else:
+                # If no task_id found, just mark the log as cancelled
+                scrape_log.status = 'cancelled'
+                scrape_log.completed_at = timezone.now()
+                scrape_log.error_message = 'Cancelled by administrator (no task ID found)'
+                scrape_log.save()
+                messages.warning(request, 'Scraper job marked as cancelled, but no task ID was found to revoke.')
+            return redirect('admin_panel:dashboard')
         
         # Revoke the task
         current_app.control.revoke(task_id, terminate=True)
+        
+        # Also cancel any other running scrapers (they might be in the same chain)
+        # Find all other running scrapers and cancel them too
+        running_logs = ScrapeLog.objects.filter(status='running').exclude(id=scrape_log.id)
+        
+        for log in running_logs:
+            log_task_id = log.metadata.get('task_id') if log.metadata else None
+            if log_task_id:
+                try:
+                    current_app.control.revoke(log_task_id, terminate=True)
+                    log.status = 'cancelled'
+                    log.completed_at = timezone.now()
+                    log.error_message = 'Cancelled by administrator'
+                    log.save()
+                except Exception:
+                    pass
         
         # Update scrape log
         scrape_log.status = 'cancelled'
@@ -1421,7 +1449,7 @@ def cancel_scraper_job(request, log_id):
         logger.error(f"Error cancelling scraper job: {e}", exc_info=True)
         messages.error(request, f'Failed to cancel scraper job: {str(e)}')
     
-    return redirect('admin_panel:scrape_logs')
+    return redirect('admin_panel:dashboard')
 
 
 @login_required
