@@ -16,6 +16,7 @@ urlpatterns = [
     path('wipe_grants', views.wipe_grants, name='wipe_grants'),
     path('wipe_grants/<str:source>', views.wipe_grants_by_source, name='wipe_grants_by_source'),
     path('scrape_logs', views.scrape_logs, name='scrape_logs'),
+    path('scrape_logs/<int:log_id>/cancel', views.cancel_scraper_job, name='cancel_scraper_job'),
     path('scraper_status', views.scraper_status, name='scraper_status'),
     path('users', views.users_list, name='users_list'),
     path('users/<int:id>/', views.user_detail, name='user_detail'),

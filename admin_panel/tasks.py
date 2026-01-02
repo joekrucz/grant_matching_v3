@@ -78,8 +78,8 @@ def _extract_counts(data):
 
 
 if CELERY_TASKS_AVAILABLE:
-    @shared_task
-    def trigger_ukri_scrape(chain_started_at_str=None, continue_chain=True):
+    @shared_task(bind=True)
+    def trigger_ukri_scrape(self, chain_started_at_str=None, continue_chain=True):
         """Trigger UKRI scraper and optionally chain to NIHR."""
         logger.info("trigger_ukri_scrape task started")
         chain_started_at = timezone.now() if chain_started_at_str is None else timezone.datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00'))
@@ -88,9 +88,14 @@ if CELERY_TASKS_AVAILABLE:
             source='ukri',
             status='running',
             started_at=chain_started_at,
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 1, 'chain_total': chain_total}
+            metadata={
+                'chain_started_at': chain_started_at.isoformat(), 
+                'chain_position': 1, 
+                'chain_total': chain_total,
+                'task_id': self.request.id
+            }
         )
-        logger.info(f"Created ScrapeLog with ID: {scrape_log.id}")
+        logger.info(f"Created ScrapeLog with ID: {scrape_log.id}, Task ID: {self.request.id}")
         
         try:
             result = _safe_scraper_request(
@@ -128,8 +133,8 @@ if CELERY_TASKS_AVAILABLE:
                 trigger_nihr_scrape.delay(chain_started_at.isoformat(), continue_chain=True)
 
 
-    @shared_task
-    def trigger_nihr_scrape(chain_started_at_str=None, continue_chain=True):
+    @shared_task(bind=True)
+    def trigger_nihr_scrape(self, chain_started_at_str=None, continue_chain=True):
         """Trigger NIHR scraper and optionally chain to Catapult."""
         from datetime import datetime
         chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
@@ -138,7 +143,12 @@ if CELERY_TASKS_AVAILABLE:
             source='nihr',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 2, 'chain_total': chain_total}
+            metadata={
+                'chain_started_at': chain_started_at.isoformat(), 
+                'chain_position': 2, 
+                'chain_total': chain_total,
+                'task_id': self.request.id
+            }
         )
         
         try:
@@ -177,8 +187,8 @@ if CELERY_TASKS_AVAILABLE:
                 trigger_catapult_scrape.delay(chain_started_at_str, continue_chain=True)
 
 
-    @shared_task
-    def trigger_catapult_scrape(chain_started_at_str=None, continue_chain=True):
+    @shared_task(bind=True)
+    def trigger_catapult_scrape(self, chain_started_at_str=None, continue_chain=True):
         """Trigger Catapult scraper and optionally chain to Innovate UK."""
         from datetime import datetime
         chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
@@ -187,7 +197,12 @@ if CELERY_TASKS_AVAILABLE:
             source='catapult',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 3, 'chain_total': chain_total}
+            metadata={
+                'chain_started_at': chain_started_at.isoformat(), 
+                'chain_position': 3, 
+                'chain_total': chain_total,
+                'task_id': self.request.id
+            }
         )
         
         try:
@@ -226,8 +241,8 @@ if CELERY_TASKS_AVAILABLE:
                 trigger_innovate_uk_scrape.delay(chain_started_at_str, continue_chain=True)
 
 
-    @shared_task
-    def trigger_innovate_uk_scrape(chain_started_at_str=None, continue_chain=True):
+    @shared_task(bind=True)
+    def trigger_innovate_uk_scrape(self, chain_started_at_str=None, continue_chain=True):
         """Trigger Innovate UK scraper (last in chain or standalone)."""
         from datetime import datetime
         chain_started_at = datetime.fromisoformat(chain_started_at_str.replace('Z', '+00:00')) if chain_started_at_str else timezone.now()
@@ -236,7 +251,12 @@ if CELERY_TASKS_AVAILABLE:
             source='innovate_uk',
             status='running',
             started_at=timezone.now(),
-            metadata={'chain_started_at': chain_started_at.isoformat(), 'chain_position': 4, 'chain_total': chain_total}
+            metadata={
+                'chain_started_at': chain_started_at.isoformat(), 
+                'chain_position': 4, 
+                'chain_total': chain_total,
+                'task_id': self.request.id
+            }
         )
         
         try:

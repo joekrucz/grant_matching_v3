@@ -40,51 +40,21 @@
     }
     
     function updateScraperProgress(data) {
-        // Update progress bar
-        const progressBar = document.getElementById('scraper-progress-bar');
-        const progressText = document.getElementById('scraper-progress-text');
         const scraperStatusAlert = document.getElementById('scraper-status-alert');
-        const scraperDetails = document.getElementById('scraper-details');
+        const cancelForm = document.getElementById('cancel-scraper-form');
         
-        if (progressBar && progressText) {
-            const percentage = data.progress.percentage || 0;
-            const current = data.progress.current || 0;
-            const total = data.progress.total || 3;
-            
-            progressBar.style.width = percentage + '%';
-            progressBar.setAttribute('aria-valuenow', percentage);
-            progressText.textContent = `${current} of ${total} scrapers completed (${percentage.toFixed(1)}%)`;
-        }
-        
-        // Update scraper details
-        if (scraperDetails && data.scrapers) {
-            let html = '<div class="space-y-2 mt-2">';
-            data.scrapers.forEach(scraper => {
-                const statusClass = scraper.status === 'success' ? 'badge-success' : 
-                                   scraper.status === 'running' ? 'badge-info' : 'badge-error';
-                const statusLabel = scraper.status === 'success' ? 'Success' : 
-                                   scraper.status === 'running' ? 'Running' : 'Failed';
-                html += `
-                    <div class="flex items-center justify-between text-sm">
-                        <span class="font-semibold">${scraper.source.toUpperCase()}</span>
-                        <span class="badge ${statusClass}">${statusLabel}</span>
-                        <span class="text-xs text-base-content/60">
-                            ${scraper.grants_created} created, ${scraper.grants_updated} updated
-                        </span>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            if (data.total_grants_processed > 0) {
-                html += `<div class="text-sm font-semibold mt-2">Total grants processed: ${data.total_grants_processed}</div>`;
-            }
-            scraperDetails.innerHTML = html;
-        }
-        
-        // Show/hide status alert
+        // Show/hide status alert and update cancel button
         if (scraperStatusAlert) {
             if (data.status === 'running') {
                 scraperStatusAlert.classList.remove('hidden');
+                
+                // Find the first running scraper log to get its ID for cancel
+                if (data.scrapers && cancelForm) {
+                    const runningScraper = data.scrapers.find(s => s.status === 'running');
+                    if (runningScraper && runningScraper.log_id) {
+                        cancelForm.action = `/admin-panel/scrape_logs/${runningScraper.log_id}/cancel`;
+                    }
+                }
             } else if (data.status === 'idle') {
                 scraperStatusAlert.classList.add('hidden');
             }
@@ -408,22 +378,18 @@
                 Triggers sequential scraper chain: UKRI → NIHR → Catapult → Innovate UK
             </p>
             
-            <!-- Progress indicator (hidden by default) -->
+            <!-- Scraper Status (hidden by default) -->
             <div id="scraper-status-alert" class="alert alert-info mt-4 hidden">
-                <span>Status: Scrapers running... This may take several minutes.</span>
-                <div class="mt-4">
-                    <div class="flex justify-between text-sm mb-2">
-                        <span id="scraper-progress-text">Initializing...</span>
+                <div class="flex items-center justify-between w-full">
+                    <div class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        <span>Scraper running...</span>
                     </div>
-                    <progress 
-                        id="scraper-progress-bar"
-                        class="progress progress-primary w-full" 
-                        value="0" 
-                        max="100"
-                        aria-valuenow="0"
-                    ></progress>
+                    <form method="post" action="" id="cancel-scraper-form" class="m-0" onsubmit="return confirm('Are you sure you want to cancel the running scraper job?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-error btn-xs">Cancel</button>
+                    </form>
                 </div>
-                <div id="scraper-details" class="mt-4"></div>
             </div>
         </div>
     </div>

@@ -22,6 +22,7 @@
                 <th>Updated</th>
                 <th>Skipped</th>
                 <th>Error</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -29,7 +30,7 @@
             <tr>
                 <td>{{ log.get_source_display }}</td>
                 <td>
-                    <div class="badge {% if log.status == 'success' %}badge-success{% elif log.status == 'error' %}badge-error{% else %}badge-warning{% endif %}">
+                    <div class="badge {% if log.status == 'success' %}badge-success{% elif log.status == 'error' %}badge-error{% elif log.status == 'cancelled' %}badge-neutral{% else %}badge-warning{% endif %}">
                         {{ log.get_status_display }}
                     </div>
                 </td>
@@ -43,10 +44,20 @@
                 <td class="text-error text-sm">
                     {% if log.error_message %}{{ log.error_message|truncatewords:10 }}{% else %}-{% endif %}
                 </td>
+                <td>
+                    {% if log.status == 'running' and log.metadata and log.metadata.task_id %}
+                    <form method="post" action="{% url 'admin_panel:cancel_scraper_job' log.id %}" onsubmit="return confirm('Are you sure you want to cancel this scraper job?');" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-error btn-xs">Cancel</button>
+                    </form>
+                    {% else %}
+                    <span class="text-base-content/40">-</span>
+                    {% endif %}
+                </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="10" class="text-center">No scrape logs found.</td>
+                <td colspan="11" class="text-center">No scrape logs found.</td>
             </tr>
             {% endfor %}
         </tbody>

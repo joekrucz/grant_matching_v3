@@ -26,6 +26,7 @@ SCRAPE_STATUSES = [
     ('running', 'Running'),
     ('success', 'Success'),
     ('error', 'Error'),
+    ('cancelled', 'Cancelled'),
 ]
 
 
