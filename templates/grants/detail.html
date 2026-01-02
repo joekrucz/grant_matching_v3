@@ -35,32 +35,13 @@
                 View Original Grant →
             </a>
             {% endif %}
+            {% if user.admin %}
             <div class="dropdown dropdown-end">
                 <div tabindex="0" role="button" class="btn btn-sm">
                     Actions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </div>
                 <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-72 p-2 shadow-lg border border-base-300">
-                    <li>
-                        <button id="generate-checklist-btn" type="button" onclick="generateEligibilityChecklist()" class="w-full text-left">
-                <span id="checklist-btn-text">{% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Eligibility Checklist</span>
-                <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-            </button>
-                    </li>
-                    <li>
-                        <button id="generate-competitiveness-btn" type="button" onclick="generateCompetitivenessChecklist()" class="w-full text-left">
-                <span id="competitiveness-btn-text">{% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Competitiveness Checklist</span>
-                <span id="competitiveness-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-            </button>
-                    </li>
-                    <li>
-                        <button id="generate-exclusions-btn" type="button" onclick="generateExclusionsChecklist()" class="w-full text-left">
-                <span id="exclusions-btn-text">{% if grant.exclusions_checklist and grant.exclusions_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Exclusions Checklist</span>
-                <span id="exclusions-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-            </button>
-                    </li>
-                    {% if user.admin %}
-                    <li class="divider my-1"></li>
                     <li>
                         <form method="post" action="{% url 'grants:delete' grant.slug %}" onsubmit="return confirm('Are you sure you want to delete this grant? This action cannot be undone.');" class="m-0">
                             {% csrf_token %}
@@ -69,9 +50,9 @@
                             </button>
                         </form>
                     </li>
-                    {% endif %}
                 </ul>
             </div>
+            {% endif %}
         </div>
         
         <div id="eligibility-checklist-container" class="{% if not grant.eligibility_checklist or not grant.eligibility_checklist.checklist_items %}hidden{% endif %} mb-6">
