@@ -1417,7 +1417,11 @@ def cancel_scraper_job(request, log_id):
             return redirect('admin_panel:dashboard')
         
         # Revoke the task
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Revoking Celery task {task_id} for ScrapeLog {log_id}")
         current_app.control.revoke(task_id, terminate=True)
+        logger.info(f"Task {task_id} revocation command sent")
         
         # Also cancel any other running scrapers (they might be in the same chain)
         # Find all other running scrapers and cancel them too

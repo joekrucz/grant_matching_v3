@@ -35,7 +35,6 @@
             {% if user.is_authenticated %}
             <ul class="menu menu-horizontal px-1 gap-4">
                 <li><a href="{% url 'grants:list' %}" class="link link-hover">Grants</a></li>
-                <li><a href="{% url 'grants:eligibility_questionnaire' %}" class="link link-hover">Eligibility Questionnaire</a></li>
                 <li><a href="{% url 'companies:list' %}" class="link link-hover">Companies</a></li>
             </ul>
             {% endif %}
@@ -48,6 +47,7 @@
                 </div>
                 <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 bg-base-200 rounded-box w-52">
                     <li><a href="{% url 'users:profile' %}">Profile</a></li>
+                    <li><a href="{% url 'grants:eligibility_questionnaire' %}">Eligibility Questionnaire</a></li>
                     <li><a href="{% url 'grants:questionnaires_list' %}">My Questionnaires</a></li>
                     <li><a href="{% url 'companies:funding_searches_list' %}">My Funding Searches</a></li>
                     {% if user.admin %}
