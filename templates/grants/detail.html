@@ -23,7 +23,7 @@
                 <div class="badge {% if grant.source == 'ukri' %}badge-primary{% elif grant.source == 'nihr' %}badge-secondary{% else %}badge-accent{% endif %} badge-lg">
                     {{ grant.get_source_display }}
                 </div>
-                <div class="badge {% if grant.status == 'open' %}badge-success{% elif grant.status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-lg">
+                <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-lg">
                     {{ grant.get_status_display }}
                 </div>
             </div>
@@ -35,20 +35,52 @@
                 View Original Grant →
             </a>
             {% endif %}
-            <button id="generate-checklist-btn" class="btn btn-primary btn-sm" onclick="generateEligibilityChecklist()">
-                <span id="checklist-btn-text">{% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Eligibility Checklist</span>
-                <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-            </button>
-            <button id="generate-competitiveness-btn" class="btn btn-secondary btn-sm" onclick="generateCompetitivenessChecklist()">
-                <span id="competitiveness-btn-text">{% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Competitiveness Checklist</span>
-                <span id="competitiveness-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-            </button>
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-sm">
+                    Actions
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </div>
+                <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-72 p-2 shadow-lg border border-base-300">
+                    <li>
+                        <button id="generate-checklist-btn" type="button" onclick="generateEligibilityChecklist()" class="w-full text-left">
+                            <span id="checklist-btn-text">{% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Eligibility Checklist</span>
+                            <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+                        </button>
+                    </li>
+                    <li>
+                        <button id="generate-competitiveness-btn" type="button" onclick="generateCompetitivenessChecklist()" class="w-full text-left">
+                            <span id="competitiveness-btn-text">{% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Competitiveness Checklist</span>
+                            <span id="competitiveness-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+                        </button>
+                    </li>
+                    <li>
+                        <button id="generate-exclusions-btn" type="button" onclick="generateExclusionsChecklist()" class="w-full text-left">
+                            <span id="exclusions-btn-text">{% if grant.exclusions_checklist and grant.exclusions_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Exclusions Checklist</span>
+                            <span id="exclusions-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+                        </button>
+                    </li>
+                    {% if user.admin %}
+                    <li class="divider my-1"></li>
+                    <li>
+                        <form method="post" action="{% url 'grants:delete' grant.slug %}" onsubmit="return confirm('Are you sure you want to delete this grant? This action cannot be undone.');" class="m-0">
+                            {% csrf_token %}
+                            <button type="submit" class="text-error w-full text-left">
+                                Delete Grant
+                            </button>
+                        </form>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
         </div>
         
         <div id="eligibility-checklist-container" class="{% if not grant.eligibility_checklist or not grant.eligibility_checklist.checklist_items %}hidden{% endif %} mb-6">
-            <div class="card bg-base-100 border border-primary">
-                <div class="card-body">
-                    <h2 class="card-title text-2xl mb-4">Eligibility Checklist</h2>
+            <div class="collapse collapse-arrow bg-base-100 border border-primary">
+                <input type="checkbox" checked />
+                <div class="collapse-title text-2xl font-bold">
+                    Eligibility Checklist
+                </div>
+                <div class="collapse-content">
                     <div id="checklist-content">
                         {% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}
                             {% if grant.eligibility_checklist.checklist_items %}
@@ -88,9 +120,12 @@
         </div>
         
         <div id="competitiveness-checklist-container" class="{% if not grant.competitiveness_checklist or not grant.competitiveness_checklist.checklist_items %}hidden{% endif %} mb-6">
-            <div class="card bg-base-100 border border-secondary">
-                <div class="card-body">
-                    <h2 class="card-title text-2xl mb-4">Competitiveness Checklist</h2>
+            <div class="collapse collapse-arrow bg-base-100 border border-secondary">
+                <input type="checkbox" checked />
+                <div class="collapse-title text-2xl font-bold">
+                    Competitiveness Checklist
+                </div>
+                <div class="collapse-content">
                     <div id="competitiveness-content">
                         {% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}
                             {% if grant.competitiveness_checklist.checklist_items %}
@@ -129,6 +164,51 @@
             </div>
         </div>
         
+        <div id="exclusions-checklist-container" class="{% if not grant.exclusions_checklist or not grant.exclusions_checklist.checklist_items %}hidden{% endif %} mb-6">
+            <div class="collapse collapse-arrow bg-base-100 border border-error">
+                <input type="checkbox" checked />
+                <div class="collapse-title text-2xl font-bold">
+                    Exclusions Checklist
+                </div>
+                <div class="collapse-content">
+                    <div id="exclusions-content">
+                        {% if grant.exclusions_checklist and grant.exclusions_checklist.checklist_items %}
+                            {% if grant.exclusions_checklist.checklist_items %}
+                            <div class="space-y-2 mb-4">
+                                <h3 class="font-semibold text-lg mb-2">What This Grant Will NOT Fund:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for item in grant.exclusions_checklist.checklist_items %}
+                                    <li class="text-base-content/90">{{ item }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if grant.exclusions_checklist.notes %}
+                            <div class="space-y-2 mb-4">
+                                <h3 class="font-semibold text-lg mb-2">Notes:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for note in grant.exclusions_checklist.notes %}
+                                    <li class="text-base-content/80">{{ note }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if grant.exclusions_checklist.missing_info %}
+                            <div class="alert alert-warning">
+                                <h3 class="font-semibold mb-2">Missing Information:</h3>
+                                <ul class="list-disc list-inside space-y-1">
+                                    {% for info in grant.exclusions_checklist.missing_info %}
+                                    <li class="text-base-content/90">{{ info }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="collapse collapse-arrow bg-base-100 border border-base-300 mb-6">
             <input type="checkbox" />
             <div class="collapse-title text-2xl font-bold">
@@ -142,6 +222,10 @@
                 <div class="stat-value text-primary">{{ grant.funding_amount }}</div>
             </div>
             {% endif %}
+            <div class="stat">
+                <div class="stat-title">Opening Date</div>
+                <div class="stat-value text-primary">{% if grant.opening_date %}{{ grant.opening_date|date:"F d, Y" }}{% else %}Unknown{% endif %}</div>
+            </div>
             {% if grant.deadline %}
             <div class="stat">
                 <div class="stat-title">Deadline</div>
@@ -306,15 +390,26 @@ async function generateEligibilityChecklist() {
             html += '</div>';
         }
         
-        if (data.missing_info && data.missing_info.length > 0) {
-            html += '<div class="alert alert-warning">';
-            html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
-            html += '<ul class="list-disc list-inside space-y-1">';
-            data.missing_info.forEach(info => {
-                html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
-            });
-            html += '</ul>';
-            html += '</div>';
+        if (data.missing_info) {
+            // Ensure missing_info is an array (handle both string and array cases)
+            const missingInfoArray = Array.isArray(data.missing_info) 
+                ? data.missing_info 
+                : (typeof data.missing_info === 'string' && data.missing_info.trim() 
+                    ? [data.missing_info] 
+                    : []);
+            
+            if (missingInfoArray.length > 0) {
+                html += '<div class="alert alert-warning">';
+                html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
+                html += '<ul class="list-disc list-inside space-y-1">';
+                missingInfoArray.forEach(info => {
+                    if (info && info.trim()) {
+                        html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
+                    }
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
         }
         
         if (!html) {
@@ -327,6 +422,115 @@ async function generateEligibilityChecklist() {
         // Update button text to "Regenerate"
         const btnText = document.getElementById('checklist-btn-text');
         btnText.textContent = 'Regenerate Eligibility Checklist';
+        
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;
+        container.classList.remove('hidden');
+    } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnLoading.classList.add('hidden');
+    }
+}
+
+async function generateExclusionsChecklist() {
+    const btn = document.getElementById('generate-exclusions-btn');
+    const btnText = document.getElementById('exclusions-btn-text');
+    const btnLoading = document.getElementById('exclusions-btn-loading');
+    const container = document.getElementById('exclusions-checklist-container');
+    const content = document.getElementById('exclusions-content');
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    btnLoading.classList.remove('hidden');
+    container.classList.add('hidden');
+    content.innerHTML = '';
+    
+    try {
+        const grantId = document.getElementById('page-context').dataset.grantId;
+        if (!grantId) {
+            throw new Error('Grant ID not found');
+        }
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || getCookie('csrftoken');
+        
+        const response = await fetch('{% url "grants:exclusions_checklist" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+                grant_id: parseInt(grantId),
+            }),
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Build HTML for checklist
+        let html = '';
+        
+        if (data.checklist_items && data.checklist_items.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">What This Grant Will NOT Fund:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.checklist_items.forEach(item => {
+                html += `<li class="text-base-content/90">${escapeHtml(item)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.notes && data.notes.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">Notes:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.notes.forEach(note => {
+                html += `<li class="text-base-content/80">${escapeHtml(note)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.missing_info) {
+            // Ensure missing_info is an array (handle both string and array cases)
+            const missingInfoArray = Array.isArray(data.missing_info) 
+                ? data.missing_info 
+                : (typeof data.missing_info === 'string' && data.missing_info.trim() 
+                    ? [data.missing_info] 
+                    : []);
+            
+            if (missingInfoArray.length > 0) {
+                html += '<div class="alert alert-warning">';
+                html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
+                html += '<ul class="list-disc list-inside space-y-1">';
+                missingInfoArray.forEach(info => {
+                    if (info && info.trim()) {
+                        html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
+                    }
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
+        }
+        
+        if (!html) {
+            html = '<p class="text-base-content/70">No exclusion information could be extracted from this grant.</p>';
+        }
+        
+        content.innerHTML = html;
+        container.classList.remove('hidden');
+        
+        // Update button text to "Regenerate"
+        const exclusionsBtnText = document.getElementById('exclusions-btn-text');
+        exclusionsBtnText.textContent = 'Regenerate Exclusions Checklist';
         
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;
@@ -404,15 +608,26 @@ async function generateCompetitivenessChecklist() {
             html += '</div>';
         }
         
-        if (data.missing_info && data.missing_info.length > 0) {
-            html += '<div class="alert alert-warning">';
-            html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
-            html += '<ul class="list-disc list-inside space-y-1">';
-            data.missing_info.forEach(info => {
-                html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
-            });
-            html += '</ul>';
-            html += '</div>';
+        if (data.missing_info) {
+            // Ensure missing_info is an array (handle both string and array cases)
+            const missingInfoArray = Array.isArray(data.missing_info) 
+                ? data.missing_info 
+                : (typeof data.missing_info === 'string' && data.missing_info.trim() 
+                    ? [data.missing_info] 
+                    : []);
+            
+            if (missingInfoArray.length > 0) {
+                html += '<div class="alert alert-warning">';
+                html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
+                html += '<ul class="list-disc list-inside space-y-1">';
+                missingInfoArray.forEach(info => {
+                    if (info && info.trim()) {
+                        html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
+                    }
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
         }
         
         if (!html) {
@@ -424,6 +639,115 @@ async function generateCompetitivenessChecklist() {
         
         // Update button text to "Regenerate"
         btnText.textContent = 'Regenerate Competitiveness Checklist';
+        
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;
+        container.classList.remove('hidden');
+    } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnLoading.classList.add('hidden');
+    }
+}
+
+async function generateExclusionsChecklist() {
+    const btn = document.getElementById('generate-exclusions-btn');
+    const btnText = document.getElementById('exclusions-btn-text');
+    const btnLoading = document.getElementById('exclusions-btn-loading');
+    const container = document.getElementById('exclusions-checklist-container');
+    const content = document.getElementById('exclusions-content');
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    btnLoading.classList.remove('hidden');
+    container.classList.add('hidden');
+    content.innerHTML = '';
+    
+    try {
+        const grantId = document.getElementById('page-context').dataset.grantId;
+        if (!grantId) {
+            throw new Error('Grant ID not found');
+        }
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || getCookie('csrftoken');
+        
+        const response = await fetch('{% url "grants:exclusions_checklist" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+                grant_id: parseInt(grantId),
+            }),
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Build HTML for checklist
+        let html = '';
+        
+        if (data.checklist_items && data.checklist_items.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">What This Grant Will NOT Fund:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.checklist_items.forEach(item => {
+                html += `<li class="text-base-content/90">${escapeHtml(item)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.notes && data.notes.length > 0) {
+            html += '<div class="space-y-2 mb-4">';
+            html += '<h3 class="font-semibold text-lg mb-2">Notes:</h3>';
+            html += '<ul class="list-disc list-inside space-y-1">';
+            data.notes.forEach(note => {
+                html += `<li class="text-base-content/80">${escapeHtml(note)}</li>`;
+            });
+            html += '</ul>';
+            html += '</div>';
+        }
+        
+        if (data.missing_info) {
+            // Ensure missing_info is an array (handle both string and array cases)
+            const missingInfoArray = Array.isArray(data.missing_info) 
+                ? data.missing_info 
+                : (typeof data.missing_info === 'string' && data.missing_info.trim() 
+                    ? [data.missing_info] 
+                    : []);
+            
+            if (missingInfoArray.length > 0) {
+                html += '<div class="alert alert-warning">';
+                html += '<h3 class="font-semibold mb-2">Missing Information:</h3>';
+                html += '<ul class="list-disc list-inside space-y-1">';
+                missingInfoArray.forEach(info => {
+                    if (info && info.trim()) {
+                        html += `<li class="text-base-content/90">${escapeHtml(info)}</li>`;
+                    }
+                });
+                html += '</ul>';
+                html += '</div>';
+            }
+        }
+        
+        if (!html) {
+            html = '<p class="text-base-content/70">No exclusion information could be extracted from this grant.</p>';
+        }
+        
+        content.innerHTML = html;
+        container.classList.remove('hidden');
+        
+        // Update button text to "Regenerate"
+        const exclusionsBtnText = document.getElementById('exclusions-btn-text');
+        exclusionsBtnText.textContent = 'Regenerate Exclusions Checklist';
         
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error"><p>Error: ${escapeHtml(error.message)}</p></div>`;

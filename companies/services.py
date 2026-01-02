@@ -471,6 +471,16 @@ Grant #{index + 1}:
         else:
             grant_text += "\nCompetitiveness Checklist: Not available (will need to extract from grant description)\n"
         
+        # Add exclusions checklist if available
+        exclusions_checklist = grant_data.get('exclusions_checklist', {})
+        exclusions_items = exclusions_checklist.get('checklist_items', [])
+        if exclusions_items:
+            grant_text += "\nExclusions Checklist (What This Grant Will NOT Fund):\n"
+            for i, item in enumerate(exclusions_items, 1):
+                grant_text += f"  {i}. {item}\n"
+        else:
+            grant_text += "\nExclusions Checklist: Not available (will need to extract from grant description)\n"
+        
         return grant_text
     
     def match_grants_batch(self, project_description, grants_batch):
@@ -493,21 +503,26 @@ FUNDING OPPORTUNITY:
 You must:
 1. If the grant has an "Eligibility Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
 2. If the grant has a "Competitiveness Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
-3. If checklists are not provided, extract eligibility criteria and competitiveness factors from the grant description.
-4. For EACH checklist item (whether provided or extracted), evaluate if the company/project meets the criterion based ONLY on the PROJECT DESCRIPTION provided above.
-5. Assign a status: "yes" (meets criterion), "no" (does not meet), or "don't know" (insufficient information in input sources).
-6. Provide a brief reason for each status.
-7. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist.
-8. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist.
-9. Provide an overall explanation (2-3 sentences).
+3. If the grant has an "Exclusions Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
+4. If checklists are not provided, extract eligibility criteria, competitiveness factors, and exclusions from the grant description.
+5. For EACH checklist item (whether provided or extracted), evaluate if the company/project meets the criterion based ONLY on the PROJECT DESCRIPTION provided above.
+6. For Exclusions Checklist items: "yes" means the project DOES fall into this exclusion (BAD - disqualifying), "no" means it does NOT fall into this exclusion (GOOD), "don't know" means insufficient information.
+7. For Eligibility and Competitiveness items: "yes" means the project meets the criterion (GOOD), "no" means it does not meet (BAD), "don't know" means insufficient information.
+8. Assign a status: "yes", "no", or "don't know" for each item.
+9. Provide a brief reason for each status.
+10. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist.
+11. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist.
+12. Calculate exclusions_score (0.0-1.0) based on percentage of "no" answers in exclusions checklist (higher is better - means fewer exclusions apply).
+13. Provide an overall explanation (2-3 sentences).
 
 CRITICAL REQUIREMENTS:
 - If a grant provides checklists, you MUST copy the criterion text EXACTLY as shown - character for character, word for word. Do not modify, rephrase, or summarize the criterion text.
 - Return evaluations in the SAME ORDER as the provided checklists.
 - The "criterion" field in your response must match the original text EXACTLY.
-- If checklists are not provided, extract ALL eligibility requirements and competitiveness factors from the grant description.
+- If checklists are not provided, extract ALL eligibility requirements, competitiveness factors, and exclusions from the grant description.
 - For each checklist item, evaluate based ONLY on the provided PROJECT DESCRIPTION. If information is not available, use "don't know".
-- The evaluation should be consistent: "yes" means the project clearly meets the criterion, "no" means it clearly does not, "don't know" means there's insufficient information to determine.
+- For Exclusions Checklist: "yes" = project IS excluded (disqualifying), "no" = project is NOT excluded (good), "don't know" = insufficient info.
+- For Eligibility/Competitiveness: "yes" = project meets criterion (good), "no" = does not meet (bad), "don't know" = insufficient info.
 - Respond with a valid JSON object containing a single match result (not an array)
 
 Format:
@@ -515,6 +530,7 @@ Format:
     "grant_index": 0,
     "eligibility_score": 0.90,
     "competitiveness_score": 0.80,
+    "exclusions_score": 0.95,
     "eligibility_checklist": [
         {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
         {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}},
@@ -523,6 +539,10 @@ Format:
     "competitiveness_checklist": [
         {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
         {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}}
+    ],
+    "exclusions_checklist": [
+        {{"criterion": "Use the exact criterion text from the provided exclusions checklist", "status": "no", "reason": "Project does not fall into this exclusion category"}},
+        {{"criterion": "Another exclusion from the checklist", "status": "yes", "reason": "Project does fall into this exclusion - this is disqualifying"}}
     ],
     "explanation": "This grant is highly relevant because..."
 }}
@@ -612,6 +632,8 @@ IMPORTANT:
                     logger.warning(f"Match result missing competitiveness_checklist. Keys: {list(first_match.keys())}")
                 else:
                     logger.info(f"Competitiveness checklist has {len(first_match.get('competitiveness_checklist', []))} items")
+                if 'exclusions_checklist' in first_match:
+                    logger.info(f"Exclusions checklist has {len(first_match.get('exclusions_checklist', []))} items")
             
             return matches
             
@@ -721,9 +743,11 @@ IMPORTANT:
                                 'grant_index': batch_num + idx,
                                 'eligibility_score': 0.0,
                                 'competitiveness_score': 0.0,
+                                'exclusions_score': 0.0,
                                 'explanation': 'Error processing this grant - JSON decode failed',
                                 'eligibility_checklist': [],
                                 'competitiveness_checklist': [],
+                                'exclusions_checklist': [],
                                 'alignment_points': [],
                                 'concerns': ['Processing error'],
                             })

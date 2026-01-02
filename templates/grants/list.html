@@ -4,9 +4,22 @@
 
 {% block content %}
 <div class="mb-6">
-    <h1 class="text-3xl font-bold mb-4">Grants</h1>
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-3xl font-bold">Grants</h1>
+        <div class="flex gap-2">
+            <a href="?{% if query %}q={{ query }}&{% endif %}{% if source_filter %}source={{ source_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if sort_by %}sort={{ sort_by }}&{% endif %}{% if sort_order %}order={{ sort_order }}&{% endif %}view=table" 
+               class="btn btn-sm {% if request.GET.view == 'table' or not request.GET.view %}btn-active{% else %}btn-outline{% endif %}">
+                Table
+            </a>
+            <a href="?{% if query %}q={{ query }}&{% endif %}{% if source_filter %}source={{ source_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if sort_by %}sort={{ sort_by }}&{% endif %}{% if sort_order %}order={{ sort_order }}&{% endif %}view=cards" 
+               class="btn btn-sm {% if request.GET.view == 'cards' %}btn-active{% else %}btn-outline{% endif %}">
+                Cards
+            </a>
+        </div>
+    </div>
     
     <form method="get" action="{% url 'grants:list' %}" class="mb-6">
+        {% if request.GET.view %}<input type="hidden" name="view" value="{{ request.GET.view }}">{% endif %}
         <div class="flex flex-wrap gap-4">
             <input 
                 type="text" 
@@ -50,31 +63,91 @@
     </form>
 </div>
 
-<div class="space-y-4">
+{% if request.GET.view == 'table' or not request.GET.view %}
+<!-- Table View -->
+<div class="overflow-x-auto">
+    <table class="table table-zebra w-full">
+        <thead>
+            <tr>
+                <th>Grant Name</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Opening Date</th>
+                <th>Closing Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for grant in page_obj %}
+            <tr>
+                <td>
+                    <a href="{% url 'grants:detail' grant.slug %}" class="link link-primary font-semibold">
+                        {{ grant.title }}
+                    </a>
+                </td>
+                <td>
+                    <div class="badge {% if grant.source == 'ukri' %}badge-primary{% elif grant.source == 'nihr' %}badge-secondary{% elif grant.source == 'catapult' %}badge-accent{% else %}badge-info{% endif %}">
+                        {{ grant.get_source_display }}
+                    </div>
+                </td>
+                <td>
+                    <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
+                        {{ grant.get_status_display }}
+                    </div>
+                </td>
+                <td>
+                    {% if grant.opening_date %}
+                        {{ grant.opening_date|date:"M d, Y" }}
+                    {% else %}
+                        <span class="text-base-content/50">Unknown</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if grant.deadline %}
+                        {{ grant.deadline|date:"M d, Y" }}
+                    {% else %}
+                        <span class="text-base-content/50">Unknown</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">
+                    <div class="alert alert-info">
+                        <span>No grants found.</span>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<!-- Grid View -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for grant in page_obj %}
-    <div class="card bg-base-200">
-        <div class="card-body">
+    <div class="card bg-base-200 h-full flex flex-col">
+        <div class="card-body flex-grow">
             <div class="flex justify-between items-start mb-2">
-                <h2 class="card-title">
-                    <a href="{% url 'grants:detail' grant.slug %}" class="link link-primary">
+                <h2 class="card-title text-lg">
+                    <a href="{% url 'grants:detail' grant.slug %}" class="link link-primary line-clamp-2">
                         {{ grant.title }}
                     </a>
                 </h2>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-shrink-0">
                     <div class="badge {% if grant.source == 'ukri' %}badge-primary{% elif grant.source == 'nihr' %}badge-secondary{% else %}badge-accent{% endif %}">
                         {{ grant.get_source_display }}
                     </div>
-                    <div class="badge {% if grant.status == 'open' %}badge-success{% elif grant.status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
+                    <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
                         {{ grant.get_status_display }}
                     </div>
                 </div>
             </div>
             
             {% if grant.summary %}
-            <p class="text-base-content/70 mb-3">{{ grant.summary|truncatewords:30 }}</p>
+            <p class="text-base-content/70 mb-3 line-clamp-3">{{ grant.summary|truncatewords:30 }}</p>
             {% endif %}
             
-            <div class="card-actions justify-start">
+            <div class="card-actions justify-start mt-auto">
                 {% if grant.deadline %}
                 <div class="badge badge-outline">Deadline: {{ grant.deadline|date:"M d, Y" }}</div>
                 {% endif %}
@@ -85,16 +158,19 @@
         </div>
     </div>
     {% empty %}
-    <div class="alert alert-info">
-        <span>No grants found.</span>
+    <div class="col-span-full">
+        <div class="alert alert-info">
+            <span>No grants found.</span>
+        </div>
     </div>
     {% endfor %}
 </div>
+{% endif %}
 
 {% if page_obj.has_other_pages %}
 <div class="join flex justify-center mt-6">
     {% if page_obj.has_previous %}
-    <a href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}{% if sort_order %}&order={{ sort_order }}{% endif %}" 
+    <a href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}{% if sort_order %}&order={{ sort_order }}{% endif %}{% if request.GET.view %}&view={{ request.GET.view }}{% endif %}" 
        class="join-item btn">
         Previous
     </a>
@@ -105,7 +181,7 @@
     </button>
     
     {% if page_obj.has_next %}
-    <a href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}{% if sort_order %}&order={{ sort_order }}{% endif %}" 
+    <a href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if sort_by %}&sort={{ sort_by }}{% endif %}{% if sort_order %}&order={{ sort_order }}{% endif %}{% if request.GET.view %}&view={{ request.GET.view }}{% endif %}" 
        class="join-item btn">
         Next
     </a>

@@ -529,20 +529,76 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           else:
             summary = description[:200] + "..." if len(description) > 200 else description
           
-          # Try to extract deadline
+          # Extract opening and closing dates from the summary-list structure
           deadline_raw = None
-          deadline_patterns = [
-              r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-              r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-              r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{4})",
-              r"(\d{1,2}\s+\w+\s+\d{4})",  # "31 December 2024"
-          ]
-          page_text = detail_soup.get_text()
-          for pattern in deadline_patterns:
-            match = re.search(pattern, page_text, re.IGNORECASE)
-            if match:
-              deadline_raw = match.group(1)
-              break
+          opening_date_raw = None
+          page_text = detail_soup.get_text()  # Get page text once for use in multiple places
+          
+          # First, try to extract from the structured ul.summary-list format
+          summary_list = detail_soup.select_one("ul.summary-list")
+          if summary_list:
+            list_items = summary_list.find_all("li", recursive=False)
+            for li in list_items:
+              # Find the label div
+              label_div = li.select_one("div.label")
+              if not label_div:
+                continue
+              
+              label_text = label_div.get_text(strip=True).lower()
+              
+              # Find the value div
+              value_div = li.select_one("div.value")
+              if not value_div:
+                continue
+              
+              # Check for opening date
+              if "opening date" in label_text:
+                # Try to get datetime attribute from time element first (most reliable)
+                time_el = value_div.select_one("time[datetime]")
+                if time_el:
+                  opening_date_raw = time_el.get("datetime")
+                else:
+                  # Fallback to text content
+                  opening_date_raw = value_div.get_text(strip=True)
+              
+              # Check for closing date
+              elif "closing date" in label_text:
+                # Try to get datetime attribute from time element first (most reliable)
+                time_el = value_div.select_one("time[datetime]")
+                if time_el:
+                  deadline_raw = time_el.get("datetime")
+                else:
+                  # Fallback to text content
+                  deadline_raw = value_div.get_text(strip=True)
+          
+          # Fallback to regex patterns if structured format not found
+          if not deadline_raw or not opening_date_raw:
+            # Only search for missing dates
+            if not deadline_raw:
+              deadline_patterns = [
+                  r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{4})",
+                  r"(\d{1,2}\s+\w+\s+\d{4})",  # "31 December 2024"
+              ]
+              for pattern in deadline_patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE)
+                if match:
+                  deadline_raw = match.group(1)
+                  break
+            
+            if not opening_date_raw:
+              opening_patterns = [
+                  r"opening[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"opens?[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"opening[:\s]+(\d{1,2}\s+\w+\s+\d{4})",
+                  r"opens?[:\s]+(\d{1,2}\s+\w+\s+\d{4})",
+              ]
+              for pattern in opening_patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE)
+                if match:
+                  opening_date_raw = match.group(1)
+                  break
           
           # Try to extract funding amount
           funding_amount = None
@@ -586,8 +642,9 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               "summary": summary,
               "description": formatted_description,
               "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
+              "opening_date": parse_deadline(opening_date_raw) if opening_date_raw else None,
               "funding_amount": funding_amount,
-              "status": "open",
+              "status": "unknown",  # Status is computed from dates, not stored
               "raw_data": {
                   "listing_url": listing_url,
                   "scraped_url": href,
@@ -805,22 +862,78 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           else:
             summary = description[:200] + "..." if len(description) > 200 else description
           
-          # Extract deadline and funding amount (same logic as above)
+          # Extract opening and closing dates from the summary-list structure
           deadline_raw = None
+          opening_date_raw = None
+          page_text = detail_soup.get_text()  # Get page text once for use in multiple places
+          
+          # First, try to extract from the structured ul.summary-list format
+          summary_list = detail_soup.select_one("ul.summary-list")
+          if summary_list:
+            list_items = summary_list.find_all("li", recursive=False)
+            for li in list_items:
+              # Find the label div
+              label_div = li.select_one("div.label")
+              if not label_div:
+                continue
+              
+              label_text = label_div.get_text(strip=True).lower()
+              
+              # Find the value div
+              value_div = li.select_one("div.value")
+              if not value_div:
+                continue
+              
+              # Check for opening date
+              if "opening date" in label_text:
+                # Try to get datetime attribute from time element first (most reliable)
+                time_el = value_div.select_one("time[datetime]")
+                if time_el:
+                  opening_date_raw = time_el.get("datetime")
+                else:
+                  # Fallback to text content
+                  opening_date_raw = value_div.get_text(strip=True)
+              
+              # Check for closing date
+              elif "closing date" in label_text:
+                # Try to get datetime attribute from time element first (most reliable)
+                time_el = value_div.select_one("time[datetime]")
+                if time_el:
+                  deadline_raw = time_el.get("datetime")
+                else:
+                  # Fallback to text content
+                  deadline_raw = value_div.get_text(strip=True)
+          
+          # Fallback to regex patterns if structured format not found
+          if not deadline_raw or not opening_date_raw:
+            # Only search for missing dates
+            if not deadline_raw:
+              deadline_patterns = [
+                  r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"(\d{1,2}\s+\w+\s+\d{4})",
+              ]
+              for pattern in deadline_patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE)
+                if match:
+                  deadline_raw = match.group(1)
+                  break
+            
+            if not opening_date_raw:
+              opening_patterns = [
+                  r"opening[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"opens?[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                  r"opening[:\s]+(\d{1,2}\s+\w+\s+\d{4})",
+                  r"opens?[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+              ]
+              for pattern in opening_patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE)
+                if match:
+                  opening_date_raw = match.group(1)
+                  break
+          
+          # Extract funding amount
           funding_amount = None
-          page_text = detail_soup.get_text()
-          
-          deadline_patterns = [
-              r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-              r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-              r"(\d{1,2}\s+\w+\s+\d{4})",
-          ]
-          for pattern in deadline_patterns:
-            match = re.search(pattern, page_text, re.IGNORECASE)
-            if match:
-              deadline_raw = match.group(1)
-              break
-          
           funding_patterns = [
               r"£[\d,]+",
               r"funding[:\s]+£?([\d,]+)",
@@ -839,8 +952,9 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               "summary": summary,
               "description": formatted_description,
               "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
+              "opening_date": parse_deadline(opening_date_raw) if opening_date_raw else None,
               "funding_amount": funding_amount,
-              "status": "open",
+              "status": "unknown",  # Status is computed from dates, not stored
               "raw_data": {
                   "listing_url": listing_url,
                   "scraped_url": url,

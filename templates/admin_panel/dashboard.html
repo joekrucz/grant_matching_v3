@@ -296,9 +296,89 @@
 <h1 class="text-3xl font-bold mb-6">Admin Dashboard</h1>
 
 <div class="space-y-4">
-    <div class="card bg-base-200">
-        <div class="card-body">
-            <h2 class="card-title">Scraper Actions</h2>
+    <!-- First 4 sections in a 2x2 grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="card-title">Scraper Actions</h2>
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-sm">
+                        Actions
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-72 p-2 shadow-lg border border-base-300">
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:run_scrapers' %}" id="run-scrapers-form" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left" onclick="startScraperPolling(); return true;">Run All Scrapers</button>
+                            </form>
+                        </li>
+                        <li class="divider my-1"></li>
+                        <li><span class="text-xs font-semibold text-base-content/60 px-2">Run Individual Scrapers</span></li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:run_ukri_scraper' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left">Run UKRI</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:run_nihr_scraper' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left">Run NIHR</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:run_catapult_scraper' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left">Run Catapult</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:run_innovate_uk_scraper' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left">Run Innovate UK</button>
+                            </form>
+                        </li>
+                        <li class="divider my-1"></li>
+                        <li><span class="text-xs font-semibold text-base-content/60 px-2">Wipe Grants by Source</span></li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:wipe_grants_by_source' 'ukri' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="text-error w-full text-left" onclick="return confirm('Are you sure you want to delete all UKRI grants?');">Wipe UKRI</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:wipe_grants_by_source' 'nihr' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="text-error w-full text-left" onclick="return confirm('Are you sure you want to delete all NIHR grants?');">Wipe NIHR</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:wipe_grants_by_source' 'catapult' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="text-error w-full text-left" onclick="return confirm('Are you sure you want to delete all Catapult grants?');">Wipe Catapult</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:wipe_grants_by_source' 'innovate_uk' %}" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="text-error w-full text-left" onclick="return confirm('Are you sure you want to delete all Innovate UK grants?');">Wipe Innovate UK</button>
+                            </form>
+                        </li>
+                        <li class="divider my-1"></li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:wipe_grants' %}" id="wipe-grants-form" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="text-error w-full text-left" onclick="return confirm('⚠️ WARNING: This will permanently delete ALL grants from the database.\\n\\nThis action cannot be undone. Are you absolutely sure you want to continue?');">Wipe All Grants</button>
+                            </form>
+                        </li>
+                        <li>
+                            <a href="{% url 'admin_panel:scrape_logs' %}" class="w-full text-left">Scrape Logs</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
             <div class="mb-4">
                 <div class="text-sm space-y-1">
                     <div class="flex justify-between">
@@ -324,42 +404,9 @@
                 <p class="text-xs text-base-content/60 mt-1">{{ celery_details }}</p>
                 {% endif %}
             </div>
-            <form method="post" action="{% url 'admin_panel:run_scrapers' %}" id="run-scrapers-form">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-primary" id="run-scrapers-btn" onclick="startScraperPolling(); return true;">Run Scrapers</button>
-            </form>
-            <p class="text-sm text-base-content/60 mt-2">
+            <p class="text-sm text-base-content/60">
                 Triggers sequential scraper chain: UKRI → NIHR → Catapult → Innovate UK
             </p>
-            <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-                <form method="post" action="{% url 'admin_panel:run_ukri_scraper' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline btn-primary w-full">Run UKRI</button>
-                </form>
-                <form method="post" action="{% url 'admin_panel:run_nihr_scraper' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline btn-primary w-full">Run NIHR</button>
-                </form>
-                <form method="post" action="{% url 'admin_panel:run_catapult_scraper' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline btn-primary w-full">Run Catapult</button>
-                </form>
-                <form method="post" action="{% url 'admin_panel:run_innovate_uk_scraper' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline btn-primary w-full">Run Innovate UK</button>
-                </form>
-            </div>
-            <div class="mt-4 flex gap-2">
-                <div class="max-w-xs">
-                <form method="post" action="{% url 'admin_panel:wipe_grants' %}" id="wipe-grants-form">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-error btn-outline w-full" id="wipe-grants-btn">
-                        Wipe All Grants
-                    </button>
-                </form>
-                </div>
-                <a href="{% url 'admin_panel:scrape_logs' %}" class="btn btn-ghost">Scrape Logs</a>
-            </div>
             
             <!-- Progress indicator (hidden by default) -->
             <div id="scraper-status-alert" class="alert alert-info mt-4 hidden">
@@ -383,11 +430,53 @@
     
     <div class="card bg-base-200">
         <div class="card-body">
-            <h2 class="card-title">Companies House Data</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="card-title">Companies House Data</h2>
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-sm">
+                        Actions
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-56 p-2 shadow-lg border border-base-300">
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:refresh_companies' %}" id="refresh-companies-form" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="w-full text-left" id="refresh-companies-btn">Refresh Companies House Data</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            </div>
             <div class="mb-4">
-                <p class="text-sm text-base-content/60">
+                <p class="text-sm text-base-content/60 mb-2">
                     Refresh Companies House data and filing history for all registered companies.
                 </p>
+                <div class="text-sm space-y-1">
+                    <div class="flex justify-between">
+                        <span class="font-semibold">Total Companies:</span>
+                        <span>{{ total_companies }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Registered Companies:</span>
+                        <span>{{ registered_companies }} / {{ total_companies }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>With Filing History:</span>
+                        <span>{{ companies_with_filing_history }} / {{ total_companies }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>With 360Giving Grants:</span>
+                        <span>{{ companies_with_360_grants }} / {{ total_companies }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Updated (Last 7 Days):</span>
+                        <span>{{ companies_updated_recently }} / {{ total_companies }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Needing Refresh:</span>
+                        <span class="{% if companies_needing_refresh > 0 %}text-warning{% endif %}">{{ companies_needing_refresh }}</span>
+                    </div>
+                </div>
                 {% if last_refresh_task and last_refresh_task.completed %}
                     {% if last_refresh_task.status == 'completed' %}
                         <div class="alert alert-success mt-2">
@@ -400,12 +489,6 @@
                     {% endif %}
                 {% endif %}
             </div>
-            <form method="post" action="{% url 'admin_panel:refresh_companies' %}" id="refresh-companies-form">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-secondary" id="refresh-companies-btn">
-                    Refresh Companies House Data
-                </button>
-            </form>
             
             <!-- Progress indicator (hidden by default) -->
             <div id="companies-refresh-status-alert" class="alert alert-info mt-4 hidden">
@@ -426,12 +509,51 @@
             </div>
         </div>
     </div>
+    
     <div class="card bg-base-200">
-        <div class="card-body">
-            <h2 class="card-title">Checklist Generation</h2>
+            <div class="card-body">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="card-title">Checklist Generation</h2>
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-sm">
+                        Actions
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-72 p-2 shadow-lg border border-base-300">
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-eligibility-checklists-form" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="checklist_type" value="eligibility">
+                                <button type="submit" class="w-full text-left" id="generate-eligibility-checklists-btn">Generate Eligibility Checklists</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-competitiveness-checklists-form" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="checklist_type" value="competitiveness">
+                                <button type="submit" class="w-full text-left" id="generate-competitiveness-checklists-btn">Generate Competitiveness Checklists</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-exclusions-checklists-form" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="checklist_type" value="exclusions">
+                                <button type="submit" class="w-full text-left" id="generate-exclusions-checklists-btn">Generate Exclusions Checklists</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-all-checklists-form" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="checklist_type" value="all">
+                                <button type="submit" class="w-full text-left" id="generate-all-checklists-btn">Generate All Three Checklists</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            </div>
             <div class="mb-4">
                 <p class="text-sm text-base-content/60 mb-2">
-                    Generate eligibility and/or competitiveness checklists for all grants using AI.
+                    Generate eligibility, competitiveness, and/or exclusions checklists for all grants using AI.
                 </p>
                 <div class="text-sm space-y-1">
                     <div class="flex justify-between">
@@ -447,33 +569,14 @@
                         <span>{{ grants_with_competitiveness }} / {{ total_grants }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span>Both Checklists:</span>
-                        <span>{{ grants_with_both }} / {{ total_grants }}</span>
+                        <span>Exclusions Checklists:</span>
+                        <span>{{ grants_with_exclusions }} / {{ total_grants }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>All Three Checklists:</span>
+                        <span>{{ grants_with_all_three }} / {{ total_grants }}</span>
                     </div>
                 </div>
-            </div>
-            <div class="flex flex-wrap gap-2 mb-4">
-                <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-eligibility-checklists-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="checklist_type" value="eligibility">
-                    <button type="submit" class="btn btn-primary" id="generate-eligibility-checklists-btn">
-                        Generate Eligibility Checklists
-                    </button>
-                </form>
-                <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-competitiveness-checklists-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="checklist_type" value="competitiveness">
-                    <button type="submit" class="btn btn-secondary" id="generate-competitiveness-checklists-btn">
-                        Generate Competitiveness Checklists
-                    </button>
-                </form>
-                <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-both-checklists-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="checklist_type" value="both">
-                    <button type="submit" class="btn btn-accent" id="generate-both-checklists-btn">
-                        Generate Both Checklists
-                    </button>
-                </form>
             </div>
             
             <!-- Progress indicator (hidden by default) -->
@@ -506,9 +609,22 @@
         </div>
     </div>
     
-    <div class="card bg-base-200">
-        <div class="card-body">
-            <h2 class="card-title">User Management</h2>
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="card-title">User Management</h2>
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-sm">
+                        Actions
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-56 p-2 shadow-lg border border-base-300">
+                        <li>
+                            <a href="{% url 'admin_panel:users_list' %}" class="w-full text-left">Manage Users</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
             <div class="mb-4">
                 <div class="text-sm space-y-1">
                     <div class="flex justify-between">
@@ -525,12 +641,11 @@
                     </div>
                 </div>
             </div>
-            <div class="flex gap-2">
-                <a href="{% url 'admin_panel:users_list' %}" class="btn btn-primary">Manage Users</a>
-            </div>
         </div>
     </div>
+    </div>
     
+    <!-- Slack Bot Logs section (outside grid) -->
     <div class="card bg-base-200">
         <div class="card-body">
             <h2 class="card-title">Slack Bot Logs</h2>
@@ -612,7 +727,7 @@
             // Try to get task ID from URL or localStorage
             const urlParams = new URLSearchParams(window.location.search);
             checklistGenerationTaskId = urlParams.get('checklist_task_id') || localStorage.getItem('checklistGenerationTaskId');
-            checklistGenerationType = urlParams.get('checklist_type') || localStorage.getItem('checklistGenerationType') || 'both';
+            checklistGenerationType = urlParams.get('checklist_type') || localStorage.getItem('checklistGenerationType') || 'all';
         }
         
         if (!checklistGenerationTaskId) {
@@ -676,7 +791,7 @@
         if (cancelForm && cancelTaskIdInput && cancelChecklistTypeInput) {
             if (data.status === 'running' && data.task_id) {
                 cancelTaskIdInput.value = data.task_id;
-                cancelChecklistTypeInput.value = checklistGenerationType || 'both';
+                cancelChecklistTypeInput.value = checklistGenerationType || 'all';
                 cancelForm.classList.remove('hidden');
             } else {
                 cancelForm.classList.add('hidden');
@@ -755,7 +870,8 @@
         const forms = [
             document.getElementById('generate-eligibility-checklists-form'),
             document.getElementById('generate-competitiveness-checklists-form'),
-            document.getElementById('generate-both-checklists-form')
+            document.getElementById('generate-exclusions-checklists-form'),
+            document.getElementById('generate-all-checklists-form')
         ];
         
         forms.forEach(form => {
@@ -805,7 +921,7 @@
         const checklistType = localStorage.getItem('checklistGenerationType');
         if (taskId) {
             checklistGenerationTaskId = taskId;
-            checklistGenerationType = checklistType || 'both';
+            checklistGenerationType = checklistType || 'all';
             fetch(`/admin-panel/checklist_generation_status?task_id=${taskId}`)
                 .then(response => response.json())
                 .then(data => {

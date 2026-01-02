@@ -232,20 +232,73 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         else:
           summary = description[:200] + "..." if len(description) > 200 else description
         
-        # Extract deadline
+        # Extract dates and content from opportunity__summary section (priority method)
         deadline_raw = None
-        deadline_patterns = [
-            r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"closes?\s+(\d{1,2}\s+\w+\s+\d{2,4})",
-        ]
-        page_text = detail_soup.get_text()
-        for pattern in deadline_patterns:
-          match = re.search(pattern, page_text, re.IGNORECASE)
-          if match:
-            deadline_raw = match.group(1)
-            break
+        opening_date_raw = None
+        summary_content = {}
+        closing_date_found = False  # Flag to track if we've processed the closing date field
+        
+        # First, try to extract from the structured dl.opportunity__summary format
+        summary_dl = detail_soup.select_one("dl.govuk-table.opportunity__summary, dl.opportunity__summary")
+        if summary_dl:
+          # Extract all dt/dd pairs from the definition list
+          dt_elements = summary_dl.find_all("dt")
+          for dt in dt_elements:
+            dt_text = dt.get_text(strip=True)
+            dd = dt.find_next_sibling("dd")
+            if dd:
+              dd_text = dd.get_text(strip=True)
+              
+              # Store all summary fields
+              summary_content[dt_text] = dd_text
+              
+              # Check for opening date - exact match for "Opening date:"
+              dt_text_lower = dt_text.lower().strip()
+              
+              if dt_text_lower == "opening date:" or dt_text_lower == "opening date":
+                opening_date_raw = dd_text
+              # Check for closing date - exact match for "Closing date:"
+              elif dt_text_lower == "closing date:" or dt_text_lower == "closing date":
+                closing_date_found = True  # Mark that we found the closing date field
+                # Check if it's "Open - no closing date" or similar
+                dd_text_lower = dd_text.lower().strip()
+                if "no closing date" in dd_text_lower or "open - no closing date" in dd_text_lower or dd_text_lower == "open":
+                  # This is an open grant with no closing date
+                  deadline_raw = None  # Explicitly set to None
+                else:
+                  deadline_raw = dd_text
+        
+        # Fallback to regex patterns if structured format not found
+        page_text = detail_soup.get_text()  # Get page text for fallback and other extractions
+          # Only use fallback if we haven't found the closing date field yet, or if we found it but it wasn't "no closing date"
+        if (not closing_date_found and not deadline_raw) or not opening_date_raw:
+          # Only search for missing dates
+          # Don't search for deadline if we explicitly found "no closing date"
+          if not deadline_raw and not closing_date_found:
+            deadline_patterns = [
+                r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                r"(\d{1,2}\s+\w+\s+\d{2,4})",
+                r"closes?\s+(\d{1,2}\s+\w+\s+\d{2,4})",
+            ]
+            for pattern in deadline_patterns:
+              match = re.search(pattern, page_text, re.IGNORECASE)
+              if match:
+                deadline_raw = match.group(1)
+                break
+          
+          if not opening_date_raw:
+            opening_patterns = [
+                r"opening[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                r"opens[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                r"opening[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+                r"opens[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+            ]
+            for pattern in opening_patterns:
+              match = re.search(pattern, page_text, re.IGNORECASE)
+              if match:
+                opening_date_raw = match.group(1)
+                break
         
         # Extract funding amount
         funding_amount = None
@@ -289,12 +342,14 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
             "summary": summary,
             "description": formatted_description,
             "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
+            "opening_date": parse_deadline(opening_date_raw) if opening_date_raw else None,
             "funding_amount": funding_amount,
-            "status": "open",
+            "status": "unknown",  # Status is computed from dates, not stored
             "raw_data": {
                 "listing_url": base_url,
                 "scraped_url": url,
-                "sections": sections if sections else None
+                "sections": sections if sections else None,
+                "opportunity_summary": summary_content if summary_content else None
             },
         }
         grant["hash_checksum"] = sha256_for_grant(grant)

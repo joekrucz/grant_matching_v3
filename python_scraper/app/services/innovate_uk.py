@@ -471,35 +471,89 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
         if summary and "summary" not in sections:
           sections["summary"] = summary
         
-        # Extract deadline - look for "Opens:" and "Closes:" patterns
+        # Extract deadline - prioritize structured HTML format above tabs
         deadline_raw = None
-        page_text = detail_soup.get_text()
+        opening_date_raw = None
+        page_text = detail_soup.get_text()  # Get page text once for use in multiple places
         
-        # Look for "Closes:" or "Closes on:" patterns
-        deadline_patterns = [
-            r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"closing[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"deadline[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"closes?[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-        ]
+        # First, try to extract from the structured govuk-list format above the tabs
+        # This is the most reliable source: <ul class="govuk-list"> with "Competition opens:" and "Competition closes:"
+        govuk_list = detail_soup.select_one("ul.govuk-list")
+        if govuk_list:
+          list_items = govuk_list.find_all("li", recursive=False)
+          for li in list_items:
+            li_text = li.get_text(strip=True)
+            
+            # Check for "Competition opens:" pattern
+            if "competition opens" in li_text.lower():
+              # Look for span tag first (most reliable)
+              span = li.find("span")
+              if span:
+                opening_date_raw = span.get_text(strip=True)
+              else:
+                # Extract text after "Competition opens:"
+                opens_match = re.search(r"competition opens:?\s*(.+)", li_text, re.IGNORECASE)
+                if opens_match:
+                  opening_date_raw = opens_match.group(1).strip()
+            
+            # Check for "Competition closes:" pattern
+            if "competition closes" in li_text.lower():
+              # Look for span tag first (if present)
+              span = li.find("span")
+              if span:
+                deadline_raw = span.get_text(strip=True)
+              else:
+                # Get text after the strong tag
+                strong = li.find("strong")
+                if strong:
+                  # Get all text content after the strong tag
+                  # This handles both direct text nodes and nested elements
+                  parts = []
+                  for sibling in strong.next_siblings:
+                    if hasattr(sibling, 'get_text'):
+                      text = sibling.get_text(strip=True)
+                      if text:
+                        parts.append(text)
+                    elif isinstance(sibling, str):
+                      text = sibling.strip()
+                      if text:
+                        parts.append(text)
+                  if parts:
+                    deadline_raw = ' '.join(parts).strip()
+                
+                # Fallback: extract from full text using regex
+                if not deadline_raw or len(deadline_raw) < 5:
+                  closes_match = re.search(r"competition closes:?\s*(.+)", li_text, re.IGNORECASE)
+                  if closes_match:
+                    deadline_raw = closes_match.group(1).strip()
         
-        for pattern in deadline_patterns:
-          match = re.search(pattern, page_text, re.IGNORECASE)
-          if match:
-            deadline_raw = match.group(1)
-            break
-        
-        # Also check for structured date elements
+        # Fallback to regex patterns if structured format not found
         if not deadline_raw:
-          # Look for date elements in the page
-          date_elements = detail_soup.select("time, [datetime], .date, .deadline")
-          for date_el in date_elements:
-            date_text = date_el.get("datetime") or date_el.get_text(strip=True)
-            if date_text and ("close" in date_el.get_text().lower() or "deadline" in date_el.get_text().lower()):
-              deadline_raw = date_text
+          # Look for "Closes:" or "Closes on:" patterns
+          deadline_patterns = [
+              r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+              r"closing[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+              r"deadline[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+              r"closes?[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+              r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+              r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+          ]
+          
+          for pattern in deadline_patterns:
+            match = re.search(pattern, page_text, re.IGNORECASE)
+            if match:
+              deadline_raw = match.group(1)
               break
+          
+          # Also check for structured date elements
+          if not deadline_raw:
+            # Look for date elements in the page
+            date_elements = detail_soup.select("time, [datetime], .date, .deadline")
+            for date_el in date_elements:
+              date_text = date_el.get("datetime") or date_el.get_text(strip=True)
+              if date_text and ("close" in date_el.get_text().lower() or "deadline" in date_el.get_text().lower()):
+                deadline_raw = date_text
+                break
         
         # Extract funding amount
         funding_amount = None
@@ -517,15 +571,7 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
             funding_amount = f"£{match.group(1) if match.groups() else match.group(0).replace('£', '')}"
             break
         
-        # Determine status - look for "Open now", "Closing soon", "Closed" indicators
-        status = "unknown"
-        status_text = page_text.lower()
-        if "open now" in status_text or "opened:" in status_text:
-          status = "open"
-        elif "closing soon" in status_text:
-          status = "open"
-        elif "closed" in status_text and "closing" not in status_text:
-          status = "closed"
+        # Status is now computed from dates, not determined here
         
         # Format description with section headings for better readability
         formatted_description = description
@@ -567,8 +613,9 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
             "summary": summary,
             "description": formatted_description,
             "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
+            "opening_date": parse_deadline(opening_date_raw) if opening_date_raw else None,
             "funding_amount": funding_amount,
-            "status": status,
+            "status": "unknown",  # Status is computed from dates, not stored
             "raw_data": {
                 "listing_url": base_url,
                 "scraped_url": url,

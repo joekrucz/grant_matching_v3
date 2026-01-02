@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 
-from grants.models import Grant, ScrapeLog
+from grants.models import Grant, ScrapeLog, GRANT_SOURCES
 from users.models import User
 from companies.models import Company
 from grants_aggregator import CELERY_AVAILABLE
@@ -78,7 +78,15 @@ def _get_ai_client():
 def dashboard(request):
     """Admin dashboard."""
     total_grants = Grant.objects.count()
-    open_grants = Grant.objects.filter(status='open').count()
+    # Count open grants using computed status (deadline in future or null, and opening_date null or in past)
+    from django.utils import timezone
+    now = timezone.now()
+    from django.db.models import Q
+    open_grants = Grant.objects.filter(
+        Q(deadline__isnull=True) | Q(deadline__gt=now)
+    ).exclude(
+        Q(opening_date__isnull=False) & Q(opening_date__gt=now)
+    ).count()
     last_scrape = ScrapeLog.objects.filter(status='success').order_by('-completed_at').first()
     
     # Check for recent Companies House refresh task
@@ -150,15 +158,44 @@ def dashboard(request):
         competitiveness_checklist__checklist_items__0__isnull=False
     ).count()
     
+    grants_with_exclusions = Grant.objects.filter(
+        exclusions_checklist__checklist_items__0__isnull=False
+    ).count()
+    
     grants_with_both = Grant.objects.filter(
         eligibility_checklist__checklist_items__0__isnull=False,
         competitiveness_checklist__checklist_items__0__isnull=False
+    ).count()
+    
+    grants_with_all_three = Grant.objects.filter(
+        eligibility_checklist__checklist_items__0__isnull=False,
+        competitiveness_checklist__checklist_items__0__isnull=False,
+        exclusions_checklist__checklist_items__0__isnull=False
     ).count()
     
     # Calculate user statistics
     total_users = User.objects.count()
     admin_users = User.objects.filter(admin=True).count()
     active_users = User.objects.filter(is_active=True).count()
+    
+    # Calculate Companies House statistics
+    from datetime import timedelta
+    from django.db.models import Q
+    total_companies = Company.objects.count()
+    registered_companies = Company.objects.filter(is_registered=True, company_number__isnull=False).count()
+    companies_with_filing_history = Company.objects.exclude(filing_history={}).exclude(filing_history__isnull=True).count()
+    companies_with_360_grants = Company.objects.exclude(grants_received_360={}).exclude(grants_received_360__isnull=True).count()
+    # Companies updated in last 7 days
+    seven_days_ago = timezone.now() - timedelta(days=7)
+    companies_updated_recently = Company.objects.filter(updated_at__gte=seven_days_ago).count()
+    # Companies not updated in last 30 days (may need refresh)
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    companies_needing_refresh = Company.objects.filter(
+        is_registered=True,
+        company_number__isnull=False
+    ).filter(
+        Q(updated_at__lt=thirty_days_ago) | Q(updated_at__isnull=True)
+    ).count()
     
     # Get recent bot logs (last 20) - handle gracefully if Slack bot isn't configured
     recent_bot_logs = []
@@ -187,13 +224,21 @@ def dashboard(request):
         'last_refresh_task': last_refresh_task,
         'grants_with_eligibility': grants_with_eligibility,
         'grants_with_competitiveness': grants_with_competitiveness,
+        'grants_with_exclusions': grants_with_exclusions,
         'grants_with_both': grants_with_both,
+        'grants_with_all_three': grants_with_all_three,
         'total_users': total_users,
         'admin_users': admin_users,
         'active_users': active_users,
         'recent_bot_logs': recent_bot_logs,
         'total_bot_messages': total_bot_messages,
         'bot_messages_today': bot_messages_today,
+        'total_companies': total_companies,
+        'registered_companies': registered_companies,
+        'companies_with_filing_history': companies_with_filing_history,
+        'companies_with_360_grants': companies_with_360_grants,
+        'companies_updated_recently': companies_updated_recently,
+        'companies_needing_refresh': companies_needing_refresh,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
@@ -871,7 +916,7 @@ def ai_search_grants_for_company(request):
                 "summary": grant.summary,
                 "deadline": grant.deadline.isoformat() if grant.deadline else None,
                 "funding_amount": grant.funding_amount,
-                "status": grant.status,
+                "status": grant.get_computed_status(),
                 "source": grant.source,
                 "url": grant.url,
                 "relevance_score": match.get("relevance_score", 0.0),
@@ -1271,6 +1316,31 @@ def wipe_grants(request):
 
 @login_required
 @admin_required
+def wipe_grants_by_source(request, source):
+    """Delete grants from a specific source (admin only)."""
+    if request.method == 'POST':
+        # Validate source
+        valid_sources = ['ukri', 'nihr', 'catapult', 'innovate_uk']
+        if source not in valid_sources:
+            messages.error(request, f'Invalid source: {source}')
+            return redirect('admin_panel:dashboard')
+        
+        # Get count before deletion
+        count = Grant.objects.filter(source=source).count()
+        
+        # Delete grants from this source
+        Grant.objects.filter(source=source).delete()
+        
+        # Get display name for the source
+        source_display = dict(GRANT_SOURCES).get(source, source)
+        messages.success(request, f'Deleted {count} {source_display} grants.')
+        return redirect('admin_panel:dashboard')
+    
+    return redirect('admin_panel:dashboard')
+
+
+@login_required
+@admin_required
 def scrape_logs(request):
     """List scrape logs."""
     logs = ScrapeLog.objects.all().order_by('-started_at')
@@ -1549,7 +1619,7 @@ def generate_checklists(request):
         import logging
         logger = logging.getLogger(__name__)
         
-        checklist_type = request.POST.get('checklist_type', 'both')  # 'eligibility', 'competitiveness', or 'both'
+        checklist_type = request.POST.get('checklist_type', 'both')  # 'eligibility', 'competitiveness', 'exclusions', 'both', or 'all'
         
         if not CELERY_AVAILABLE or generate_checklists_for_all_grants is None:
             error_msg = 'Background task service (Celery) is not available. Please check Redis connection.'

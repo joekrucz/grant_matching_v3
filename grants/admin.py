@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Grant, ScrapeLog
+from .models import Grant, ScrapeLog, EligibilityQuestionnaire
 
 
 @admin.register(Grant)
@@ -17,4 +17,13 @@ class ScrapeLogAdmin(admin.ModelAdmin):
     list_filter = ('source', 'status', 'started_at')
     readonly_fields = ('started_at', 'completed_at', 'created_at', 'updated_at')
     date_hierarchy = 'started_at'
+
+
+@admin.register(EligibilityQuestionnaire)
+class EligibilityQuestionnaireAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'selected_count', 'total_items', 'total_grants', 'created_at')
+    list_filter = ('created_at', 'total_grants')
+    search_fields = ('name', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+    date_hierarchy = 'created_at'
 

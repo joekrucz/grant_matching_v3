@@ -146,7 +146,7 @@
             <div class="card-body">
                 <div class="flex justify-between items-center mb-4">
                     <div class="flex items-center gap-2">
-                        <h2 class="card-title text-xl">Input Sources</h2>
+                    <h2 class="card-title text-xl">Input Sources</h2>
                         {% if funding_search.matching_status == 'running' %}
                         <div class="badge badge-warning">Locked - Matching in progress</div>
                         {% endif %}
@@ -365,9 +365,10 @@
                                 type="checkbox" 
                                 name="grant_sources" 
                                 value="{{ source_code }}"
-                                class="checkbox checkbox-primary"
+                                class="checkbox checkbox-primary grant-source-checkbox"
                                 {% if source_code in funding_search.selected_grant_sources %}checked{% endif %}
-                                {% if funding_search.matching_status == 'running' %}disabled{% else %}onchange="document.getElementById('grant-sources-form').submit()"{% endif %}
+                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                                data-funding-search-id="{{ funding_search.id }}"
                             >
                             <span class="label-text">{{ source_name }}</span>
                         </label>
@@ -619,7 +620,7 @@
                             {% endif %}
                         </div>
                         <div class="lg:text-right lg:ml-4 min-w-[200px]">
-                            <div class="stat-value text-primary text-3xl">{{ match.match_score|percentage }}%</div>
+                            <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
                             <div class="stat-desc text-xs mb-3">Overall Match</div>
                             {% if match.eligibility_score is not None or match.competitiveness_score is not None %}
                             <div class="border-t border-base-300 pt-3 mt-3">
@@ -629,7 +630,10 @@
                                     <div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-sm text-base-content/70">Eligibility</span>
-                                            <span class="text-sm font-semibold">{{ match.eligibility_score|percentage }}%</span>
+                                            <span class="text-sm font-semibold eligibility-breakdown-percentage">
+                                                {{ match.eligibility_score|percentage }}%
+                                                <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">(calculating...)</span>
+                                            </span>
                                         </div>
                                     </div>
                                     {% endif %}
@@ -637,7 +641,10 @@
                                     <div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-sm text-base-content/70">Competitiveness</span>
-                                            <span class="text-sm font-semibold">{{ match.competitiveness_score|percentage }}%</span>
+                                            <span class="text-sm font-semibold competitiveness-breakdown-percentage">
+                                                {{ match.competitiveness_score|percentage }}%
+                                                <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">(calculating...)</span>
+                                            </span>
                                         </div>
                                     </div>
                                     {% endif %}
@@ -658,9 +665,17 @@
                     {% endif %}
                     
                     {% if match.match_reasons.eligibility_checklist %}
-                    <div class="mt-4">
-                        <h4 class="font-semibold text-base mb-2">Eligibility Checklist</h4>
-                        <div class="space-y-2">
+                    <div class="mt-4 -mx-4 -mb-4">
+                        <div class="collapse collapse-arrow">
+                            <input type="checkbox" />
+                            <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                                Eligibility Checklist 
+                                <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
+                                    (calculating...)
+                                </span>
+                            </div>
+                            <div class="collapse-content px-4 pb-2 pt-2">
+                                <div class="space-y-2 eligibility-checklist-items">
                             {% for item in match.match_reasons.eligibility_checklist %}
                             <div class="flex items-start gap-2">
                                 {% if item.status == "yes" %}
@@ -673,13 +688,6 @@
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                        {% if item.status == "yes" %}
-                                        <span class="badge badge-success badge-sm">Yes</span>
-                                        {% elif item.status == "no" %}
-                                        <span class="badge badge-error badge-sm">No</span>
-                                        {% else %}
-                                        <span class="badge badge-warning badge-sm">Don't Know</span>
-                                        {% endif %}
                                     </div>
                                     {% if item.reason %}
                                     <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
@@ -687,14 +695,24 @@
                                 </div>
                             </div>
                             {% endfor %}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     {% endif %}
                     
                     {% if match.match_reasons.competitiveness_checklist %}
-                    <div class="mt-4">
-                        <h4 class="font-semibold text-base mb-2">Competitiveness Checklist</h4>
-                        <div class="space-y-2">
+                    <div class="mt-4 -mx-4 -mb-4">
+                        <div class="collapse collapse-arrow">
+                            <input type="checkbox" />
+                            <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                                Competitiveness Checklist
+                                <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
+                                    (calculating...)
+                                </span>
+                            </div>
+                            <div class="collapse-content px-4 pb-2 pt-2">
+                                <div class="space-y-2 competitiveness-checklist-items">
                             {% for item in match.match_reasons.competitiveness_checklist %}
                             <div class="flex items-start gap-2">
                                 {% if item.status == "yes" %}
@@ -707,13 +725,6 @@
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                        {% if item.status == "yes" %}
-                                        <span class="badge badge-success badge-sm">Yes</span>
-                                        {% elif item.status == "no" %}
-                                        <span class="badge badge-error badge-sm">No</span>
-                                        {% else %}
-                                        <span class="badge badge-warning badge-sm">Don't Know</span>
-                                        {% endif %}
                                     </div>
                                     {% if item.reason %}
                                     <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
@@ -721,11 +732,52 @@
                                 </div>
                             </div>
                             {% endfor %}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     {% endif %}
                     
-                    {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist %}
+                    {% if match.match_reasons.exclusions_checklist %}
+                    <div class="mt-4 -mx-4 -mb-4">
+                        <div class="collapse collapse-arrow">
+                            <input type="checkbox" />
+                            <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                                Exclusions Checklist
+                                <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
+                                    (calculating...)
+                                </span>
+                                <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                            </div>
+                            <div class="collapse-content px-4 pb-2 pt-2">
+                                <p class="text-xs text-base-content/60 mb-2">Note: ⚠️ means the exclusion applies (disqualifying), ○ means it does not apply</p>
+                                <div class="space-y-2 exclusions-checklist-items">
+                            {% for item in match.match_reasons.exclusions_checklist %}
+                            <div class="flex items-start gap-2">
+                                        {% if item.status == "yes" %}
+                                <span class="text-error text-lg font-bold">⚠️</span>
+                                        {% elif item.status == "no" %}
+                                <span class="text-base-content/40 text-lg">○</span>
+                                        {% else %}
+                                <span class="text-warning text-lg">?</span>
+                                        {% endif %}
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                    </div>
+                                    {% if item.reason %}
+                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
                     <div class="mt-4">
                         <div class="alert alert-info">
                             <span class="text-sm">Checklists not available. Please run a new matching job to see eligibility and competitiveness checklists.</span>
@@ -788,7 +840,7 @@
                                         {% endif %}
                                     </div>
                                     <div class="lg:text-right lg:ml-4 min-w-[200px]">
-                                        <div class="stat-value text-primary text-3xl">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                         <div class="stat-desc text-xs mb-3">Overall Match</div>
                                         {% if match.eligibility_score is not None or match.competitiveness_score is not None %}
                                         <div class="border-t border-base-300 pt-3 mt-3">
@@ -798,7 +850,10 @@
                                                 <div>
                                                     <div class="flex justify-between items-center">
                                                         <span class="text-sm text-base-content/70">Eligibility</span>
-                                                        <span class="text-sm font-semibold">{{ match.eligibility_score|percentage }}%</span>
+                                                        <span class="text-sm font-semibold eligibility-breakdown-percentage">
+                                                            {{ match.eligibility_score|percentage }}%
+                                                            <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">(calculating...)</span>
+                                                        </span>
                                                     </div>
                                                 </div>
                                                 {% endif %}
@@ -806,7 +861,10 @@
                                                 <div>
                                                     <div class="flex justify-between items-center">
                                                         <span class="text-sm text-base-content/70">Competitiveness</span>
-                                                        <span class="text-sm font-semibold">{{ match.competitiveness_score|percentage }}%</span>
+                                                        <span class="text-sm font-semibold competitiveness-breakdown-percentage">
+                                                            {{ match.competitiveness_score|percentage }}%
+                                                            <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">(calculating...)</span>
+                                                        </span>
                                                     </div>
                                                 </div>
                                                 {% endif %}
@@ -827,9 +885,17 @@
                                 {% endif %}
                                 
                                 {% if match.match_reasons.eligibility_checklist %}
-                                <div class="mt-4">
-                                    <h4 class="font-semibold text-base mb-2">Eligibility Checklist</h4>
-                                    <div class="space-y-2">
+                                <div class="mt-4 -mx-4 -mb-4">
+                                    <div class="collapse collapse-arrow">
+                                        <input type="checkbox" />
+                                        <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                                            Eligibility Checklist
+                                            <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="space-y-2 eligibility-checklist-items">
                                         {% for item in match.match_reasons.eligibility_checklist %}
                                         <div class="flex items-start gap-2">
                                             {% if item.status == "yes" %}
@@ -842,13 +908,6 @@
                                             <div class="flex-1">
                                                 <div class="flex items-center gap-2">
                                                     <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                    {% if item.status == "yes" %}
-                                                    <span class="badge badge-success badge-sm">Yes</span>
-                                                    {% elif item.status == "no" %}
-                                                    <span class="badge badge-error badge-sm">No</span>
-                                                    {% else %}
-                                                    <span class="badge badge-warning badge-sm">Don't Know</span>
-                                                    {% endif %}
                                                 </div>
                                                 {% if item.reason %}
                                                 <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
@@ -856,14 +915,24 @@
                                             </div>
                                         </div>
                                         {% endfor %}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 {% endif %}
                                 
                                 {% if match.match_reasons.competitiveness_checklist %}
-                                <div class="mt-4">
-                                    <h4 class="font-semibold text-base mb-2">Competitiveness Checklist</h4>
-                                    <div class="space-y-2">
+                                <div class="mt-4 -mx-4 -mb-4">
+                                    <div class="collapse collapse-arrow">
+                                        <input type="checkbox" />
+                                        <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                                            Competitiveness Checklist
+                                            <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="space-y-2 competitiveness-checklist-items">
                                         {% for item in match.match_reasons.competitiveness_checklist %}
                                         <div class="flex items-start gap-2">
                                             {% if item.status == "yes" %}
@@ -876,13 +945,6 @@
                                             <div class="flex-1">
                                                 <div class="flex items-center gap-2">
                                                     <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                    {% if item.status == "yes" %}
-                                                    <span class="badge badge-success badge-sm">Yes</span>
-                                                    {% elif item.status == "no" %}
-                                                    <span class="badge badge-error badge-sm">No</span>
-                                                    {% else %}
-                                                    <span class="badge badge-warning badge-sm">Don't Know</span>
-                                                    {% endif %}
                                                 </div>
                                                 {% if item.reason %}
                                                 <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
@@ -894,7 +956,46 @@
                                 </div>
                                 {% endif %}
                                 
-                                {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist %}
+                                {% if match.match_reasons.exclusions_checklist %}
+                                <div class="mt-4 -mx-4 -mb-4">
+                                    <div class="collapse collapse-arrow">
+                                        <input type="checkbox" />
+                                        <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                                            Exclusions Checklist
+                                            <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                            <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                            <p class="text-xs text-base-content/60 mb-2">Note: ⚠️ means the exclusion applies (disqualifying), ○ means it does not apply</p>
+                                            <div class="space-y-2 exclusions-checklist-items">
+                                                {% for item in match.match_reasons.exclusions_checklist %}
+                                                <div class="flex items-start gap-2">
+                                                    {% if item.status == "yes" %}
+                                                    <span class="text-error text-lg font-bold">⚠️</span>
+                                                    {% elif item.status == "no" %}
+                                                    <span class="text-base-content/40 text-lg">○</span>
+                                                    {% else %}
+                                                    <span class="text-warning text-lg">?</span>
+                                                    {% endif %}
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                                </div>
+                                                {% if item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
                                 <div class="mt-4">
                                     <div class="alert alert-info">
                                         <span class="text-sm">Checklists not available. Please run a new matching job to see eligibility and competitiveness checklists.</span>
@@ -1027,6 +1128,73 @@ document.addEventListener('DOMContentLoaded', function() {
             isDropdownOpen = false;
         }
     });
+    
+    // Handle grant sources checkbox changes with AJAX to prevent page scroll to top
+    const grantSourceCheckboxes = document.querySelectorAll('.grant-source-checkbox');
+    const grantSourcesForm = document.getElementById('grant-sources-form');
+    
+    if (grantSourceCheckboxes.length > 0 && grantSourcesForm && !isMatchingRunning) {
+        grantSourceCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function(e) {
+                // Prevent default form submission
+                e.preventDefault();
+                
+                // Collect all form data
+                const formData = new FormData(grantSourcesForm);
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                // Submit via AJAX
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // If it's a redirect (302), follow it
+                        if (response.redirected) {
+                            // Reload the page but maintain scroll position
+                            const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+                            sessionStorage.setItem('fundingSearchScrollPosition', scrollPosition.toString());
+                            window.location.href = response.url;
+                        } else {
+                            // If response is OK but not redirected, just reload maintaining scroll
+                            const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+                            sessionStorage.setItem('fundingSearchScrollPosition', scrollPosition.toString());
+                            window.location.reload();
+                        }
+                    } else {
+                        console.error('Error updating grant sources');
+                        // Revert checkbox on error
+                        this.checked = !this.checked;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // Revert checkbox on error
+                    this.checked = !this.checked;
+                });
+            });
+        });
+    }
+});
+
+// Restore scroll position after page load (for grant sources form submission)
+document.addEventListener('DOMContentLoaded', function() {
+    const savedScrollPosition = sessionStorage.getItem('fundingSearchScrollPosition');
+    if (savedScrollPosition) {
+        // Remove from sessionStorage so it only applies once
+        sessionStorage.removeItem('fundingSearchScrollPosition');
+        // Restore scroll position after a short delay to ensure page is fully loaded
+        setTimeout(() => {
+            window.scrollTo(0, parseInt(savedScrollPosition));
+        }, 100);
+    }
 });
 
 // Toggle remaining grants section
@@ -1138,5 +1306,163 @@ function editName() {
         }
     });
 }
+
+// Calculate and display checklist scores
+document.addEventListener('DOMContentLoaded', function() {
+    // Store scores per card for overall match calculation
+    const cardScores = new Map();
+    
+    // Calculate eligibility checklist scores
+    document.querySelectorAll('.eligibility-checklist-items').forEach(function(container) {
+        const items = container.querySelectorAll('.flex.items-start');
+        let yesCount = 0;
+        let totalCount = items.length;
+        
+        items.forEach(function(item) {
+            const statusIcon = item.querySelector('.text-success');
+            if (statusIcon) {
+                yesCount++;
+            }
+        });
+        
+        const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
+        const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+        
+        // Update heading score (look for it in the collapse-title)
+        const collapseSection = container.closest('.collapse');
+        const scoreSpan = collapseSection ? collapseSection.querySelector('.eligibility-checklist-score') : null;
+        if (scoreSpan && totalCount > 0) {
+            scoreSpan.textContent = scoreText;
+        }
+        
+        // Update score breakdown percentage and count
+        const card = container.closest('.card');
+        const breakdownPercentage = card ? card.querySelector('.eligibility-breakdown-percentage') : null;
+        if (breakdownPercentage && totalCount > 0) {
+            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${scoreText}</span>`;
+        }
+        
+        // Store eligibility score for this card
+        if (card) {
+            if (!cardScores.has(card)) {
+                cardScores.set(card, {});
+            }
+            cardScores.get(card).eligibility = percentage / 100; // Store as decimal (0.0-1.0)
+        }
+    });
+    
+    // Calculate competitiveness checklist scores
+    document.querySelectorAll('.competitiveness-checklist-items').forEach(function(container) {
+        const items = container.querySelectorAll('.flex.items-start');
+        let yesCount = 0;
+        let totalCount = items.length;
+        
+        items.forEach(function(item) {
+            const statusIcon = item.querySelector('.text-success');
+            if (statusIcon) {
+                yesCount++;
+            }
+        });
+        
+        const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
+        const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+        
+        // Update heading score (look for it in the collapse-title)
+        const collapseSection = container.closest('.collapse');
+        const scoreSpan = collapseSection ? collapseSection.querySelector('.competitiveness-checklist-score') : null;
+        if (scoreSpan && totalCount > 0) {
+            scoreSpan.textContent = scoreText;
+        }
+        
+        // Update score breakdown percentage and count
+        const card = container.closest('.card');
+        const breakdownPercentage = card ? card.querySelector('.competitiveness-breakdown-percentage') : null;
+        if (breakdownPercentage && totalCount > 0) {
+            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${scoreText}</span>`;
+        }
+        
+        // Store competitiveness score for this card
+        if (card) {
+            if (!cardScores.has(card)) {
+                cardScores.set(card, {});
+            }
+            cardScores.get(card).competitiveness = percentage / 100; // Store as decimal (0.0-1.0)
+        }
+    });
+    
+    // Calculate exclusions checklist scores (for exclusions, "no" is good - means NOT excluded)
+    document.querySelectorAll('.exclusions-checklist-items').forEach(function(container) {
+        const items = container.querySelectorAll('.flex.items-start');
+        let noCount = 0; // Count "no" answers (not excluded = good)
+        let totalCount = items.length;
+        
+        let yesCount = 0; // Count "yes" answers (excluded = bad)
+        
+        items.forEach(function(item) {
+            // "no" status shows neutral circle icon (not text-success anymore)
+            const statusIcon = item.querySelector('span.text-base-content\\/40');
+            if (statusIcon) {
+                noCount++;
+            }
+            // Check for "yes" status (excluded - shows warning icon)
+            const warningIcon = item.querySelector('span.text-error');
+            if (warningIcon && warningIcon.textContent.includes('⚠️')) {
+                yesCount++;
+            }
+        });
+        
+        const scoreText = totalCount > 0 ? `(${noCount}/${totalCount})` : '';
+        const percentage = totalCount > 0 ? Math.round((noCount / totalCount) * 100) : 0;
+        
+        // Update heading score (look for it in the collapse-title)
+        const collapseSection = container.closest('.collapse');
+        const scoreSpan = collapseSection ? collapseSection.querySelector('.exclusions-checklist-score') : null;
+        if (scoreSpan && totalCount > 0) {
+            scoreSpan.textContent = scoreText;
+        }
+        
+        // Show warning icon in heading if any exclusion is met
+        const warningIconSpan = collapseSection ? collapseSection.querySelector('.exclusions-warning-icon') : null;
+        if (warningIconSpan) {
+            if (yesCount > 0) {
+                warningIconSpan.style.display = 'inline';
+            } else {
+                warningIconSpan.style.display = 'none';
+            }
+        }
+        
+        // Store exclusions score for this card
+        const card = container.closest('.card');
+        if (card) {
+            if (!cardScores.has(card)) {
+                cardScores.set(card, {});
+            }
+            cardScores.get(card).exclusions = percentage / 100; // Store as decimal (0.0-1.0)
+        }
+    });
+    
+    // Calculate and update overall match scores
+    cardScores.forEach(function(scores, card) {
+        const eligibility = scores.eligibility;
+        const competitiveness = scores.competitiveness;
+        const exclusions = scores.exclusions;
+        
+        // Build array of available scores
+        const scoreComponents = [];
+        if (eligibility !== undefined) scoreComponents.push(eligibility);
+        if (competitiveness !== undefined) scoreComponents.push(competitiveness);
+        if (exclusions !== undefined) scoreComponents.push(exclusions);
+        
+        if (scoreComponents.length > 0) {
+            // Calculate overall as average of all available scores
+            const overall = scoreComponents.reduce((a, b) => a + b, 0) / scoreComponents.length;
+            const overallPercentage = Math.round(overall * 100);
+            const overallMatchScore = card.querySelector('.overall-match-score');
+            if (overallMatchScore) {
+                overallMatchScore.textContent = `${overallPercentage}%`;
+            }
+        }
+    });
+});
 </script>
 {% endblock %}

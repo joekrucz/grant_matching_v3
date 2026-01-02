@@ -14,6 +14,7 @@ urlpatterns = [
     path('run_scraper/catapult', views.run_catapult_scraper, name='run_catapult_scraper'),
     path('run_scraper/innovate', views.run_innovate_uk_scraper, name='run_innovate_uk_scraper'),
     path('wipe_grants', views.wipe_grants, name='wipe_grants'),
+    path('wipe_grants/<str:source>', views.wipe_grants_by_source, name='wipe_grants_by_source'),
     path('scrape_logs', views.scrape_logs, name='scrape_logs'),
     path('scraper_status', views.scraper_status, name='scraper_status'),
     path('users', views.users_list, name='users_list'),

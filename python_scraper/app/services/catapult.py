@@ -924,7 +924,7 @@ def scrape_catapult(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[D
             "description": formatted_description,
             "deadline": parse_deadline(deadline_raw) if deadline_raw else None,
             "funding_amount": funding_amount,
-            "status": "open",
+            "status": "unknown",  # Status is computed from dates, not stored
             "raw_data": {
                 "listing_url": listing_url,
                 "scraped_url": url,

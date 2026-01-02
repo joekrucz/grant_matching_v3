@@ -385,10 +385,12 @@ if CELERY_TASKS_AVAILABLE:
     @shared_task(bind=True)
     def generate_checklists_for_all_grants(self, checklist_type='both'):
         """
-        Generate eligibility and/or competitiveness checklists for all grants.
+        Generate eligibility, competitiveness, and/or exclusions checklists for all grants.
         
         Args:
-            checklist_type: 'eligibility', 'competitiveness', or 'both'
+            checklist_type: 'eligibility', 'competitiveness', 'exclusions', 'both', or 'all'
+            - 'both' generates eligibility and competitiveness
+            - 'all' generates all three (eligibility, competitiveness, and exclusions)
         
         Returns:
             dict with status, total, processed, success, errors
@@ -445,14 +447,19 @@ if CELERY_TASKS_AVAILABLE:
                 # Check if checklist already exists and skip if it does
                 skip_eligibility = False
                 skip_competitiveness = False
+                skip_exclusions = False
                 
-                if checklist_type in ['eligibility', 'both']:
+                if checklist_type in ['eligibility', 'both', 'all']:
                     if grant.eligibility_checklist and grant.eligibility_checklist.get('checklist_items'):
                         skip_eligibility = True
                 
-                if checklist_type in ['competitiveness', 'both']:
+                if checklist_type in ['competitiveness', 'both', 'all']:
                     if grant.competitiveness_checklist and grant.competitiveness_checklist.get('checklist_items'):
                         skip_competitiveness = True
+                
+                if checklist_type in ['exclusions', 'all']:
+                    if grant.exclusions_checklist and grant.exclusions_checklist.get('checklist_items'):
+                        skip_exclusions = True
                 
                 # Skip this grant if all requested checklists already exist
                 if checklist_type == 'eligibility' and skip_eligibility:
@@ -465,7 +472,17 @@ if CELERY_TASKS_AVAILABLE:
                     processed_count += 1
                     progress_callback(processed_count, total_grants)
                     continue
+                elif checklist_type == 'exclusions' and skip_exclusions:
+                    skipped_count += 1
+                    processed_count += 1
+                    progress_callback(processed_count, total_grants)
+                    continue
                 elif checklist_type == 'both' and skip_eligibility and skip_competitiveness:
+                    skipped_count += 1
+                    processed_count += 1
+                    progress_callback(processed_count, total_grants)
+                    continue
+                elif checklist_type == 'all' and skip_eligibility and skip_competitiveness and skip_exclusions:
                     skipped_count += 1
                     processed_count += 1
                     progress_callback(processed_count, total_grants)
@@ -521,10 +538,36 @@ if CELERY_TASKS_AVAILABLE:
                 elif skip_competitiveness:
                     logger.debug(f"Skipped competitiveness checklist for grant {grant.id} (already exists)")
                 
+                if checklist_type in ['exclusions', 'all'] and not skip_exclusions:
+                    try:
+                        parsed, raw_meta, latency_ms = client.exclusions_checklist(grant_ctx)
+                        checklist_data = {
+                            "checklist_items": parsed.get("checklist_items") or [],
+                            "notes": parsed.get("notes") or [],
+                            "missing_info": parsed.get("missing_info") or [],
+                            "meta": {
+                                "model": raw_meta.get("model"),
+                                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                                "latency_ms": latency_ms,
+                            },
+                        }
+                        grant.exclusions_checklist = checklist_data
+                        grant.save(update_fields=['exclusions_checklist'])
+                        logger.debug(f"Generated exclusions checklist for grant {grant.id}")
+                    except Exception as e:
+                        error_msg = f"Grant {grant.id} (exclusions): {str(e)}"
+                        errors.append(error_msg)
+                        logger.error(error_msg)
+                elif skip_exclusions:
+                    logger.debug(f"Skipped exclusions checklist for grant {grant.id} (already exists)")
+                
                 # Only count as success if we actually generated at least one checklist
                 if (checklist_type == 'eligibility' and not skip_eligibility) or \
                    (checklist_type == 'competitiveness' and not skip_competitiveness) or \
-                   (checklist_type == 'both' and (not skip_eligibility or not skip_competitiveness)):
+                   (checklist_type == 'exclusions' and not skip_exclusions) or \
+                   (checklist_type == 'both' and (not skip_eligibility or not skip_competitiveness)) or \
+                   (checklist_type == 'all' and (not skip_eligibility or not skip_competitiveness or not skip_exclusions)):
                     success_count += 1
                 
             except Exception as e:

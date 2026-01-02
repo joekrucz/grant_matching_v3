@@ -25,11 +25,8 @@
             {% if user.is_authenticated %}
             <ul class="menu menu-horizontal px-1 gap-4">
                 <li><a href="{% url 'grants:list' %}" class="link link-hover">Grants</a></li>
+                <li><a href="{% url 'grants:eligibility_questionnaire' %}" class="link link-hover">Eligibility Questionnaire</a></li>
                 <li><a href="{% url 'companies:list' %}" class="link link-hover">Companies</a></li>
-                <li><a href="{% url 'companies:funding_searches_list' %}" class="link link-hover">My Funding Searches</a></li>
-                {% if user.admin %}
-                <li><a href="{% url 'admin_panel:conversations_page' %}" class="link link-hover">My Conversations</a></li>
-                {% endif %}
             </ul>
             {% endif %}
         </div>
@@ -41,7 +38,10 @@
                 </div>
                 <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 bg-base-200 rounded-box w-52">
                     <li><a href="{% url 'users:profile' %}">Profile</a></li>
+                    <li><a href="{% url 'grants:questionnaires_list' %}">My Questionnaires</a></li>
+                    <li><a href="{% url 'companies:funding_searches_list' %}">My Funding Searches</a></li>
                     {% if user.admin %}
+                    <li><a href="{% url 'admin_panel:conversations_page' %}">My Conversations</a></li>
                     <li><a href="{% url 'admin_panel:dashboard' %}">Admin</a></li>
                     {% endif %}
                     <li><a href="{% url 'users:sign_out' %}">Sign Out</a></li>

@@ -4,6 +4,7 @@ Grant and ScrapeLog models.
 import hashlib
 import json
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -39,10 +40,12 @@ class Grant(models.Model):
     url = models.URLField(blank=True, null=True)
     funding_amount = models.CharField(max_length=255, blank=True, null=True)
     deadline = models.DateTimeField(blank=True, null=True, db_index=True)
+    opening_date = models.DateTimeField(blank=True, null=True, db_index=True)
     status = models.CharField(max_length=50, choices=GRANT_STATUSES, default='unknown', db_index=True)
     raw_data = models.JSONField(default=dict, blank=True)
     eligibility_checklist = models.JSONField(default=dict, blank=True, null=True)
     competitiveness_checklist = models.JSONField(default=dict, blank=True, null=True)
+    exclusions_checklist = models.JSONField(default=dict, blank=True, null=True)
     scraped_at = models.DateTimeField(blank=True, null=True)
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_changed_at = models.DateTimeField(blank=True, null=True)
@@ -61,6 +64,50 @@ class Grant(models.Model):
     
     def __str__(self):
         return f"{self.title} ({self.source})"
+    
+    def get_computed_status(self):
+        """
+        Calculate grant status based on opening_date and deadline.
+        Returns: 'open', 'closed', or 'unknown'
+        """
+        now = timezone.now()
+        
+        # If we have a deadline
+        if self.deadline:
+            if self.deadline < now:
+                return 'closed'
+            # Deadline is in the future
+            # Check if it's opened yet
+            if self.opening_date:
+                if self.opening_date <= now:
+                    return 'open'
+                else:
+                    # Opening date is in the future
+                    return 'open'  # Consider it open if deadline exists and is future
+            else:
+                # No opening date, but deadline is in future - assume open
+                return 'open'
+        
+        # No deadline - check opening date
+        if self.opening_date:
+            if self.opening_date <= now:
+                return 'open'  # Opened but no closing date (open-ended)
+            else:
+                return 'open'  # Not opened yet, but will open (treat as open)
+        
+        # No dates at all
+        return 'unknown'
+    
+    @property
+    def computed_status(self):
+        """Property to access computed status (for backward compatibility)."""
+        return self.get_computed_status()
+    
+    def get_status_display(self):
+        """Override to use computed status instead of stored status."""
+        status = self.get_computed_status()
+        status_dict = dict(GRANT_STATUSES)
+        return status_dict.get(status, 'Unknown')
     
     @classmethod
     def generate_slug(cls, title, source):
@@ -150,7 +197,8 @@ class Grant(models.Model):
                     grant.url = grant_data.get('url', grant.url)
                     grant.funding_amount = grant_data.get('funding_amount', grant.funding_amount)
                     grant.deadline = grant_data.get('deadline')
-                    grant.status = grant_data.get('status', grant.status)
+                    grant.opening_date = grant_data.get('opening_date')
+                    # Status is now computed from dates, so we don't update it here
                     grant.raw_data = grant_data.get('raw_data', grant.raw_data)
                     grant.scraped_at = grant_data.get('scraped_at') or timezone.now()
                     grant.hash_checksum = hash_checksum
@@ -171,7 +219,8 @@ class Grant(models.Model):
                     url=grant_data.get('url', ''),
                     funding_amount=grant_data.get('funding_amount', ''),
                     deadline=grant_data.get('deadline'),
-                    status=grant_data.get('status', 'unknown'),
+                    opening_date=grant_data.get('opening_date'),
+                    status='unknown',  # Status is computed from dates, default to unknown
                     raw_data=grant_data.get('raw_data', {}),
                     scraped_at=grant_data.get('scraped_at') or timezone.now(),
                     hash_checksum=hash_checksum,
@@ -255,4 +304,40 @@ class ScrapeLog(models.Model):
     def total_grants_processed(self):
         """Return total grants processed."""
         return self.grants_created + self.grants_updated + self.grants_skipped
+
+
+class EligibilityQuestionnaire(models.Model):
+    """Store saved eligibility questionnaires with user selections."""
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='eligibility_questionnaires'
+    )
+    name = models.CharField(max_length=255, blank=True, null=True)
+    selected_items = models.JSONField(default=list)  # List of selected item texts
+    all_items = models.JSONField(default=list)  # All items available at time of creation
+    total_grants = models.IntegerField(default=0)  # Total grants with checklists at time of creation
+    sales_questionnaire = models.JSONField(default=dict, blank=True, null=True)  # Generated sales qualification questionnaire from ChatGPT
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'eligibility_questionnaires'
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        name = self.name or f"Questionnaire {self.id}"
+        return f"{name} - {self.user.email} - {self.created_at.strftime('%Y-%m-%d')}"
+    
+    def selected_count(self):
+        """Return count of selected items."""
+        return len(self.selected_items) if self.selected_items else 0
+    
+    def total_items(self):
+        """Return total items available."""
+        return len(self.all_items) if self.all_items else 0
 

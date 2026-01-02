@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ questionnaire.name|default:"Questionnaire" }} - Trellis{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold">{{ questionnaire.name|default:"Unnamed Questionnaire" }}</h1>
+            <p class="text-sm text-base-content/70 mt-1">
+                Created {{ questionnaire.created_at|date:"M d, Y H:i" }} • {{ selected_count }} / {{ total_items }} items selected
+                {% if questionnaire.total_grants %}
+                • {{ questionnaire.total_grants }} grant{{ questionnaire.total_grants|pluralize }} analyzed
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'grants:questionnaires_list' %}" class="btn btn-outline btn-sm">
+                Back to List
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card bg-base-200 border border-base-300">
+    <div class="card-body">
+        <div class="space-y-4">
+            {% for item in items %}
+            <div class="card bg-base-100 border {% if item.selected %}border-primary{% else %}border-base-300{% endif %}">
+                <div class="card-body p-4">
+                    <div class="flex items-start gap-3">
+                        {% if item.selected %}
+                        <input 
+                            type="checkbox" 
+                            class="checkbox checkbox-primary checkbox-sm mt-1" 
+                            checked
+                            disabled
+                        >
+                        <div class="flex-1">
+                            <span class="text-base-content/90">{{ item.text }}</span>
+                            <span class="badge badge-success badge-sm ml-2">Selected</span>
+                        </div>
+                        {% else %}
+                        <input 
+                            type="checkbox" 
+                            class="checkbox checkbox-sm mt-1" 
+                            disabled
+                        >
+                        <div class="flex-1">
+                            <span class="text-base-content/60">{{ item.text }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="alert alert-info">
+                <span>No items in this questionnaire.</span>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="mt-6 pt-6 border-t border-base-300">
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="text-sm text-base-content/70">Selected: </span>
+                    <span class="text-sm font-semibold">{{ selected_count }}</span>
+                    <span class="text-sm text-base-content/70"> / {{ total_items }}</span>
+                </div>
+                <div>
+                    <a href="{% url 'grants:eligibility_questionnaire' %}" class="btn btn-primary btn-sm">
+                        Create New Questionnaire
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if questionnaire.sales_questionnaire and questionnaire.sales_questionnaire.sections %}
+<div class="card bg-base-200 border border-primary mt-6">
+    <div class="card-body">
+        <h2 class="card-title text-2xl mb-4">Sales Qualification Questionnaire</h2>
+        <p class="text-base-content/80 mb-6">
+            Use this questionnaire during sales calls to qualify prospects against the majority of eligibility criteria.
+        </p>
+        
+        {% if questionnaire.sales_questionnaire.introduction %}
+        <div class="alert alert-info mb-6">
+            <div>
+                <h3 class="font-semibold mb-2">Introduction</h3>
+                <p>{{ questionnaire.sales_questionnaire.introduction }}</p>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% for section in questionnaire.sales_questionnaire.sections %}
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold mb-4">{{ section.title }}</h3>
+            <div class="space-y-4">
+                {% for question in section.questions %}
+                <div class="card bg-base-100 border border-base-300">
+                    <div class="card-body p-4">
+                        <div class="flex items-start gap-3">
+                            <span class="badge badge-outline badge-sm mt-1">{{ forloop.parentloop.counter }}.{{ forloop.counter }}</span>
+                            <div class="flex-1">
+                                <p class="font-medium text-base-content/90 mb-2">{{ question.question }}</p>
+                                
+                                {% if question.type == "yes_no" %}
+                                <div class="flex gap-2 mb-2">
+                                    <span class="badge badge-ghost">Yes/No</span>
+                                </div>
+                                {% elif question.type == "multiple_choice" %}
+                                <div class="mb-2">
+                                    <span class="badge badge-ghost mb-2">Multiple Choice</span>
+                                    {% if question.options %}
+                                    <ul class="list-disc list-inside mt-2 ml-4">
+                                        {% for option in question.options %}
+                                        <li class="text-sm text-base-content/70">{{ option }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% endif %}
+                                </div>
+                                {% elif question.type == "open_ended" %}
+                                <div class="flex gap-2 mb-2">
+                                    <span class="badge badge-ghost">Open-ended</span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if question.context %}
+                                <p class="text-xs text-base-content/60 italic mt-2">
+                                    <strong>Why this matters:</strong> {{ question.context }}
+                                </p>
+                                {% endif %}
+                                
+                                {% if question.follow_up %}
+                                <div class="mt-3 pt-3 border-t border-base-300">
+                                    <p class="text-sm text-base-content/80">
+                                        <strong>Follow-up:</strong> {{ question.follow_up }}
+                                    </p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if questionnaire.sales_questionnaire.summary %}
+        <div class="alert alert-success mt-6">
+            <div>
+                <h3 class="font-semibold mb-2">Summary</h3>
+                <p>{{ questionnaire.sales_questionnaire.summary }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+

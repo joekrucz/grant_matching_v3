@@ -471,6 +471,74 @@ class AiAssistantClient:
         }
         return self._call_json_model(system_prompt, payload, max_tokens=800)
 
+    def generate_sales_qualification_questionnaire(self, eligibility_items: List[str]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Generate a sales qualification-friendly questionnaire from eligibility items."""
+        system_prompt = (
+            "You are a sales qualification expert helping to create effective qualification questionnaires for grant eligibility.\n"
+            "Your task is to transform technical eligibility requirements into conversational, sales-friendly questions that can be used during sales calls.\n"
+            "\n"
+            "Guidelines:\n"
+            "- Convert each eligibility requirement into a natural, conversational question\n"
+            "- Questions should be easy to ask during a sales call and easy for prospects to answer\n"
+            "- Use open-ended questions when possible, but include yes/no questions for quick qualification\n"
+            "- Group related requirements into logical sections\n"
+            "- Make questions sound professional but approachable - avoid jargon\n"
+            "- Include follow-up questions or probing questions where helpful\n"
+            "- Order questions logically (e.g., company basics first, then specific requirements)\n"
+            "- Add context or explanation where needed to help the salesperson understand why the question matters\n"
+            "- Ensure the questionnaire covers the majority of eligibility criteria comprehensively\n"
+            "\n"
+            "Output format:\n"
+            "Return a JSON object with:\n"
+            "- \"sections\": Array of section objects, each with:\n"
+            "  - \"title\": Section heading (e.g., \"Company Information\", \"Project Requirements\")\n"
+            "  - \"questions\": Array of question objects, each with:\n"
+            "    - \"question\": The sales-friendly question text\n"
+            "    - \"type\": \"yes_no\", \"open_ended\", or \"multiple_choice\"\n"
+            "    - \"options\": Array of options (only for multiple_choice type)\n"
+            "    - \"follow_up\": Optional follow-up question or probing question\n"
+            "    - \"context\": Optional brief explanation of why this question matters\n"
+            "- \"introduction\": A brief introduction text for the salesperson to use when starting the qualification\n"
+            "- \"summary\": A brief summary of what the questionnaire covers\n"
+        )
+        payload = {
+            "task": "generate_sales_qualification_questionnaire",
+            "eligibility_items": eligibility_items,
+        }
+        return self._call_json_model(system_prompt, payload, max_tokens=2000)
+
+    def exclusions_checklist(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Generate an exclusions checklist - what the grant will NOT fund."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a single grant object with fields such as "
+            "`title`, `summary`, `description`, `eligibility`, `deadline`, "
+            "`funding_amount`, `status`, `source`, `url`.\n"
+            "Your task is to:\n"
+            "- Identify what types of projects, activities, organizations, or expenses this grant will NOT fund.\n"
+            "- Extract all explicit exclusions, restrictions, and ineligible items mentioned in the grant information.\n"
+            "- Create a comprehensive checklist of what the grant excludes or will not fund.\n"
+            "- Include exclusions such as: ineligible organization types, excluded sectors/industries, "
+            "restricted activities, excluded costs/expenses, geographic restrictions, project type restrictions, "
+            "and any other specific exclusions mentioned.\n"
+            "- Look for language like 'not eligible', 'excluded', 'will not fund', 'not covered', 'ineligible', etc.\n"
+            "- If exclusion information is missing or unclear, note that in the checklist.\n"
+            "Rules:\n"
+            "- Use only the information in the provided grant object.\n"
+            "- Extract exclusions from all relevant fields (eligibility, description, summary, etc.).\n"
+            "- Be specific and actionable - each checklist item should clearly state what is excluded.\n"
+            "- If important exclusion information is missing, explicitly mention that instead of guessing.\n"
+            "- Keep language clear and non-technical.\n"
+            "- Do not invent exclusions that are not present in the grant information.\n"
+            "Always respond with a single JSON object: "
+            '{"checklist_items": [string], "notes": [string], "missing_info": [string]}.'
+        )
+        payload = {
+            "task": "exclusions_checklist",
+            "grant": grant_ctx,
+        }
+        return self._call_json_model(system_prompt, payload, max_tokens=800)
+
     def competitiveness_checklist(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
         """Generate a competitiveness checklist from grant information."""
         system_prompt = (
