@@ -529,21 +529,21 @@ def scrape_innovate_uk(existing_grants: Dict[str, Dict[str, Any]] = None) -> Lis
         
         # Fallback to regex patterns if structured format not found
         if not deadline_raw:
-        # Look for "Closes:" or "Closes on:" patterns
-        deadline_patterns = [
-            r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"closing[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"deadline[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"closes?[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-        ]
-        
-        for pattern in deadline_patterns:
-          match = re.search(pattern, page_text, re.IGNORECASE)
-          if match:
-            deadline_raw = match.group(1)
-            break
+            # Look for "Closes:" or "Closes on:" patterns
+            deadline_patterns = [
+                r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+                r"closing[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+                r"deadline[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+                r"closes?[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+            ]
+            
+            for pattern in deadline_patterns:
+                match = re.search(pattern, page_text, re.IGNORECASE)
+                if match:
+                    deadline_raw = match.group(1)
+                    break
         
         # Also check for structured date elements
         if not deadline_raw:
