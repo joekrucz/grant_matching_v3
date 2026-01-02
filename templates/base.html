@@ -12,6 +12,16 @@
             opacity: 0.5;
             pointer-events: none;
         }
+        {% if user.is_authenticated and user.theme == 'custom' and user.custom_theme %}
+        :root[data-theme="custom"] {
+            {% if user.custom_theme.primary %}--p: {{ user.custom_theme.primary }};{% endif %}
+            {% if user.custom_theme.secondary %}--s: {{ user.custom_theme.secondary }};{% endif %}
+            {% if user.custom_theme.accent %}--a: {{ user.custom_theme.accent }};{% endif %}
+            {% if user.custom_theme.neutral %}--n: {{ user.custom_theme.neutral }};{% endif %}
+            {% if user.custom_theme.base_100 %}--b1: {{ user.custom_theme.base_100 }};{% endif %}
+            {% if user.custom_theme.base_content %}--bc: {{ user.custom_theme.base_content }};{% endif %}
+        }
+        {% endif %}
     </style>
 </head>
 <body class="min-h-screen bg-base-100 text-base-content">

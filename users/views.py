@@ -206,6 +206,25 @@ def profile(request):
         theme = request.POST.get('theme', '').strip()
         user.theme = theme if theme else None
         
+        # Handle custom theme colors
+        import json
+        custom_theme_data = {}
+        if request.POST.get('use_custom_theme') == 'true':
+            # Collect custom theme color values
+            # Use underscores in JSON keys, convert to hyphens for CSS
+            color_fields = ['primary', 'secondary', 'accent', 'neutral', 'base_100', 'base_200', 'base_300', 'base_content', 'info', 'success', 'warning', 'error']
+            for field in color_fields:
+                color_value = request.POST.get(f'custom_theme_{field}', '').strip()
+                if color_value:
+                    custom_theme_data[field] = color_value
+            user.custom_theme = custom_theme_data
+            # Set theme to 'custom' if custom colors are provided
+            if custom_theme_data:
+                user.theme = 'custom'
+        else:
+            # Clear custom theme if not using it
+            user.custom_theme = {}
+        
         # Handle password change if provided
         current_password = request.POST.get('current_password', '').strip()
         new_password = request.POST.get('new_password', '').strip()

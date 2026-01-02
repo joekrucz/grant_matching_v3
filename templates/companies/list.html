@@ -3,49 +3,189 @@
 {% block title %}Companies - Grants Aggregator{% endblock %}
 
 {% block content %}
-<div class="mb-6 flex justify-between items-center">
-    <div>
-        <h1 class="text-3xl font-bold">Companies</h1>
-        <p class="text-sm text-base-content/70 mt-1">
-            {{ page_obj.paginator.count }} compan{% if page_obj.paginator.count == 1 %}y{% else %}ies{% endif %}
-        </p>
+<div class="mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h1 class="text-3xl font-bold">Companies</h1>
+            <p class="text-sm text-base-content/70 mt-1">
+                {{ page_obj.paginator.count }} compan{% if page_obj.paginator.count == 1 %}y{% else %}ies{% endif %}
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <a href="?view=table" 
+               class="btn btn-sm {% if request.GET.view == 'table' or not request.GET.view %}btn-active{% else %}btn-outline{% endif %}" 
+               id="table-view-btn">
+                Table
+            </a>
+            <a href="?view=grid" 
+               class="btn btn-sm {% if request.GET.view == 'grid' %}btn-active{% else %}btn-outline{% endif %}" 
+               id="grid-view-btn">
+                Grid
+            </a>
+            <a href="{% url 'companies:create' %}" class="btn btn-primary btn-sm">
+                Add Company
+            </a>
+        </div>
     </div>
-    <a href="{% url 'companies:create' %}" class="btn btn-primary">
-        Add Company
-    </a>
 </div>
 
-<div class="space-y-4">
+{% if request.GET.view == 'table' or not request.GET.view %}
+<!-- Table View -->
+<div class="overflow-x-auto">
+    <table class="table table-zebra w-full">
+        <thead>
+            <tr>
+                <th>Company Name</th>
+                <th>Company Number</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Registration</th>
+                {% if user.admin %}
+                <th>Owner</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for company in page_obj %}
+            <tr>
+                <td>
+                    <a href="{% url 'companies:detail' company.id %}" class="text-base-content no-underline hover:underline font-semibold">
+                        {{ company.name|title }}
+                    </a>
+                </td>
+                <td>
+                    {% if company.company_number %}
+                        <span class="badge badge-outline">{{ company.company_number }}</span>
+                    {% else %}
+                        <span class="text-base-content/50">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if company.company_type %}
+                        {{ company.company_type }}
+                    {% else %}
+                        <span class="text-base-content/50">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if company.status %}
+                        <span class="badge badge-ghost">{{ company.status }}</span>
+                    {% else %}
+                        <span class="text-base-content/50">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if company.is_registered %}
+                        <span class="badge badge-success">Registered</span>
+                    {% else %}
+                        <span class="badge badge-warning">Unregistered</span>
+                    {% endif %}
+                </td>
+                {% if user.admin %}
+                <td>
+                    <span class="text-sm">{{ company.user.email }}</span>
+                </td>
+                {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="{% if user.admin %}6{% else %}5{% endif %}" class="text-center">
+                    <div class="alert alert-info">
+                        <span>No companies found. <a href="{% url 'companies:create' %}" class="link">Add one</a></span>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<!-- Grid View -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for company in page_obj %}
-    <div class="card bg-base-200 border border-base-300">
-        <div class="card-body p-3">
+    <div class="card bg-base-200 border border-base-300 h-full flex flex-col">
+        <div class="card-body flex-grow">
             <div class="flex justify-between items-start mb-2">
-                <h2 class="card-title">
+                <h2 class="card-title text-lg">
                     <a href="{% url 'companies:detail' company.id %}"
-                       class="text-base-content no-underline hover:underline hover:text-primary transition-colors">
+                       class="text-base-content no-underline hover:underline transition-colors line-clamp-2">
                         {{ company.name|title }}
                     </a>
                 </h2>
-                <div class="badge badge-outline">{{ company.company_number }}</div>
+                {% if company.company_number %}
+                <div class="badge badge-outline flex-shrink-0">{{ company.company_number }}</div>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap gap-2 mt-auto">
+                {% if company.company_type %}
+                <div class="badge badge-ghost">{{ company.company_type }}</div>
+                {% endif %}
+                {% if company.is_registered %}
+                <div class="badge badge-success">Registered</div>
+                {% else %}
+                <div class="badge badge-warning">Unregistered</div>
+                {% endif %}
             </div>
         </div>
     </div>
     {% empty %}
-    <div class="alert alert-info">
-        <span>No companies found. <a href="{% url 'companies:create' %}" class="link">Add one</a></span>
+    <div class="col-span-full">
+        <div class="alert alert-info">
+            <span>No companies found. <a href="{% url 'companies:create' %}" class="link">Add one</a></span>
+        </div>
     </div>
     {% endfor %}
 </div>
+{% endif %}
 
 {% if page_obj.has_other_pages %}
 <div class="join flex justify-center mt-6">
     {% if page_obj.has_previous %}
-    <a href="?page={{ page_obj.previous_page_number }}" class="join-item btn">Previous</a>
+    <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.view %}&view={{ request.GET.view }}{% endif %}" class="join-item btn">Previous</a>
     {% endif %}
     <button class="join-item btn btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
     {% if page_obj.has_next %}
-    <a href="?page={{ page_obj.next_page_number }}" class="join-item btn">Next</a>
+    <a href="?page={{ page_obj.next_page_number }}{% if request.GET.view %}&view={{ request.GET.view }}{% endif %}" class="join-item btn">Next</a>
     {% endif %}
 </div>
 {% endif %}
+
+<script>
+    // Handle view toggle and persist preference
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get view preference from localStorage or URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const viewFromUrl = urlParams.get('view');
+        const savedView = localStorage.getItem('companiesListView') || 'table';
+        const currentView = viewFromUrl || savedView;
+        
+        // Update button states
+        const tableBtn = document.getElementById('table-view-btn');
+        const gridBtn = document.getElementById('grid-view-btn');
+        
+        if (currentView === 'grid') {
+            if (tableBtn) tableBtn.classList.remove('btn-active');
+            if (tableBtn) tableBtn.classList.add('btn-outline');
+            if (gridBtn) gridBtn.classList.remove('btn-outline');
+            if (gridBtn) gridBtn.classList.add('btn-active');
+        } else {
+            if (gridBtn) gridBtn.classList.remove('btn-active');
+            if (gridBtn) gridBtn.classList.add('btn-outline');
+            if (tableBtn) tableBtn.classList.remove('btn-outline');
+            if (tableBtn) tableBtn.classList.add('btn-active');
+        }
+        
+        // Save preference when clicking buttons
+        if (tableBtn) {
+            tableBtn.addEventListener('click', function() {
+                localStorage.setItem('companiesListView', 'table');
+            });
+        }
+        if (gridBtn) {
+            gridBtn.addEventListener('click', function() {
+                localStorage.setItem('companiesListView', 'grid');
+            });
+        }
+    });
+</script>
 {% endblock %}

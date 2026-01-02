@@ -43,21 +43,21 @@
                 <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-72 p-2 shadow-lg border border-base-300">
                     <li>
                         <button id="generate-checklist-btn" type="button" onclick="generateEligibilityChecklist()" class="w-full text-left">
-                            <span id="checklist-btn-text">{% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Eligibility Checklist</span>
-                            <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-                        </button>
+                <span id="checklist-btn-text">{% if grant.eligibility_checklist and grant.eligibility_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Eligibility Checklist</span>
+                <span id="checklist-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
                     </li>
                     <li>
                         <button id="generate-competitiveness-btn" type="button" onclick="generateCompetitivenessChecklist()" class="w-full text-left">
-                            <span id="competitiveness-btn-text">{% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Competitiveness Checklist</span>
-                            <span id="competitiveness-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-                        </button>
+                <span id="competitiveness-btn-text">{% if grant.competitiveness_checklist and grant.competitiveness_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Competitiveness Checklist</span>
+                <span id="competitiveness-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
                     </li>
                     <li>
                         <button id="generate-exclusions-btn" type="button" onclick="generateExclusionsChecklist()" class="w-full text-left">
-                            <span id="exclusions-btn-text">{% if grant.exclusions_checklist and grant.exclusions_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Exclusions Checklist</span>
-                            <span id="exclusions-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
-                        </button>
+                <span id="exclusions-btn-text">{% if grant.exclusions_checklist and grant.exclusions_checklist.checklist_items %}Regenerate{% else %}Generate{% endif %} Exclusions Checklist</span>
+                <span id="exclusions-btn-loading" class="loading loading-spinner loading-sm hidden"></span>
+            </button>
                     </li>
                     {% if user.admin %}
                     <li class="divider my-1"></li>

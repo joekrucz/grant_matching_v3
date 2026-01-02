@@ -43,6 +43,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     name = models.CharField(max_length=255, blank=True, null=True)
     admin = models.BooleanField(default=False)
     theme = models.CharField(max_length=50, blank=True, null=True)
+    custom_theme = models.JSONField(default=dict, blank=True)  # Stores custom theme color values
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)

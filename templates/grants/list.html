@@ -80,14 +80,12 @@
             {% for grant in page_obj %}
             <tr>
                 <td>
-                    <a href="{% url 'grants:detail' grant.slug %}" class="link link-primary font-semibold">
+                    <a href="{% url 'grants:detail' grant.slug %}" class="text-base-content no-underline hover:underline font-semibold">
                         {{ grant.title }}
                     </a>
                 </td>
                 <td>
-                    <div class="badge {% if grant.source == 'ukri' %}badge-primary{% elif grant.source == 'nihr' %}badge-secondary{% elif grant.source == 'catapult' %}badge-accent{% else %}badge-info{% endif %}">
-                        {{ grant.get_source_display }}
-                    </div>
+                    {{ grant.get_source_display }}
                 </td>
                 <td>
                     <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
@@ -129,14 +127,12 @@
         <div class="card-body flex-grow">
             <div class="flex justify-between items-start mb-2">
                 <h2 class="card-title text-lg">
-                    <a href="{% url 'grants:detail' grant.slug %}" class="link link-primary line-clamp-2">
+                    <a href="{% url 'grants:detail' grant.slug %}" class="text-base-content no-underline hover:underline transition-colors line-clamp-2">
                         {{ grant.title }}
                     </a>
                 </h2>
                 <div class="flex gap-2 flex-shrink-0">
-                    <div class="badge {% if grant.source == 'ukri' %}badge-primary{% elif grant.source == 'nihr' %}badge-secondary{% else %}badge-accent{% endif %}">
-                        {{ grant.get_source_display }}
-                    </div>
+                    <span class="text-sm">{{ grant.get_source_display }}</span>
                     <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
                         {{ grant.get_status_display }}
                     </div>
