@@ -4,6 +4,7 @@ Company views.
 import os
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models.functions import Lower
@@ -356,6 +357,7 @@ def company_create(request):
 
 
 @login_required
+@require_POST
 def company_delete(request, id):
     """Delete company (owner or admin only)."""
     # SECURITY: Check authorization before loading data
@@ -365,13 +367,10 @@ def company_delete(request, id):
         messages.error(request, 'You do not have permission to delete this company.')
         return redirect('companies:detail', id=id)
     
-    if request.method == 'POST':
-        company_name = company.name
-        company.delete()
-        messages.success(request, f'Company {company_name} deleted successfully.')
-        return redirect('companies:list')
-    
-    return render(request, 'companies/delete.html', {'company': company})
+    company_name = company.name
+    company.delete()
+    messages.success(request, f'Company {company_name} deleted successfully.')
+    return redirect('companies:list')
 
 
 @login_required
@@ -561,6 +560,7 @@ def funding_search_select_data(request, id):
 
 
 @login_required
+@require_POST
 def funding_search_delete(request, id):
     """Delete funding search (owner or admin only)."""
     # SECURITY: Check authorization before loading data
@@ -570,13 +570,89 @@ def funding_search_delete(request, id):
         messages.error(request, 'You do not have permission to delete this funding search.')
         return redirect('companies:funding_search_detail', id=id)
     
-    if request.method == 'POST':
-        company_id = funding_search.company.id
-        funding_search.delete()
-        messages.success(request, 'Funding search deleted successfully.')
-        return redirect('companies:detail', id=company_id)
+    company_id = funding_search.company.id
+    funding_search.delete()
+    messages.success(request, 'Funding search deleted successfully.')
+    return redirect('companies:detail', id=company_id)
+
+
+@login_required
+def funding_search_copy(request, id):
+    """Copy funding search (owner or admin only)."""
+    from django.core.files.base import ContentFile
+    import os
     
-    return render(request, 'companies/funding_search_delete.html', {'funding_search': funding_search})
+    # SECURITY: Check authorization before loading data
+    original = get_object_or_404(FundingSearch, id=id)
+    
+    if request.user != original.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to copy this funding search.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    if request.method == 'POST':
+        # Create new funding search with copied data
+        new_name = f"{original.name} (copy)"
+        
+        # Create the new funding search (without file first)
+        new_funding_search = FundingSearch.objects.create(
+            company=original.company,
+            user=original.user,
+            name=new_name,
+            notes=original.notes,
+            trl_level=original.trl_level,
+            trl_levels=original.trl_levels.copy() if original.trl_levels else [],
+            project_description=original.project_description,
+            file_type=original.file_type,
+            use_company_website=original.use_company_website,
+            selected_grant_sources=original.selected_grant_sources.copy() if original.selected_grant_sources else [],
+            matching_status='pending',
+            matching_progress={},
+        )
+        
+        # Copy the uploaded file if it exists
+        if original.uploaded_file:
+            try:
+                # Read the original file content
+                original.uploaded_file.open('rb')
+                file_content = original.uploaded_file.read()
+                original.uploaded_file.close()
+                
+                # Create a new file with the same name
+                new_funding_search.uploaded_file.save(
+                    os.path.basename(original.uploaded_file.name),
+                    ContentFile(file_content),
+                    save=True
+                )
+            except Exception as e:
+                # If file copying fails, continue without the file
+                messages.warning(request, f'Funding search copied, but file could not be copied: {str(e)}')
+        
+        # Copy ManyToMany relationships
+        new_funding_search.selected_company_files.set(original.selected_company_files.all())
+        new_funding_search.selected_company_notes.set(original.selected_company_notes.all())
+        
+        # Copy matching results
+        if original.match_results.exists():
+            for original_result in original.match_results.all():
+                GrantMatchResult.objects.create(
+                    funding_search=new_funding_search,
+                    grant=original_result.grant,
+                    match_score=original_result.match_score,
+                    eligibility_score=original_result.eligibility_score,
+                    competitiveness_score=original_result.competitiveness_score,
+                    match_reasons=original_result.match_reasons.copy() if original_result.match_reasons else {},
+                )
+            
+            # Copy last_matched_at and set status to completed if results were copied
+            new_funding_search.last_matched_at = original.last_matched_at
+            new_funding_search.matching_status = 'completed'
+            new_funding_search.save()
+        
+        messages.success(request, 'Funding search copied successfully.')
+        return redirect('companies:funding_search_detail', id=new_funding_search.id)
+    
+    # GET request - show confirmation (optional, or just redirect)
+    return redirect('companies:funding_search_detail', id=id)
 
 
 def extract_text_from_file(file, file_type):
