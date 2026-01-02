@@ -97,30 +97,12 @@ if CELERY_TASKS_AVAILABLE:
         )
         logger.info(f"Created ScrapeLog with ID: {scrape_log.id}, Task ID: {self.request.id}")
         
-        # Check if task has been revoked before starting
-        if self.is_aborted():
-            logger.info(f"Task {self.request.id} was revoked before starting scraper request")
-            scrape_log.status = 'cancelled'
-            scrape_log.completed_at = timezone.now()
-            scrape_log.error_message = 'Cancelled by administrator'
-            scrape_log.save()
-            return
-        
         try:
             result = _safe_scraper_request(
                 f"{settings.PYTHON_SCRAPER_URL}/run/ukri",
                 scrape_log.id,
                 timeout=300
             )
-            
-            # Check again after request completes
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked after scraper request")
-                scrape_log.status = 'cancelled'
-                scrape_log.completed_at = timezone.now()
-                scrape_log.error_message = 'Cancelled by administrator'
-                scrape_log.save()
-                return
             
             counts = _extract_counts(result.get("data"))
             scrape_log.metadata = {
@@ -140,19 +122,13 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
             
-            # Check if task was revoked before chaining
-            if continue_chain and not self.is_aborted():
+            # Chain to next scraper if needed
+            if continue_chain:
                 trigger_nihr_scrape.delay(chain_started_at.isoformat(), continue_chain=True)
         except Exception as e:
             scrape_log.refresh_from_db()
-            # Check if error was due to revocation
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked, marking as cancelled")
-                scrape_log.status = 'cancelled'
-                scrape_log.error_message = 'Cancelled by administrator'
-            else:
-                scrape_log.status = 'error'
-                scrape_log.error_message = str(e)
+            scrape_log.status = 'error'
+            scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
 
@@ -175,30 +151,12 @@ if CELERY_TASKS_AVAILABLE:
             }
         )
         
-        # Check if task has been revoked before starting
-        if self.is_aborted():
-            logger.info(f"Task {self.request.id} was revoked before starting scraper request")
-            scrape_log.status = 'cancelled'
-            scrape_log.completed_at = timezone.now()
-            scrape_log.error_message = 'Cancelled by administrator'
-            scrape_log.save()
-            return
-        
         try:
             result = _safe_scraper_request(
                 f"{settings.PYTHON_SCRAPER_URL}/run/nihr",
                 scrape_log.id,
                 timeout=300
             )
-            
-            # Check again after request completes
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked after scraper request")
-                scrape_log.status = 'cancelled'
-                scrape_log.completed_at = timezone.now()
-                scrape_log.error_message = 'Cancelled by administrator'
-                scrape_log.save()
-                return
             
             counts = _extract_counts(result.get("data"))
             scrape_log.metadata = {
@@ -218,19 +176,13 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
             
-            # Check if task was revoked before chaining
-            if continue_chain and not self.is_aborted():
+            # Chain to next scraper if needed
+            if continue_chain:
                 trigger_catapult_scrape.delay(chain_started_at_str, continue_chain=True)
         except Exception as e:
             scrape_log.refresh_from_db()
-            # Check if error was due to revocation
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked, marking as cancelled")
-                scrape_log.status = 'cancelled'
-                scrape_log.error_message = 'Cancelled by administrator'
-            else:
-                scrape_log.status = 'error'
-                scrape_log.error_message = str(e)
+            scrape_log.status = 'error'
+            scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
 
@@ -253,30 +205,12 @@ if CELERY_TASKS_AVAILABLE:
             }
         )
         
-        # Check if task has been revoked before starting
-        if self.is_aborted():
-            logger.info(f"Task {self.request.id} was revoked before starting scraper request")
-            scrape_log.status = 'cancelled'
-            scrape_log.completed_at = timezone.now()
-            scrape_log.error_message = 'Cancelled by administrator'
-            scrape_log.save()
-            return
-        
         try:
             result = _safe_scraper_request(
                 f"{settings.PYTHON_SCRAPER_URL}/run/catapult",
                 scrape_log.id,
                 timeout=300
             )
-            
-            # Check again after request completes
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked after scraper request")
-                scrape_log.status = 'cancelled'
-                scrape_log.completed_at = timezone.now()
-                scrape_log.error_message = 'Cancelled by administrator'
-                scrape_log.save()
-                return
             
             counts = _extract_counts(result.get("data"))
             scrape_log.metadata = {
@@ -296,19 +230,13 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
             
-            # Check if task was revoked before chaining
-            if continue_chain and not self.is_aborted():
+            # Chain to next scraper if needed
+            if continue_chain:
                 trigger_innovate_uk_scrape.delay(chain_started_at_str, continue_chain=True)
         except Exception as e:
             scrape_log.refresh_from_db()
-            # Check if error was due to revocation
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked, marking as cancelled")
-                scrape_log.status = 'cancelled'
-                scrape_log.error_message = 'Cancelled by administrator'
-            else:
-                scrape_log.status = 'error'
-                scrape_log.error_message = str(e)
+            scrape_log.status = 'error'
+            scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
 
@@ -331,30 +259,12 @@ if CELERY_TASKS_AVAILABLE:
             }
         )
         
-        # Check if task has been revoked before starting
-        if self.is_aborted():
-            logger.info(f"Task {self.request.id} was revoked before starting scraper request")
-            scrape_log.status = 'cancelled'
-            scrape_log.completed_at = timezone.now()
-            scrape_log.error_message = 'Cancelled by administrator'
-            scrape_log.save()
-            return
-        
         try:
             result = _safe_scraper_request(
                 f"{settings.PYTHON_SCRAPER_URL}/run/innovate_uk",
                 scrape_log.id,
                 timeout=300
             )
-            
-            # Check again after request completes
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked after scraper request")
-                scrape_log.status = 'cancelled'
-                scrape_log.completed_at = timezone.now()
-                scrape_log.error_message = 'Cancelled by administrator'
-                scrape_log.save()
-                return
             
             counts = _extract_counts(result.get("data"))
             scrape_log.metadata = {
@@ -375,14 +285,8 @@ if CELERY_TASKS_AVAILABLE:
             scrape_log.save()
         except Exception as e:
             scrape_log.refresh_from_db()
-            # Check if error was due to revocation
-            if self.is_aborted():
-                logger.info(f"Task {self.request.id} was revoked, marking as cancelled")
-                scrape_log.status = 'cancelled'
-                scrape_log.error_message = 'Cancelled by administrator'
-            else:
-                scrape_log.status = 'error'
-                scrape_log.error_message = str(e)
+            scrape_log.status = 'error'
+            scrape_log.error_message = str(e)
             scrape_log.completed_at = timezone.now()
             scrape_log.save()
 else:
