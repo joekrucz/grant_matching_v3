@@ -367,10 +367,10 @@ def company_delete(request, id):
         messages.error(request, 'You do not have permission to delete this company.')
         return redirect('companies:detail', id=id)
     
-    company_name = company.name
-    company.delete()
-    messages.success(request, f'Company {company_name} deleted successfully.')
-    return redirect('companies:list')
+        company_name = company.name
+        company.delete()
+        messages.success(request, f'Company {company_name} deleted successfully.')
+        return redirect('companies:list')
 
 
 @login_required
@@ -436,6 +436,9 @@ def funding_search_detail(request, id):
     
     if request.method == 'POST':
         if not can_edit:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                from django.http import JsonResponse
+                return JsonResponse({'error': 'You do not have permission to edit this funding search.'}, status=403)
             messages.error(request, 'You do not have permission to edit this funding search.')
             return redirect('companies:funding_search_detail', id=id)
         
@@ -451,6 +454,11 @@ def funding_search_detail(request, id):
         grant_sources = [source for source in grant_sources if source]  # Remove empty values
         funding_search.selected_grant_sources = grant_sources if grant_sources else []  # Default to empty list if none selected
         funding_search.save()
+        
+        # If AJAX request, return JSON response instead of redirecting
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            from django.http import JsonResponse
+            return JsonResponse({'success': True, 'message': 'Funding search updated successfully.'})
         
         messages.success(request, 'Funding search updated successfully.')
         return redirect('companies:funding_search_detail', id=id)
@@ -570,11 +578,11 @@ def funding_search_delete(request, id):
         messages.error(request, 'You do not have permission to delete this funding search.')
         return redirect('companies:funding_search_detail', id=id)
     
-    company_id = funding_search.company.id
-    funding_search.delete()
-    messages.success(request, 'Funding search deleted successfully.')
-    return redirect('companies:detail', id=company_id)
-
+        company_id = funding_search.company.id
+        funding_search.delete()
+        messages.success(request, 'Funding search deleted successfully.')
+        return redirect('companies:detail', id=company_id)
+    
 
 @login_required
 def funding_search_copy(request, id):

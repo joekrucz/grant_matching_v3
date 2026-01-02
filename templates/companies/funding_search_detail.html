@@ -211,35 +211,58 @@
                         {% endfor %}
                     {% endif %}
                     <div class="form-control mb-6">
-                        <label class="label" for="trl-levels-dropdown">
-                            <span class="label-text">TRL Levels</span>
+                        <label class="label" for="trl-range-min">
+                            <span class="label-text flex items-center gap-2">
+                                TRL Levels
+                                <div class="tooltip tooltip-right" data-tip="Click to view TRL level explanations">
+                                    <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick="document.getElementById('trl-info-modal').showModal()">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </span>
                         </label>
-                        <div class="trl-levels-dropdown-container dropdown w-full">
-                            <div role="button" class="btn btn-outline w-full justify-between {% if funding_search.matching_status == 'running' %}btn-disabled{% endif %}" id="trl-levels-dropdown" {% if funding_search.matching_status == 'running' %}style="pointer-events: none;"{% endif %}>
-                                <span id="trl-levels-display">Select TRL Levels</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                        <div class="relative mb-2" style="padding: 0.5rem 0;">
+                            <div class="relative" style="height: 20px;">
+                                <input type="range" min="1" max="9" value="1" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-min" style="z-index: 2;" {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
+                                <input type="range" min="1" max="9" value="9" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-max" style="z-index: 3;" {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
+                                <div class="absolute w-full h-2 bg-base-300 rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
+                                <div id="trl-range-track" class="absolute h-2 bg-primary rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
                             </div>
-                            <ul class="trl-levels-dropdown-content dropdown-content bg-base-200 border border-base-300 rounded-box w-full p-2 shadow-lg z-[1] max-h-64 overflow-y-auto" style="display: flex; flex-direction: column;">
-                                {% for value, label in trl_levels %}
-                                <li class="w-full">
-                                    <label class="label cursor-pointer justify-start gap-3 py-2 w-full">
-                                        <input 
-                                            type="checkbox" 
-                                            class="checkbox checkbox-sm trl-level-checkbox" 
-                                            value="{{ value }}"
-                                            name="trl_levels"
-                                            {% if value in funding_search.trl_levels or funding_search.trl_level == value %}checked{% endif %}
-                                            {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                                        >
-                                        <span class="label-text">{{ label }}</span>
-                    </label>
-                                </li>
+                            <div class="flex justify-between text-xs text-base-content/60 mt-1" style="padding: 0 10px;">
+                                {% for i in "123456789" %}
+                                <span>{{ i }}</span>
                                 {% endfor %}
-                            </ul>
-                    </div>
-                        <div id="trl-levels-selected" class="flex flex-col gap-2 mt-2"></div>
+                            </div>
+                        </div>
+                        {# Hidden inputs to store selected TRL levels #}
+                        <div id="trl-levels-hidden-inputs"></div>
                     </div>
                 </form>
+                
+                <!-- TRL Info Modal -->
+                <dialog id="trl-info-modal" class="modal">
+                    <div class="modal-box">
+                        <h3 class="font-bold text-lg mb-4">TRL Level Explanations</h3>
+                        <div class="space-y-3">
+                                {% for value, label in trl_levels %}
+                            <div class="border-b border-base-300 pb-2 last:border-b-0">
+                                <div class="font-semibold text-sm">{{ value }}</div>
+                                <div class="text-xs text-base-content/70 mt-1">{{ label }}</div>
+                            </div>
+                                {% endfor %}
+                    </div>
+                        <div class="modal-action">
+                            <form method="dialog">
+                                <button class="btn">Close</button>
+                            </form>
+                    </div>
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                </form>
+                </dialog>
                 {% else %}
                 <!-- Display TRL levels for non-editors -->
                 {% if funding_search.trl_levels or funding_search.trl_level %}
@@ -354,7 +377,6 @@
         
         <!-- Matching Section -->
         {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
-        <div class="divider"></div>
         <div class="card bg-base-100 border border-base-300">
             <div class="card-body">
                 <h2 class="card-title text-xl">Grant Matching</h2>
@@ -363,50 +385,50 @@
                 <div class="mb-6">
                     <div class="flex items-center gap-4 flex-wrap">
                         <h3 class="text-lg font-semibold">Grant Sources</h3>
-                        {% if funding_search.matching_status == 'running' %}
-                        <div class="badge badge-warning">Locked - Matching in progress</div>
-                        {% endif %}
-                        {% if can_edit %}
+                    {% if funding_search.matching_status == 'running' %}
+                    <div class="badge badge-warning">Locked - Matching in progress</div>
+                    {% endif %}
+                {% if can_edit %}
                         <form method="post" id="grant-sources-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %} class="flex items-center gap-3 flex-wrap">
-                            {% csrf_token %}
-                            {# Preserve TRL levels when submitting grant sources form #}
-                            {% if funding_search.trl_levels %}
-                                {% for trl_level in funding_search.trl_levels %}
-                                    <input type="hidden" name="trl_levels" value="{{ trl_level }}">
-                                {% endfor %}
-                            {% endif %}
-                            {% for source_code, source_name in grant_sources %}
-                            <label class="flex items-center gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
-                            <input 
-                                    type="checkbox" 
-                                    name="grant_sources" 
-                                    value="{{ source_code }}"
-                                    class="checkbox checkbox-primary grant-source-checkbox"
-                                    {% if source_code in funding_search.selected_grant_sources %}checked{% endif %}
-                                    {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                                    data-funding-search-id="{{ funding_search.id }}"
-                                >
-                                <span class="label-text">{{ source_name }}</span>
-                            </label>
-                            {% endfor %}
-                        </form>
-                        {% else %}
+                    {% csrf_token %}
+                    {# Preserve TRL levels when submitting grant sources form #}
+                    {% if funding_search.trl_levels %}
+                        {% for trl_level in funding_search.trl_levels %}
+                            <input type="hidden" name="trl_levels" value="{{ trl_level }}">
+                        {% endfor %}
+                    {% endif %}
+                        {% for source_code, source_name in grant_sources %}
+                        <label class="flex items-center gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
+                        <input 
+                                type="checkbox" 
+                                name="grant_sources" 
+                                value="{{ source_code }}"
+                                class="checkbox checkbox-primary grant-source-checkbox"
+                                {% if source_code in funding_search.selected_grant_sources %}checked{% endif %}
+                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                                data-funding-search-id="{{ funding_search.id }}"
+                            >
+                            <span class="label-text">{{ source_name }}</span>
+                        </label>
+                        {% endfor %}
+                </form>
+                {% else %}
                         <div class="flex flex-wrap gap-2">
-                            {% if funding_search.selected_grant_sources %}
-                                {% for source_code in funding_search.selected_grant_sources %}
-                                    {% for code, name in grant_sources %}
-                                        {% if code == source_code %}
-                                        <div class="badge badge-primary badge-outline">{{ name }}</div>
-                                        {% endif %}
-                                    {% endfor %}
-                                {% endfor %}
-                            {% else %}
-                            <div class="text-sm text-base-content/70">All sources selected</div>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                    </div>
+                    {% if funding_search.selected_grant_sources %}
+                        {% for source_code in funding_search.selected_grant_sources %}
+                            {% for code, name in grant_sources %}
+                                {% if code == source_code %}
+                                <div class="badge badge-primary badge-outline">{{ name }}</div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                    {% else %}
+                    <div class="text-sm text-base-content/70">All sources selected</div>
+                    {% endif %}
                 </div>
+                {% endif %}
+            </div>
+        </div>
                 
                 <div class="flex flex-col gap-2">
                     <div class="flex gap-2">
@@ -563,8 +585,8 @@
             <form method="post" action="{% url 'companies:funding_search_clear_results' funding_search.id %}" onsubmit="return confirm('Are you sure you want to clear all {{ match_results|length }} matching result{{ match_results|length|pluralize }}? This action cannot be undone.');">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-sm btn-error btn-outline">
-                    Clear
-                </button>
+                Clear
+            </button>
             </form>
             {% endif %}
         </div>
@@ -665,107 +687,107 @@
                                         <div class="collapse collapse-arrow">
                                             <input type="checkbox" />
                                             <div class="collapse-title font-semibold text-sm px-4 min-h-0">
-                                                Eligibility Checklist 
-                                                <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
-                                                    (calculating...)
-                                                </span>
-                                            </div>
-                                            <div class="collapse-content px-4 pb-2 pt-2">
-                                                <div class="space-y-2 eligibility-checklist-items">
-                                            {% for item in match.match_reasons.eligibility_checklist %}
-                                            <div class="flex items-start gap-2">
-                                                {% if item.status == "yes" %}
-                                                <span class="text-success text-lg">✓</span>
-                                                {% elif item.status == "no" %}
-                                                <span class="text-error text-lg">✗</span>
-                                                {% else %}
-                                                <span class="text-warning text-lg">?</span>
-                                                {% endif %}
-                                                <div class="flex-1">
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                    </div>
-                                                    {% if item.reason %}
-                                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                            {% endfor %}
-                                                </div>
-                                            </div>
-                                        </div>
+                                Eligibility Checklist 
+                                <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
+                                    (calculating...)
+                                </span>
+                            </div>
+                            <div class="collapse-content px-4 pb-2 pt-2">
+                                <div class="space-y-2 eligibility-checklist-items">
+                            {% for item in match.match_reasons.eligibility_checklist %}
+                            <div class="flex items-start gap-2">
+                                {% if item.status == "yes" %}
+                                <span class="text-success text-lg">✓</span>
+                                {% elif item.status == "no" %}
+                                <span class="text-error text-lg">✗</span>
+                                {% else %}
+                                <span class="text-warning text-lg">?</span>
+                                {% endif %}
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
                                     </div>
+                                    {% if item.reason %}
+                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                     {% endif %}
-                                    
-                                    {% if match.match_reasons.competitiveness_checklist %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if match.match_reasons.competitiveness_checklist %}
                                     <div class="mt-2">
-                                        <div class="collapse collapse-arrow">
-                                            <input type="checkbox" />
+                        <div class="collapse collapse-arrow">
+                            <input type="checkbox" />
                                             <div class="collapse-title font-semibold text-sm px-4 min-h-0">
-                                                Competitiveness Checklist
-                                                <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
-                                                    (calculating...)
-                                                </span>
-                                            </div>
-                                            <div class="collapse-content px-4 pb-2 pt-2">
-                                                <div class="space-y-2 competitiveness-checklist-items">
-                                            {% for item in match.match_reasons.competitiveness_checklist %}
-                                            <div class="flex items-start gap-2">
-                                                {% if item.status == "yes" %}
-                                                <span class="text-success text-lg">✓</span>
-                                                {% elif item.status == "no" %}
-                                                <span class="text-error text-lg">✗</span>
-                                                {% else %}
-                                                <span class="text-warning text-lg">?</span>
-                                                {% endif %}
-                                                <div class="flex-1">
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                    </div>
-                                                    {% if item.reason %}
-                                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                            {% endfor %}
-                                                </div>
-                                            </div>
-                                        </div>
+                                Competitiveness Checklist
+                                <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
+                                    (calculating...)
+                                </span>
+                            </div>
+                            <div class="collapse-content px-4 pb-2 pt-2">
+                                <div class="space-y-2 competitiveness-checklist-items">
+                            {% for item in match.match_reasons.competitiveness_checklist %}
+                            <div class="flex items-start gap-2">
+                                {% if item.status == "yes" %}
+                                <span class="text-success text-lg">✓</span>
+                                {% elif item.status == "no" %}
+                                <span class="text-error text-lg">✗</span>
+                                {% else %}
+                                <span class="text-warning text-lg">?</span>
+                                {% endif %}
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
                                     </div>
+                                    {% if item.reason %}
+                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                     {% endif %}
-                                    
-                                    {% if match.match_reasons.exclusions_checklist %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if match.match_reasons.exclusions_checklist %}
                                     <div class="mt-2">
-                                        <div class="collapse collapse-arrow">
-                                            <input type="checkbox" />
+                        <div class="collapse collapse-arrow">
+                            <input type="checkbox" />
                                             <div class="collapse-title font-semibold text-sm px-4 min-h-0">
-                                                Exclusions Checklist
-                                                <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
-                                                    (calculating...)
-                                                </span>
-                                                <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
-                                            </div>
-                                            <div class="collapse-content px-4 pb-2 pt-2">
-                                                <div class="space-y-2 exclusions-checklist-items">
-                                            {% for item in match.match_reasons.exclusions_checklist %}
-                                            <div class="flex items-start gap-2">
-                                                {% if item.status == "yes" %}
+                                Exclusions Checklist
+                                <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
+                                    (calculating...)
+                                </span>
+                                <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                            </div>
+                            <div class="collapse-content px-4 pb-2 pt-2">
+                                <div class="space-y-2 exclusions-checklist-items">
+                            {% for item in match.match_reasons.exclusions_checklist %}
+                            <div class="flex items-start gap-2">
+                                        {% if item.status == "yes" %}
                                                 <span class="text-error text-lg">✗</span>
-                                                {% elif item.status == "no" %}
+                                        {% elif item.status == "no" %}
                                                 <span class="text-success text-lg">✓</span>
-                                                {% else %}
-                                                <span class="text-warning text-lg">?</span>
-                                                {% endif %}
-                                                <div class="flex-1">
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                    </div>
-                                                    {% if item.reason %}
-                                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                            {% endfor %}
+                                        {% else %}
+                                <span class="text-warning text-lg">?</span>
+                                        {% endif %}
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                    </div>
+                                    {% if item.reason %}
+                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
                                                 </div>
                                             </div>
                                         </div>
@@ -905,107 +927,107 @@
                                                     <div class="collapse collapse-arrow">
                                                         <input type="checkbox" />
                                                         <div class="collapse-title font-semibold text-sm px-4 min-h-0">
-                                                            Eligibility Checklist
-                                                            <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
-                                                                (calculating...)
-                                                            </span>
-                                                        </div>
-                                                        <div class="collapse-content px-4 pb-2 pt-2">
-                                                            <div class="space-y-2 eligibility-checklist-items">
-                                                        {% for item in match.match_reasons.eligibility_checklist %}
-                                                        <div class="flex items-start gap-2">
-                                                            {% if item.status == "yes" %}
-                                                            <span class="text-success text-lg">✓</span>
-                                                            {% elif item.status == "no" %}
-                                                            <span class="text-error text-lg">✗</span>
-                                                            {% else %}
-                                                            <span class="text-warning text-lg">?</span>
-                                                            {% endif %}
-                                                            <div class="flex-1">
-                                                                <div class="flex items-center gap-2">
-                                                                    <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                                </div>
-                                                                {% if item.reason %}
-                                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                                                {% endif %}
-                                                            </div>
-                                                        </div>
-                                                        {% endfor %}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                            Eligibility Checklist
+                                            <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="space-y-2 eligibility-checklist-items">
+                                        {% for item in match.match_reasons.eligibility_checklist %}
+                                        <div class="flex items-start gap-2">
+                                            {% if item.status == "yes" %}
+                                            <span class="text-success text-lg">✓</span>
+                                            {% elif item.status == "no" %}
+                                            <span class="text-error text-lg">✗</span>
+                                            {% else %}
+                                            <span class="text-warning text-lg">?</span>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-sm font-medium">{{ item.criterion }}</span>
                                                 </div>
+                                                {% if item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                                 {% endif %}
-                                                
-                                                {% if match.match_reasons.competitiveness_checklist %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.competitiveness_checklist %}
                                                 <div class="mt-2">
-                                                    <div class="collapse collapse-arrow">
-                                                        <input type="checkbox" />
+                                    <div class="collapse collapse-arrow">
+                                        <input type="checkbox" />
                                                         <div class="collapse-title font-semibold text-sm px-4 min-h-0">
-                                                            Competitiveness Checklist
-                                                            <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
-                                                                (calculating...)
-                                                            </span>
-                                                        </div>
-                                                        <div class="collapse-content px-4 pb-2 pt-2">
-                                                            <div class="space-y-2 competitiveness-checklist-items">
-                                                        {% for item in match.match_reasons.competitiveness_checklist %}
-                                                        <div class="flex items-start gap-2">
-                                                            {% if item.status == "yes" %}
-                                                            <span class="text-success text-lg">✓</span>
-                                                            {% elif item.status == "no" %}
-                                                            <span class="text-error text-lg">✗</span>
-                                                            {% else %}
-                                                            <span class="text-warning text-lg">?</span>
-                                                            {% endif %}
-                                                            <div class="flex-1">
-                                                                <div class="flex items-center gap-2">
-                                                                    <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                                </div>
-                                                                {% if item.reason %}
-                                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                                                {% endif %}
-                                                            </div>
-                                                        </div>
-                                                        {% endfor %}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                            Competitiveness Checklist
+                                            <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="space-y-2 competitiveness-checklist-items">
+                                        {% for item in match.match_reasons.competitiveness_checklist %}
+                                        <div class="flex items-start gap-2">
+                                            {% if item.status == "yes" %}
+                                            <span class="text-success text-lg">✓</span>
+                                            {% elif item.status == "no" %}
+                                            <span class="text-error text-lg">✗</span>
+                                            {% else %}
+                                            <span class="text-warning text-lg">?</span>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-sm font-medium">{{ item.criterion }}</span>
                                                 </div>
+                                                {% if item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                                 {% endif %}
-                                                
-                                                {% if match.match_reasons.exclusions_checklist %}
-                                                <div class="mt-2">
-                                                    <div class="collapse collapse-arrow">
-                                                        <input type="checkbox" />
-                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0">
-                                                            Exclusions Checklist
-                                                            <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
-                                                                (calculating...)
-                                                            </span>
-                                                            <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                                            </div>
                                                         </div>
-                                                        <div class="collapse-content px-4 pb-2 pt-2">
-                                                            <div class="space-y-2 exclusions-checklist-items">
-                                                                {% for item in match.match_reasons.exclusions_checklist %}
-                                                                <div class="flex items-start gap-2">
-                                                                    {% if item.status == "yes" %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.exclusions_checklist %}
+                                                <div class="mt-2">
+                                    <div class="collapse collapse-arrow">
+                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0">
+                                            Exclusions Checklist
+                                            <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                            <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="space-y-2 exclusions-checklist-items">
+                                                {% for item in match.match_reasons.exclusions_checklist %}
+                                                <div class="flex items-start gap-2">
+                                                    {% if item.status == "yes" %}
                                                                     <span class="text-error text-lg">✗</span>
-                                                                    {% elif item.status == "no" %}
+                                                    {% elif item.status == "no" %}
                                                                     <span class="text-success text-lg">✓</span>
-                                                                    {% else %}
-                                                                    <span class="text-warning text-lg">?</span>
-                                                                    {% endif %}
-                                                                    <div class="flex-1">
-                                                                        <div class="flex items-center gap-2">
-                                                                            <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                                                        </div>
-                                                                        {% if item.reason %}
-                                                                        <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                                                        {% endif %}
-                                                                    </div>
-                                                                </div>
-                                                                {% endfor %}
+                                                    {% else %}
+                                                    <span class="text-warning text-lg">?</span>
+                                                    {% endif %}
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                                </div>
+                                                {% if item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1048,101 +1070,312 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const checkboxes = document.querySelectorAll('.trl-level-checkbox, input[name="trl_levels"]');
-    const displaySpan = document.getElementById('trl-levels-display');
-    const selectedContainer = document.getElementById('trl-levels-selected');
-    const dropdown = document.querySelector('.trl-levels-dropdown-container');
+    const rangeMin = document.getElementById('trl-range-min');
+    const rangeMax = document.getElementById('trl-range-max');
+    const hiddenInputsContainer = document.getElementById('trl-levels-hidden-inputs');
     
     // Check if matching is running
     const isMatchingRunning = {% if funding_search.matching_status == 'running' %}true{% else %}false{% endif %};
     
-    if (!checkboxes.length || !displaySpan || !selectedContainer || !dropdown) {
+    if (!rangeMin || !rangeMax || !hiddenInputsContainer) {
         return; // Elements not found
     }
     
-    if (!checkboxes.length || !displaySpan || !selectedContainer || !dropdown) {
-        return; // Elements not found (might be in view-only mode)
+    // TRL levels data
+    const trlLevels = [
+        {% for value, label in trl_levels %}
+        { value: "{{ value }}", label: "{{ label }}" }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    // Initialize sliders from current TRL levels
+    {% if funding_search.trl_levels and funding_search.trl_levels|length > 0 %}
+    const currentLevels = {{ funding_search.trl_levels|safe }};
+    if (currentLevels && currentLevels.length > 0) {
+        // Find min and max TRL levels from current selection
+        const trlNumbers = currentLevels.map(level => {
+            const match = level.match(/TRL (\d+)/);
+            return match ? parseInt(match[1]) : null;
+        }).filter(n => n !== null);
+        
+        if (trlNumbers.length > 0) {
+            const minLevel = Math.min(...trlNumbers);
+            const maxLevel = Math.max(...trlNumbers);
+            rangeMin.value = minLevel;
+            rangeMax.value = maxLevel;
+        }
+    }
+    {% else %}
+    // Default to full range if no TRL levels selected
+    rangeMin.value = 1;
+    rangeMax.value = 9;
+    {% endif %}
+    
+    function updateRangeTrack() {
+        const min = parseInt(rangeMin.value);
+        const max = parseInt(rangeMax.value);
+        const minPercent = ((min - 1) / 8) * 100;
+        const maxPercent = ((max - 1) / 8) * 100;
+        
+        const track = document.getElementById('trl-range-track');
+        if (track) {
+            track.style.left = minPercent + '%';
+            track.style.width = (maxPercent - minPercent) + '%';
+        }
     }
     
     function updateDisplay() {
-        const selected = Array.from(checkboxes)
-            .filter(cb => cb.checked)
-            .map(cb => {
-                const label = cb.closest('label').querySelector('.label-text').textContent;
-                return { value: cb.value, label: label };
-            });
+        const min = parseInt(rangeMin.value);
+        const max = parseInt(rangeMax.value);
         
-        if (selected.length === 0) {
-            displaySpan.textContent = 'Select TRL Levels';
-            selectedContainer.innerHTML = '';
+        // Ensure min <= max
+        if (min > max) {
+            if (rangeMin === document.activeElement) {
+                rangeMax.value = min;
         } else {
-            displaySpan.textContent = `${selected.length} TRL Level${selected.length > 1 ? 's' : ''} selected`;
-            selectedContainer.innerHTML = selected.map(item => 
-                `<div><span class="badge badge-primary">${item.label}</span></div>`
-            ).join('');
+                rangeMin.value = max;
+            }
+            return updateDisplay();
         }
+        
+        // Update range track visual
+        updateRangeTrack();
+        
+        // Generate selected TRL levels
+        const selectedLevels = [];
+        for (let i = min; i <= max; i++) {
+            const trlLevel = trlLevels[i - 1];
+            if (trlLevel) {
+                selectedLevels.push(trlLevel);
+            }
+        }
+        
+        // Update hidden inputs for form submission
+        hiddenInputsContainer.innerHTML = selectedLevels.map(level => 
+            `<input type="hidden" name="trl_levels" value="${level.value}">`
+            ).join('');
     }
     
-    // Initialize display with current selections
+    // Initialize display
     updateDisplay();
     
-    checkboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            if (isMatchingRunning) {
-                // Prevent changes when matching is running
-                this.checked = !this.checked; // Revert the change
-                return;
-            }
-            updateDisplay();
-            // Auto-submit form when TRL levels change
-            const form = document.getElementById('trl-levels-form');
-            if (form) {
-                form.submit();
-            }
-        });
-    });
-    
-    const dropdownButton = document.getElementById('trl-levels-dropdown');
-    let isDropdownOpen = false;
-    
-    // Toggle dropdown on button click
-    dropdownButton.addEventListener('click', function(e) {
+    // Handle slider changes
+    function handleSliderChange(event) {
         if (isMatchingRunning) {
-            e.preventDefault();
-            e.stopPropagation();
-            return; // Prevent dropdown from opening when matching is running
+            // Revert to previous values if matching is running
+            event.preventDefault();
+            updateDisplay();
+            return;
         }
-        e.stopPropagation();
-        isDropdownOpen = !isDropdownOpen;
-        if (isDropdownOpen) {
-            dropdown.classList.add('dropdown-open');
-        } else {
-            dropdown.classList.remove('dropdown-open');
+        
+        const min = parseInt(rangeMin.value);
+        const max = parseInt(rangeMax.value);
+        
+        // Ensure min <= max
+        if (min > max) {
+            if (event.target === rangeMin) {
+                rangeMax.value = min;
+            } else {
+                rangeMin.value = max;
+            }
         }
-    });
-    
-    // Prevent dropdown from closing when clicking inside the dropdown content
-    const dropdownContent = dropdown.querySelector('.trl-levels-dropdown-content');
-    if (dropdownContent) {
-        dropdownContent.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
+        
+        updateDisplay();
     }
     
-    // Prevent any focus/blur events from affecting other dropdowns
-    dropdownButton.addEventListener('focus', function(e) {
-        e.stopPropagation();
+    // Save TRL levels via AJAX (debounced)
+    let trlSaveTimeout = null;
+    function saveTRLLevels() {
+        if (isMatchingRunning) {
+            return;
+        }
+        
+        clearTimeout(trlSaveTimeout);
+        trlSaveTimeout = setTimeout(function() {
+            const form = document.getElementById('trl-levels-form');
+            if (!form) return;
+            
+            const formData = new FormData(form);
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Success - no page refresh needed
+                    console.log('TRL levels saved successfully');
+                } else {
+                    console.error('Error saving TRL levels');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }, 500); // Debounce: wait 500ms after last change
+    }
+    
+    rangeMin.addEventListener('input', function(event) {
+        handleSliderChange(event);
+        saveTRLLevels();
+    });
+    rangeMax.addEventListener('input', function(event) {
+        handleSliderChange(event);
+        saveTRLLevels();
     });
     
-    dropdownButton.addEventListener('blur', function(e) {
+    // Style the range inputs to look like handles on a single track
+    const style = document.createElement('style');
+    style.textContent = `
+        #trl-range-min::-webkit-slider-thumb,
+        #trl-range-max::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: hsl(var(--p));
+            border: 2px solid hsl(var(--b1));
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin-top: 10px;
+            pointer-events: auto;
+            position: relative;
+            z-index: 10;
+        }
+        #trl-range-min::-moz-range-thumb,
+        #trl-range-max::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: hsl(var(--p));
+            border: 2px solid hsl(var(--b1));
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin-top: 10px;
+            pointer-events: auto;
+        }
+        #trl-range-min::-webkit-slider-runnable-track,
+        #trl-range-max::-webkit-slider-runnable-track {
+            pointer-events: none;
+        }
+        #trl-range-min::-moz-range-track,
+        #trl-range-max::-moz-range-track {
+            pointer-events: none;
+        }
+        #trl-range-min:disabled::-webkit-slider-thumb,
+        #trl-range-max:disabled::-webkit-slider-thumb {
+            background: hsl(var(--bc) / 0.3);
+            cursor: not-allowed;
+        }
+        #trl-range-min:disabled::-moz-range-thumb,
+        #trl-range-max:disabled::-moz-range-thumb {
+            background: hsl(var(--bc) / 0.3);
+            cursor: not-allowed;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Fix the z-index issue: intercept clicks and manually set the correct slider value
+    const sliderContainer = rangeMin.parentElement;
+    let isDragging = false;
+    let activeSlider = null;
+    
+    // Intercept clicks on the slider container
+    sliderContainer.addEventListener('mousedown', function(e) {
+        if (isMatchingRunning) return;
+        
+        // Check if click is directly on a thumb (allow normal dragging)
+        const target = e.target;
+        // If clicking on the input element itself (not the track), allow normal behavior
+        if (target === rangeMin || target === rangeMax) {
+            // Check if click is near the thumb
+            const rect = target.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = rect.width;
+            const value = parseInt(target.value);
+            const thumbPercent = (value - 1) / 8;
+            const clickPercent = clickX / width;
+            const distToThumb = Math.abs(clickPercent - thumbPercent);
+            
+            // If click is close to thumb (within 5% of track), allow normal dragging
+            if (distToThumb < 0.05) {
+                activeSlider = target;
+                isDragging = true;
+                return; // Let normal behavior handle it
+            }
+        }
+        
+        // Otherwise, intercept and route to correct slider
+        e.preventDefault();
         e.stopPropagation();
+        
+        const rect = sliderContainer.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const width = rect.width;
+        const clickPercent = clickX / width;
+        
+        const minValue = parseInt(rangeMin.value);
+        const maxValue = parseInt(rangeMax.value);
+        const minPercent = (minValue - 1) / 8;
+        const maxPercent = (maxValue - 1) / 8;
+        
+        // Determine which slider is closer
+        const distToMin = Math.abs(clickPercent - minPercent);
+        const distToMax = Math.abs(clickPercent - maxPercent);
+        
+        if (distToMin < distToMax) {
+            // Click closer to min slider
+            const newValue = Math.round(clickPercent * 8) + 1;
+            const clampedValue = Math.max(1, Math.min(9, Math.min(newValue, maxValue)));
+            rangeMin.value = clampedValue;
+            handleSliderChange({target: rangeMin});
+            activeSlider = rangeMin;
+        } else {
+            // Click closer to max slider
+            const newValue = Math.round(clickPercent * 8) + 1;
+            const clampedValue = Math.max(1, Math.min(9, Math.max(newValue, minValue)));
+            rangeMax.value = clampedValue;
+            handleSliderChange({target: rangeMax});
+            activeSlider = rangeMax;
+        }
+        
+        isDragging = true;
+    }, true); // Use capture phase
+    
+    // Handle dragging
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging || !activeSlider || isMatchingRunning) return;
+        
+        const rect = sliderContainer.getBoundingClientRect();
+        const moveX = e.clientX - rect.left;
+        const width = rect.width;
+        const movePercent = moveX / width;
+        const newValue = Math.round(movePercent * 8) + 1;
+        const clampedValue = Math.max(1, Math.min(9, newValue));
+        
+        if (activeSlider === rangeMin) {
+            if (clampedValue <= parseInt(rangeMax.value)) {
+                rangeMin.value = clampedValue;
+                handleSliderChange({target: rangeMin});
+            }
+        } else {
+            if (clampedValue >= parseInt(rangeMin.value)) {
+                rangeMax.value = clampedValue;
+                handleSliderChange({target: rangeMax});
+            }
+        }
     });
     
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(event) {
-        if (!dropdown.contains(event.target)) {
-            dropdown.classList.remove('dropdown-open');
-            isDropdownOpen = false;
+    document.addEventListener('mouseup', function() {
+        if (isDragging) {
+            isDragging = false;
+            activeSlider = null;
+            saveTRLLevels();
         }
     });
     

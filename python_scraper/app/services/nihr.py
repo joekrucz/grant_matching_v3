@@ -575,16 +575,16 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           if not deadline_raw or not opening_date_raw:
               # Only search for missing dates
               if not deadline_raw:
-                  deadline_patterns = [
-                      r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-                      r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-                      r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{4})",
-                      r"(\d{1,2}\s+\w+\s+\d{4})",  # "31 December 2024"
-                  ]
-                  for pattern in deadline_patterns:
-                    match = re.search(pattern, page_text, re.IGNORECASE)
-                    if match:
-                      deadline_raw = match.group(1)
+          deadline_patterns = [
+              r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+              r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+              r"closes?[:\s]+(\d{1,2}\s+\w+\s+\d{4})",
+              r"(\d{1,2}\s+\w+\s+\d{4})",  # "31 December 2024"
+          ]
+          for pattern in deadline_patterns:
+            match = re.search(pattern, page_text, re.IGNORECASE)
+            if match:
+              deadline_raw = match.group(1)
                       break
               
               if not opening_date_raw:
@@ -598,7 +598,7 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
                       match = re.search(pattern, page_text, re.IGNORECASE)
                       if match:
                           opening_date_raw = match.group(1)
-                          break
+              break
           
           # Try to extract funding amount
           funding_amount = None
@@ -908,16 +908,16 @@ def scrape_nihr(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
           if not deadline_raw or not opening_date_raw:
               # Only search for missing dates
               if not deadline_raw:
-                  deadline_patterns = [
+          deadline_patterns = [
               r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
               r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
               r"(\d{1,2}\s+\w+\s+\d{4})",
-                  ]
-                  for pattern in deadline_patterns:
-                    match = re.search(pattern, page_text, re.IGNORECASE)
-                    if match:
-                      deadline_raw = match.group(1)
-                      break
+          ]
+          for pattern in deadline_patterns:
+            match = re.search(pattern, page_text, re.IGNORECASE)
+            if match:
+              deadline_raw = match.group(1)
+              break
           
               if not opening_date_raw:
                   opening_patterns = [
