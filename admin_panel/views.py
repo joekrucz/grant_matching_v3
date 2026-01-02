@@ -78,6 +78,11 @@ def _get_ai_client():
 def dashboard(request):
     """Admin dashboard."""
     total_grants = Grant.objects.count()
+    # Count grants by source
+    from grants.models import GRANT_SOURCES
+    grants_by_source = {}
+    for source_code, source_name in GRANT_SOURCES:
+        grants_by_source[source_code] = Grant.objects.filter(source=source_code).count()
     # Count open grants using computed status (deadline in future or null, and opening_date null or in past)
     from django.utils import timezone
     now = timezone.now()
@@ -217,6 +222,7 @@ def dashboard(request):
     
     context = {
         'total_grants': total_grants,
+        'grants_by_source': grants_by_source,
         'open_grants': open_grants,
         'last_scrape': last_scrape,
         'celery_status': celery_status,

@@ -271,7 +271,7 @@
     <div class="card bg-base-200">
         <div class="card-body">
                 <div class="flex justify-between items-center mb-4">
-            <h2 class="card-title">Scraper Actions</h2>
+            <h2 class="card-title">Grants</h2>
                 <div class="dropdown dropdown-end">
                     <div tabindex="0" role="button" class="btn btn-sm">
                         Actions
@@ -359,6 +359,24 @@
                         <span>Open Grants:</span>
                         <span>{{ open_grants }}</span>
                     </div>
+                    <div class="divider my-2"></div>
+                    <div class="flex justify-between">
+                        <span>UKRI:</span>
+                        <span>{{ grants_by_source.ukri|default:0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>NIHR:</span>
+                        <span>{{ grants_by_source.nihr|default:0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Catapult:</span>
+                        <span>{{ grants_by_source.catapult|default:0 }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Innovate UK:</span>
+                        <span>{{ grants_by_source.innovate_uk|default:0 }}</span>
+                    </div>
+                    <div class="divider my-2"></div>
                     <div class="flex justify-between">
                         <span>Last Scraped:</span>
                         <span>{% if last_scrape %}{{ last_scrape.completed_at|date:"M d, Y H:i" }}{% else %}Never{% endif %}</span>
