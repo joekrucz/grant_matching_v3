@@ -615,8 +615,8 @@
                                 <span class="badge badge-info">Deadline: {{ match.grant.deadline|date:"M d, Y" }}</span>
                                 {% endif %}
                             </div>
-                            {% if match.grant.summary %}
-                            <p class="text-base-content/80 mt-3 text-sm">{{ match.grant.summary|truncatewords:30 }}</p>
+                            {% if match.match_reasons.explanation %}
+                            <p class="text-base-content mt-3 text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
                             {% endif %}
                         </div>
                         <div class="lg:text-right lg:ml-4 min-w-[200px]">
@@ -656,16 +656,9 @@
                         </div>
                     </div>
                     
-                    {% if match.match_reasons.explanation %}
-                    <div class="mt-4">
-                        <p class="text-base-content/90 text-sm">
-                            <strong>Summary:</strong> {{ match.match_reasons.explanation }}
-                        </p>
-                    </div>
-                    {% endif %}
                     
                     {% if match.match_reasons.eligibility_checklist %}
-                    <div class="mt-4 -mx-4 -mb-4">
+                    <div class="mt-4 -mx-4 -mb-2">
                         <div class="collapse collapse-arrow">
                             <input type="checkbox" />
                             <div class="collapse-title font-semibold text-base px-4 min-h-0">
@@ -702,7 +695,7 @@
                     {% endif %}
                     
                     {% if match.match_reasons.competitiveness_checklist %}
-                    <div class="mt-4 -mx-4 -mb-4">
+                    <div class="mt-2 -mx-4 -mb-2">
                         <div class="collapse collapse-arrow">
                             <input type="checkbox" />
                             <div class="collapse-title font-semibold text-base px-4 min-h-0">
@@ -739,7 +732,7 @@
                     {% endif %}
                     
                     {% if match.match_reasons.exclusions_checklist %}
-                    <div class="mt-4 -mx-4 -mb-4">
+                    <div class="mt-2 -mx-4 -mb-2">
                         <div class="collapse collapse-arrow">
                             <input type="checkbox" />
                             <div class="collapse-title font-semibold text-base px-4 min-h-0">
@@ -750,17 +743,16 @@
                                 <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
                             </div>
                             <div class="collapse-content px-4 pb-2 pt-2">
-                                <p class="text-xs text-base-content/60 mb-2">Note: ⚠️ means the exclusion applies (disqualifying), ○ means it does not apply</p>
                                 <div class="space-y-2 exclusions-checklist-items">
                             {% for item in match.match_reasons.exclusions_checklist %}
                             <div class="flex items-start gap-2">
-                                        {% if item.status == "yes" %}
-                                <span class="text-error text-lg font-bold">⚠️</span>
-                                        {% elif item.status == "no" %}
-                                <span class="text-base-content/40 text-lg">○</span>
-                                        {% else %}
+                                {% if item.status == "yes" %}
+                                <span class="text-error text-lg">✗</span>
+                                {% elif item.status == "no" %}
+                                <span class="text-success text-lg">✓</span>
+                                {% else %}
                                 <span class="text-warning text-lg">?</span>
-                                        {% endif %}
+                                {% endif %}
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium">{{ item.criterion }}</span>
@@ -785,11 +777,6 @@
                     </div>
                     {% endif %}
                     
-                    <div class="card-actions justify-end mt-4">
-                        <a href="{% url 'grants:detail' match.grant.slug %}" class="btn btn-primary btn-sm">
-                            View Grant Details
-                        </a>
-                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -835,8 +822,8 @@
                                             <span class="badge badge-info">Deadline: {{ match.grant.deadline|date:"M d, Y" }}</span>
                                             {% endif %}
                                         </div>
-                                        {% if match.grant.summary %}
-                                        <p class="text-base-content/80 mt-3 text-sm">{{ match.grant.summary|truncatewords:30 }}</p>
+                                        {% if match.match_reasons.explanation %}
+                                        <p class="text-base-content mt-3 text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
                                         {% endif %}
                                     </div>
                                     <div class="lg:text-right lg:ml-4 min-w-[200px]">
@@ -885,7 +872,7 @@
                                 {% endif %}
                                 
                                 {% if match.match_reasons.eligibility_checklist %}
-                                <div class="mt-4 -mx-4 -mb-4">
+                                <div class="mt-4 -mx-4 -mb-2">
                                     <div class="collapse collapse-arrow">
                                         <input type="checkbox" />
                                         <div class="collapse-title font-semibold text-base px-4 min-h-0">
@@ -922,7 +909,7 @@
                                 {% endif %}
                                 
                                 {% if match.match_reasons.competitiveness_checklist %}
-                                <div class="mt-4 -mx-4 -mb-4">
+                                <div class="mt-2 -mx-4 -mb-2">
                                     <div class="collapse collapse-arrow">
                                         <input type="checkbox" />
                                         <div class="collapse-title font-semibold text-base px-4 min-h-0">
@@ -957,7 +944,7 @@
                                 {% endif %}
                                 
                                 {% if match.match_reasons.exclusions_checklist %}
-                                <div class="mt-4 -mx-4 -mb-4">
+                                <div class="mt-2 -mx-4 -mb-2">
                                     <div class="collapse collapse-arrow">
                                         <input type="checkbox" />
                                         <div class="collapse-title font-semibold text-base px-4 min-h-0">
@@ -968,14 +955,13 @@
                                             <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
                                         </div>
                                         <div class="collapse-content px-4 pb-2 pt-2">
-                                            <p class="text-xs text-base-content/60 mb-2">Note: ⚠️ means the exclusion applies (disqualifying), ○ means it does not apply</p>
                                             <div class="space-y-2 exclusions-checklist-items">
                                                 {% for item in match.match_reasons.exclusions_checklist %}
                                                 <div class="flex items-start gap-2">
                                                     {% if item.status == "yes" %}
-                                                    <span class="text-error text-lg font-bold">⚠️</span>
+                                                    <span class="text-error text-lg">✗</span>
                                                     {% elif item.status == "no" %}
-                                                    <span class="text-base-content/40 text-lg">○</span>
+                                                    <span class="text-success text-lg">✓</span>
                                                     {% else %}
                                                     <span class="text-warning text-lg">?</span>
                                                     {% endif %}
@@ -1003,11 +989,6 @@
                                 </div>
                                 {% endif %}
                                 
-                                <div class="card-actions justify-end mt-4">
-                                    <a href="{% url 'grants:detail' match.grant.slug %}" class="btn btn-primary btn-sm">
-                                        View Grant Details
-                                    </a>
-                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -1399,14 +1380,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let yesCount = 0; // Count "yes" answers (excluded = bad)
         
         items.forEach(function(item) {
-            // "no" status shows neutral circle icon (not text-success anymore)
-            const statusIcon = item.querySelector('span.text-base-content\\/40');
-            if (statusIcon) {
+            // "no" status shows green checkmark (not excluded = good)
+            const successIcon = item.querySelector('span.text-success');
+            if (successIcon && successIcon.textContent.includes('✓')) {
                 noCount++;
             }
-            // Check for "yes" status (excluded - shows warning icon)
-            const warningIcon = item.querySelector('span.text-error');
-            if (warningIcon && warningIcon.textContent.includes('⚠️')) {
+            // Check for "yes" status (excluded - shows red X)
+            const errorIcon = item.querySelector('span.text-error');
+            if (errorIcon && errorIcon.textContent.includes('✗')) {
                 yesCount++;
             }
         });

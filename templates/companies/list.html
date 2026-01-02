@@ -5,12 +5,12 @@
 {% block content %}
 <div class="mb-6">
     <div class="flex justify-between items-center mb-4">
-        <div>
-            <h1 class="text-3xl font-bold">Companies</h1>
-            <p class="text-sm text-base-content/70 mt-1">
-                {{ page_obj.paginator.count }} compan{% if page_obj.paginator.count == 1 %}y{% else %}ies{% endif %}
-            </p>
-        </div>
+    <div>
+        <h1 class="text-3xl font-bold">Companies</h1>
+        <p class="text-sm text-base-content/70 mt-1">
+            {{ page_obj.paginator.count }} compan{% if page_obj.paginator.count == 1 %}y{% else %}ies{% endif %}
+        </p>
+    </div>
         <div class="flex gap-2">
             <a href="?view=table" 
                class="btn btn-sm {% if request.GET.view == 'table' or not request.GET.view %}btn-active{% else %}btn-outline{% endif %}" 
@@ -23,8 +23,8 @@
                 Grid
             </a>
             <a href="{% url 'companies:create' %}" class="btn btn-primary btn-sm">
-                Add Company
-            </a>
+        Add Company
+    </a>
         </div>
     </div>
 </div>
@@ -130,8 +130,8 @@
     </div>
     {% empty %}
     <div class="col-span-full">
-        <div class="alert alert-info">
-            <span>No companies found. <a href="{% url 'companies:create' %}" class="link">Add one</a></span>
+    <div class="alert alert-info">
+        <span>No companies found. <a href="{% url 'companies:create' %}" class="link">Add one</a></span>
         </div>
     </div>
     {% endfor %}
