@@ -270,35 +270,35 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         
         # Fallback to regex patterns if structured format not found
         page_text = detail_soup.get_text()  # Get page text for fallback and other extractions
-          # Only use fallback if we haven't found the closing date field yet, or if we found it but it wasn't "no closing date"
+        # Only use fallback if we haven't found the closing date field yet, or if we found it but it wasn't "no closing date"
         if (not closing_date_found and not deadline_raw) or not opening_date_raw:
-          # Only search for missing dates
-          # Don't search for deadline if we explicitly found "no closing date"
-          if not deadline_raw and not closing_date_found:
-        deadline_patterns = [
-            r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"closes?\s+(\d{1,2}\s+\w+\s+\d{2,4})",
-        ]
-        for pattern in deadline_patterns:
-          match = re.search(pattern, page_text, re.IGNORECASE)
-          if match:
-            deadline_raw = match.group(1)
-            break
-          
-          if not opening_date_raw:
-            opening_patterns = [
-                r"opening[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-                r"opens[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-                r"opening[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-                r"opens[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
-            ]
-            for pattern in opening_patterns:
-              match = re.search(pattern, page_text, re.IGNORECASE)
-              if match:
-                opening_date_raw = match.group(1)
-                break
+            # Only search for missing dates
+            # Don't search for deadline if we explicitly found "no closing date"
+            if not deadline_raw and not closing_date_found:
+                deadline_patterns = [
+                    r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                    r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                    r"(\d{1,2}\s+\w+\s+\d{2,4})",
+                    r"closes?\s+(\d{1,2}\s+\w+\s+\d{2,4})",
+                ]
+                for pattern in deadline_patterns:
+                    match = re.search(pattern, page_text, re.IGNORECASE)
+                    if match:
+                        deadline_raw = match.group(1)
+                        break
+            
+            if not opening_date_raw:
+                opening_patterns = [
+                    r"opening[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                    r"opens[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                    r"opening[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+                    r"opens[:\s]+(\d{1,2}\s+\w+\s+\d{2,4})",
+                ]
+                for pattern in opening_patterns:
+                    match = re.search(pattern, page_text, re.IGNORECASE)
+                    if match:
+                        opening_date_raw = match.group(1)
+                        break
         
         # Extract funding amount
         funding_amount = None

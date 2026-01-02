@@ -5,7 +5,12 @@
 {% block content %}
 <div class="mb-6">
     <div class="flex justify-between items-center mb-4">
-        <h1 class="text-3xl font-bold">Grants</h1>
+        <div>
+            <h1 class="text-3xl font-bold">Grants</h1>
+            <p class="text-sm text-base-content/60 mt-1">
+                Showing <span class="font-semibold">{{ filtered_grants_count }}</span> of <span class="font-semibold">{{ total_grants_count }}</span> total grants
+            </p>
+        </div>
         <div class="flex gap-2">
             <a href="?{% if query %}q={{ query }}&{% endif %}{% if source_filter %}source={{ source_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if sort_by %}sort={{ sort_by }}&{% endif %}{% if sort_order %}order={{ sort_order }}&{% endif %}view=table" 
                class="btn btn-sm {% if request.GET.view == 'table' or not request.GET.view %}btn-active{% else %}btn-outline{% endif %}">

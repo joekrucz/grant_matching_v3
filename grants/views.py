@@ -171,6 +171,9 @@ def questionnaire_detail(request, questionnaire_id):
 @login_required
 def grants_list(request):
     """List all grants with search and filters."""
+    # Get total count before any filtering
+    total_grants_count = Grant.objects.count()
+    
     grants = Grant.objects.all()
     
     # Search
@@ -204,6 +207,9 @@ def grants_list(request):
         elif status == 'unknown':
             # Unknown: no opening_date and no deadline
             grants = grants.filter(opening_date__isnull=True, deadline__isnull=True)
+    
+    # Get filtered count before pagination
+    filtered_grants_count = grants.count()
     
     # Ordering
     sort_by = request.GET.get('sort', 'title')
@@ -257,6 +263,8 @@ def grants_list(request):
             'status_filter': status,
             'sort_by': sort_by,
             'sort_order': sort_order,
+            'total_grants_count': total_grants_count,
+            'filtered_grants_count': filtered_grants_count,
         }
         return render(request, 'grants/list.html', context)
     else:
@@ -278,6 +286,8 @@ def grants_list(request):
         'status_filter': status,
         'sort_by': sort_by,
         'sort_order': sort_order,
+        'total_grants_count': total_grants_count,
+        'filtered_grants_count': filtered_grants_count,
     }
     return render(request, 'grants/list.html', context)
 
