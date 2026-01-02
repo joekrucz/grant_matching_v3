@@ -103,6 +103,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'grants_aggregator.middleware.NonAdminRestrictionMiddleware',  # Restrict non-admins to landing page only
 ]
 
 ROOT_URLCONF = 'grants_aggregator.urls'
