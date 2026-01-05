@@ -171,34 +171,6 @@
                         <div class="badge badge-warning">Locked - Matching in progress</div>
                         {% endif %}
                     </div>
-        {% if can_edit %}
-                    <div class="flex gap-2 items-center">
-                        <form method="post" enctype="multipart/form-data" action="{% url 'companies:funding_search_upload' funding_search.id %}" id="file-upload-form" class="inline-block">
-            {% csrf_token %}
-                    <input 
-                            type="file" 
-                            name="file" 
-                            accept=".pdf,.docx,.txt" 
-                                id="file-input"
-                                class="hidden"
-                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                            >
-                            <button 
-                                type="button" 
-                                class="btn btn-circle btn-primary btn-sm"
-                                onclick="document.getElementById('file-input').click()"
-                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                </svg>
-                            </button>
-                        </form>
-                        <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="btn btn-sm btn-outline {% if funding_search.matching_status == 'running' %}btn-disabled{% endif %}">
-                            Edit Sources
-                        </a>
-                    </div>
-                    {% endif %}
                 </div>
                 <!-- TRL Levels Selection -->
                 {% if can_edit %}
@@ -296,9 +268,37 @@
                 <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Attachments -->
-                        {% if funding_search.uploaded_file %}
                         <div class="border border-base-300 rounded-lg p-4">
-                            <div class="font-semibold mb-3">Attachments (1)</div>
+                            <div class="flex justify-between items-center mb-3">
+                                <div class="font-semibold">
+                                    Attachments
+                                    {% if funding_search.uploaded_file %}(1){% endif %}
+                                </div>
+                                {% if can_edit %}
+                                <form method="post" enctype="multipart/form-data" action="{% url 'companies:funding_search_upload' funding_search.id %}" id="file-upload-form" class="inline-block">
+                                    {% csrf_token %}
+                                    <input 
+                                        type="file" 
+                                        name="file" 
+                                        accept=".pdf,.docx,.txt" 
+                                        id="file-input"
+                                        class="hidden"
+                                        {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                                    >
+                                    <button 
+                                        type="button" 
+                                        class="btn btn-circle btn-primary btn-sm"
+                                        onclick="document.getElementById('file-input').click()"
+                                        {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            {% if funding_search.uploaded_file %}
                             <div class="space-y-2">
                                 <div class="flex items-center gap-3 p-2 bg-base-200 rounded group">
                                     <div class="badge badge-outline">File</div>
@@ -319,17 +319,24 @@
                                     {% endif %}
                                 </div>
                             </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                        
+                    
                         <!-- Selected Company Sources -->
                         {% if selected_files or funding_search.use_company_website %}
-                        <div class="border border-base-300 rounded-lg p-4">
+                    <div class="border border-base-300 rounded-lg p-4">
                         {% with file_count=selected_files|length %}
-                        <div class="font-semibold mb-3">
-                            Company Sources
-                            {% if file_count > 0 or funding_search.use_company_website %}
-                            ({% if file_count > 0 %}{{ file_count }} file{{ file_count|pluralize }}{% endif %}{% if file_count > 0 and funding_search.use_company_website %}, {% endif %}{% if funding_search.use_company_website %}Website{% endif %})
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="font-semibold">
+                                Company Sources
+                                {% if file_count > 0 or funding_search.use_company_website %}
+                                ({% if file_count > 0 %}{{ file_count }} file{{ file_count|pluralize }}{% endif %}{% if file_count > 0 and funding_search.use_company_website %}, {% endif %}{% if funding_search.use_company_website %}Website{% endif %})
+                                {% endif %}
+                            </div>
+                            {% if can_edit %}
+                            <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="btn btn-sm btn-outline {% if funding_search.matching_status == 'running' %}btn-disabled{% endif %}">
+                                Edit Sources
+                            </a>
                             {% endif %}
                         </div>
                         <div class="space-y-2">
@@ -358,8 +365,8 @@
                             {% endfor %}
                         </div>
                         {% endwith %}
-                        </div>
-                        {% endif %}
+                    </div>
+                    {% endif %}
                     </div>
                     
                     <!-- Selected Company Notes -->
@@ -491,20 +498,19 @@
                                 Cancel
                             </button>
                         </form>
+                        {% elif funding_search.matching_status != 'running' %}
+                        <form method="post" action="{% url 'companies:funding_search_match_test' funding_search.id %}" id="test-matching-form">
+                            {% csrf_token %}
+                            <button 
+                                type="submit" 
+                                class="btn btn-outline btn-lg"
+                                id="run-test-matching-btn"
+                            >
+                                Test Match (First 5 Grants)
+                            </button>
+                        </form>
                         {% endif %}
                     </div>
-                    {% if funding_search.matching_status != 'running' %}
-                    <form method="post" action="{% url 'companies:funding_search_match_test' funding_search.id %}" id="test-matching-form">
-                        {% csrf_token %}
-                        <button 
-                            type="submit" 
-                            class="btn btn-outline btn-secondary btn-sm w-full"
-                            id="run-test-matching-btn"
-                        >
-                            Test Match (First 5 Grants)
-                        </button>
-                    </form>
-                    {% endif %}
                 </div>
                 
                 <script>
@@ -583,8 +589,6 @@
                     </div>
                     {% endif %}
                 </div>
-                {% elif funding_search.matching_status == 'completed' and funding_search.last_matched_at %}
-                <p class="text-xs text-base-content/60 mt-4 text-center">Status: Last matched: {{ funding_search.last_matched_at|date:"F d, Y g:i A" }}</p>
                 {% endif %}
             </div>
         </div>
@@ -632,6 +636,16 @@
             {% for match_data in match_results_with_json|slice:":5" %}
             {% with match=match_data.match %}
             <div class="card bg-base-100 border border-base-300 {% if forloop.first %}border-2 border-primary{% endif %}">
+                {% if forloop.first %}
+                <div class="bg-primary text-primary-content px-4 py-2 rounded-t-lg">
+                    <div class="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                        </svg>
+                        <span class="font-semibold">Top Match</span>
+                    </div>
+                </div>
+                {% endif %}
                 <div class="card-body">
                     <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
                         <div class="flex-1">
@@ -641,11 +655,9 @@
                                 </a>
                             </h3>
                             <div class="flex gap-2 mt-2 flex-wrap">
-                                {% if match.grant.computed_status == 'open' %}
-                                <span class="badge badge-success">Open</span>
-                                {% else %}
-                                <span class="badge badge-error">Closed</span>
-                                {% endif %}
+                                <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
+                                    {{ match.grant.get_status_display }}
+                                </div>
                                 <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                 {% if match.grant.deadline %}
                                 <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
@@ -971,11 +983,9 @@
                                             </a>
                                         </h3>
                                         <div class="flex gap-2 mt-2 flex-wrap">
-                                            {% if match.grant.computed_status == 'open' %}
-                                            <span class="badge badge-success">Open</span>
-                                            {% else %}
-                                            <span class="badge badge-error">Closed</span>
-                                            {% endif %}
+                                            <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
+                                                {{ match.grant.get_status_display }}
+                                            </div>
                                             <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                             {% if match.grant.deadline %}
                                             <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
