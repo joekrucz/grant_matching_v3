@@ -501,9 +501,9 @@ details[open] summary .collapse-indicator::after {
             <div class="card bg-base-300 border border-base-300">
                 <div class="card-body py-3">
                     <div class="flex items-center justify-between mb-1">
-                        <a href="{% url 'companies:funding_search_detail' search.id %}" class="card-title text-lg link link-primary">
-                            {{ search.name }}
-                        </a>
+                    <a href="{% url 'companies:funding_search_detail' search.id %}" class="card-title text-lg link link-primary">
+                        {{ search.name }}
+                    </a>
                         {% if search.matching_status == 'pending' %}
                             <div class="badge badge-ghost">Pending</div>
                         {% elif search.matching_status == 'running' %}

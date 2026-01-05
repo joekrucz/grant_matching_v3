@@ -616,14 +616,14 @@
                                 </a>
                             </h3>
                             <div class="flex gap-2 mt-2 flex-wrap">
-                                <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                 {% if match.grant.computed_status == 'open' %}
                                 <span class="badge badge-success">Open</span>
                                 {% else %}
                                 <span class="badge badge-error">Closed</span>
                                 {% endif %}
+                                <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                 {% if match.grant.deadline %}
-                                <span class="badge badge-info">Deadline: {{ match.grant.deadline|date:"M d, Y" }}</span>
+                                <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
                                 {% endif %}
                             </div>
                             {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
@@ -717,18 +717,24 @@
                     
                     {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
                     <div class="mt-4 -mx-4 -mb-2">
-                        <div class="collapse collapse-arrow">
+                        <div class="collapse">
                             <input type="checkbox" />
-                            <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                            <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
+                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
                                 Checklists
                             </div>
                             <div class="collapse-content px-4 pb-2 pt-2">
                                 <div class="space-y-2">
                                     {% if match.match_reasons.eligibility_checklist %}
                                     <div class="mt-2">
-                                        <div class="collapse collapse-arrow">
+                                        <div class="collapse">
                                             <input type="checkbox" />
-                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0">
+                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
                                 Eligibility Checklist 
                                 <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
                                     (calculating...)
@@ -779,9 +785,12 @@
                     
                     {% if match.match_reasons.competitiveness_checklist %}
                                     <div class="mt-2">
-                        <div class="collapse collapse-arrow">
+                        <div class="collapse">
                             <input type="checkbox" />
-                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0">
+                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
                                 Competitiveness Checklist
                                 <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
                                     (calculating...)
@@ -832,9 +841,12 @@
                     
                     {% if match.match_reasons.exclusions_checklist %}
                                     <div class="mt-2">
-                        <div class="collapse collapse-arrow">
+                        <div class="collapse">
                             <input type="checkbox" />
-                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0">
+                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
                                 Exclusions Checklist
                                 <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
                                     (calculating...)
@@ -934,14 +946,14 @@
                                             </a>
                                         </h3>
                                         <div class="flex gap-2 mt-2 flex-wrap">
-                                            <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                             {% if match.grant.computed_status == 'open' %}
                                             <span class="badge badge-success">Open</span>
                                             {% else %}
                                             <span class="badge badge-error">Closed</span>
                                             {% endif %}
+                                            <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                             {% if match.grant.deadline %}
-                                            <span class="badge badge-info">Deadline: {{ match.grant.deadline|date:"M d, Y" }}</span>
+                                            <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
                                             {% endif %}
                                         </div>
                                         {% if match.match_reasons.explanation %}
@@ -1049,18 +1061,24 @@
                                 
                                 {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
                                 <div class="mt-4 -mx-4 -mb-2">
-                                    <div class="collapse collapse-arrow">
+                                    <div class="collapse">
                                         <input type="checkbox" />
-                                        <div class="collapse-title font-semibold text-base px-4 min-h-0">
+                                        <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
                                             Checklists
                                         </div>
                                         <div class="collapse-content px-4 pb-2 pt-2">
                                             <div class="space-y-2">
                                                 {% if match.match_reasons.eligibility_checklist %}
                                                 <div class="mt-2">
-                                                    <div class="collapse collapse-arrow">
+                                                    <div class="collapse">
                                                         <input type="checkbox" />
-                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0">
+                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
                                             Eligibility Checklist
                                             <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
                                                 (calculating...)
@@ -1111,9 +1129,12 @@
                                 
                                 {% if match.match_reasons.competitiveness_checklist %}
                                                 <div class="mt-2">
-                                    <div class="collapse collapse-arrow">
+                                    <div class="collapse">
                                         <input type="checkbox" />
-                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0">
+                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
                                             Competitiveness Checklist
                                             <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
                                                 (calculating...)
@@ -1164,9 +1185,12 @@
                                 
                                 {% if match.match_reasons.exclusions_checklist %}
                                                 <div class="mt-2">
-                                    <div class="collapse collapse-arrow">
+                                    <div class="collapse">
                                         <input type="checkbox" />
-                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0">
+                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
                                             Exclusions Checklist
                                             <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
                                                 (calculating...)
@@ -1776,6 +1800,27 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Render all pie charts
     document.querySelectorAll('.checklist-pie-chart').forEach(renderPieChart);
+    
+    // Rotate collapse arrows when expanded
+    document.querySelectorAll('.collapse input[type="checkbox"]').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            const collapse = this.closest('.collapse');
+            const arrow = collapse.querySelector('.collapse-arrow-icon');
+            if (arrow) {
+                if (this.checked) {
+                    arrow.style.transform = 'rotate(90deg)';
+                } else {
+                    arrow.style.transform = 'rotate(0deg)';
+                }
+            }
+        });
+        // Set initial state
+        const collapse = checkbox.closest('.collapse');
+        const arrow = collapse.querySelector('.collapse-arrow-icon');
+        if (arrow && checkbox.checked) {
+            arrow.style.transform = 'rotate(90deg)';
+        }
+    });
     
     // Checklist edit functionality
     let currentEditData = null;
