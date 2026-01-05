@@ -275,17 +275,17 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
             # Only search for missing dates
             # Don't search for deadline if we explicitly found "no closing date"
             if not deadline_raw and not closing_date_found:
-        deadline_patterns = [
-            r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            r"(\d{1,2}\s+\w+\s+\d{2,4})",
-            r"closes?\s+(\d{1,2}\s+\w+\s+\d{2,4})",
-        ]
-        for pattern in deadline_patterns:
-          match = re.search(pattern, page_text, re.IGNORECASE)
-          if match:
-            deadline_raw = match.group(1)
-            break
+                deadline_patterns = [
+                    r"deadline[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                    r"closing[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+                    r"(\d{1,2}\s+\w+\s+\d{2,4})",
+                    r"closes?\s+(\d{1,2}\s+\w+\s+\d{2,4})",
+                ]
+                for pattern in deadline_patterns:
+                    match = re.search(pattern, page_text, re.IGNORECASE)
+                    if match:
+                        deadline_raw = match.group(1)
+                        break
             
             if not opening_date_raw:
                 opening_patterns = [
