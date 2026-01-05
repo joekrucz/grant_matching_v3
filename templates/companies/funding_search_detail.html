@@ -559,9 +559,7 @@
                     {% endif %}
                 </div>
                 {% elif funding_search.matching_status == 'completed' and funding_search.last_matched_at %}
-                <div class="alert alert-success mt-4">
-                    <span>Status: Last matched: {{ funding_search.last_matched_at|date:"F d, Y g:i A" }}</span>
-                </div>
+                <p class="text-xs text-base-content/60 mt-4 text-center">Status: Last matched: {{ funding_search.last_matched_at|date:"F d, Y g:i A" }}</p>
                 {% endif %}
             </div>
         </div>
@@ -628,7 +626,28 @@
                                 <span class="badge badge-info">Deadline: {{ match.grant.deadline|date:"M d, Y" }}</span>
                                 {% endif %}
                             </div>
-                            {% if match.match_reasons.explanation %}
+                            {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
+                            <div class="text-base-content mt-3 text-sm space-y-3">
+                                {% if match.match_reasons.project_type_and_trl_focus %}
+                                <div>
+                                    <strong>Project type and TRL focus:</strong>
+                                    <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                </div>
+                                {% endif %}
+                                {% if match.match_reasons.why_it_matches %}
+                                <div>
+                                    <strong>Why it matches:</strong>
+                                    <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
+                                </div>
+                                {% endif %}
+                                {% if match.match_reasons.key_risks_and_uncertainties %}
+                                <div>
+                                    <strong>Key risks and uncertainties:</strong>
+                                    <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% elif match.match_reasons.explanation %}
                             <p class="text-base-content mt-3 text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
                             {% endif %}
                         </div>
@@ -646,7 +665,7 @@
                                 </div>
                                 {% endif %}
                                 <div>
-                                    <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                            <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                     <div class="stat-desc text-xs">Overall Match</div>
                                 </div>
                             </div>
@@ -718,19 +737,35 @@
                             <div class="collapse-content px-4 pb-2 pt-2">
                                 <div class="space-y-2 eligibility-checklist-items">
                             {% for item in match.match_reasons.eligibility_checklist %}
-                            <div class="flex items-start gap-2">
+                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
                                 {% if item.status == "yes" %}
-                                <span class="text-success text-lg">✓</span>
+                                <span class="text-success text-lg checklist-status-icon">✓</span>
                                 {% elif item.status == "no" %}
-                                <span class="text-error text-lg">✗</span>
+                                <span class="text-error text-lg checklist-status-icon">✗</span>
                                 {% else %}
-                                <span class="text-warning text-lg">?</span>
+                                <span class="text-warning text-lg checklist-status-icon">?</span>
                                 {% endif %}
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                        {% if can_edit %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'eligibility', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                        {% if item.manually_edited %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'eligibility', {{ forloop.counter0 }})">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </button>
+                                        {% endif %}
+                                        {% endif %}
                                     </div>
-                                    {% if item.reason %}
+                                    {% if item.manually_edited %}
+                                    <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                    {% elif item.reason %}
                                     <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                     {% endif %}
                                 </div>
@@ -755,19 +790,35 @@
                             <div class="collapse-content px-4 pb-2 pt-2">
                                 <div class="space-y-2 competitiveness-checklist-items">
                             {% for item in match.match_reasons.competitiveness_checklist %}
-                            <div class="flex items-start gap-2">
+                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
                                 {% if item.status == "yes" %}
-                                <span class="text-success text-lg">✓</span>
+                                <span class="text-success text-lg checklist-status-icon">✓</span>
                                 {% elif item.status == "no" %}
-                                <span class="text-error text-lg">✗</span>
+                                <span class="text-error text-lg checklist-status-icon">✗</span>
                                 {% else %}
-                                <span class="text-warning text-lg">?</span>
+                                <span class="text-warning text-lg checklist-status-icon">?</span>
                                 {% endif %}
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                        {% if can_edit %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'competitiveness', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                        {% if item.manually_edited %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'competitiveness', {{ forloop.counter0 }})">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </button>
+                                        {% endif %}
+                                        {% endif %}
                                     </div>
-                                    {% if item.reason %}
+                                    {% if item.manually_edited %}
+                                    <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                    {% elif item.reason %}
                                     <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                     {% endif %}
                                 </div>
@@ -793,29 +844,45 @@
                             <div class="collapse-content px-4 pb-2 pt-2">
                                 <div class="space-y-2 exclusions-checklist-items">
                             {% for item in match.match_reasons.exclusions_checklist %}
-                            <div class="flex items-start gap-2">
+                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
                                         {% if item.status == "yes" %}
-                                                <span class="text-error text-lg">✗</span>
+                                                <span class="text-error text-lg checklist-status-icon">✗</span>
                                         {% elif item.status == "no" %}
-                                                <span class="text-success text-lg">✓</span>
+                                                <span class="text-success text-lg checklist-status-icon">✓</span>
                                         {% else %}
-                                <span class="text-warning text-lg">?</span>
+                                <span class="text-warning text-lg checklist-status-icon">?</span>
                                         {% endif %}
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                        {% if can_edit %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'exclusions', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                        {% endif %}
                                     </div>
-                                    {% if item.reason %}
+                                                {% if item.manually_edited %}
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <p class="text-xs font-bold text-accent">Manually edited</p>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs text-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'exclusions', {{ forloop.counter0 }})">
+                                                        Undo
+                                                    </button>
+                                                    {% endif %}
+                                                </div>
+                                                {% elif item.reason %}
                                     <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                     {% endif %}
                                 </div>
                             </div>
                             {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endif %}
+                                                {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -830,8 +897,8 @@
                     </div>
                     {% endif %}
                     
+                    </div>
                 </div>
-            </div>
             {% endwith %}
             {% endfor %}
         </div>
@@ -895,7 +962,7 @@
                                             </div>
                                             {% endif %}
                                             <div>
-                                                <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                                 <div class="stat-desc text-xs">Overall Match</div>
                                             </div>
                                         </div>
@@ -945,7 +1012,34 @@
                                     </div>
                                 </div>
                                 
-                                {% if match.match_reasons.explanation %}
+                                {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
+                                <div class="mt-4 space-y-3">
+                                    {% if match.match_reasons.project_type_and_trl_focus %}
+                                    <div>
+                                        <p class="text-base-content/90 text-sm">
+                                            <strong>Project type and TRL focus:</strong>
+                                        </p>
+                                        <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                    </div>
+                                    {% endif %}
+                                    {% if match.match_reasons.why_it_matches %}
+                                    <div>
+                                        <p class="text-base-content/90 text-sm">
+                                            <strong>Why it matches:</strong>
+                                        </p>
+                                        <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.why_it_matches }}</p>
+                                    </div>
+                                    {% endif %}
+                                    {% if match.match_reasons.key_risks_and_uncertainties %}
+                                    <div>
+                                        <p class="text-base-content/90 text-sm">
+                                            <strong>Key risks and uncertainties:</strong>
+                                        </p>
+                                        <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% elif match.match_reasons.explanation %}
                                 <div class="mt-4">
                                     <p class="text-base-content/90 text-sm">
                                         <strong>Summary:</strong> {{ match.match_reasons.explanation }}
@@ -975,19 +1069,35 @@
                                         <div class="collapse-content px-4 pb-2 pt-2">
                                             <div class="space-y-2 eligibility-checklist-items">
                                         {% for item in match.match_reasons.eligibility_checklist %}
-                                        <div class="flex items-start gap-2">
+                                        <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
                                             {% if item.status == "yes" %}
-                                            <span class="text-success text-lg">✓</span>
+                                            <span class="text-success text-lg checklist-status-icon">✓</span>
                                             {% elif item.status == "no" %}
-                                            <span class="text-error text-lg">✗</span>
+                                            <span class="text-error text-lg checklist-status-icon">✗</span>
                                             {% else %}
-                                            <span class="text-warning text-lg">?</span>
+                                            <span class="text-warning text-lg checklist-status-icon">?</span>
                                             {% endif %}
                                             <div class="flex-1">
                                                 <div class="flex items-center gap-2">
                                                     <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'eligibility', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                    {% if item.manually_edited %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'eligibility', {{ forloop.counter0 }})">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                        </svg>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% endif %}
                                                 </div>
-                                                {% if item.reason %}
+                                                {% if item.manually_edited %}
+                                                <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                                {% elif item.reason %}
                                                 <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                                 {% endif %}
                                             </div>
@@ -1012,19 +1122,35 @@
                                         <div class="collapse-content px-4 pb-2 pt-2">
                                             <div class="space-y-2 competitiveness-checklist-items">
                                         {% for item in match.match_reasons.competitiveness_checklist %}
-                                        <div class="flex items-start gap-2">
+                                        <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
                                             {% if item.status == "yes" %}
-                                            <span class="text-success text-lg">✓</span>
+                                            <span class="text-success text-lg checklist-status-icon">✓</span>
                                             {% elif item.status == "no" %}
-                                            <span class="text-error text-lg">✗</span>
+                                            <span class="text-error text-lg checklist-status-icon">✗</span>
                                             {% else %}
-                                            <span class="text-warning text-lg">?</span>
+                                            <span class="text-warning text-lg checklist-status-icon">?</span>
                                             {% endif %}
                                             <div class="flex-1">
                                                 <div class="flex items-center gap-2">
                                                     <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'competitiveness', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                    {% if item.manually_edited %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'competitiveness', {{ forloop.counter0 }})">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                        </svg>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% endif %}
                                                 </div>
-                                                {% if item.reason %}
+                                                {% if item.manually_edited %}
+                                                <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                                {% elif item.reason %}
                                                 <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                                 {% endif %}
                                             </div>
@@ -1050,19 +1176,35 @@
                                         <div class="collapse-content px-4 pb-2 pt-2">
                                             <div class="space-y-2 exclusions-checklist-items">
                                                 {% for item in match.match_reasons.exclusions_checklist %}
-                                                <div class="flex items-start gap-2">
+                                                <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
                                                     {% if item.status == "yes" %}
-                                                                    <span class="text-error text-lg">✗</span>
+                                                                    <span class="text-error text-lg checklist-status-icon">✗</span>
                                                     {% elif item.status == "no" %}
-                                                                    <span class="text-success text-lg">✓</span>
+                                                                    <span class="text-success text-lg checklist-status-icon">✓</span>
                                                     {% else %}
-                                                    <span class="text-warning text-lg">?</span>
+                                                    <span class="text-warning text-lg checklist-status-icon">?</span>
                                                     {% endif %}
                                                     <div class="flex-1">
                                                         <div class="flex items-center gap-2">
                                                             <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                                            {% if can_edit %}
+                                                            <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'exclusions', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                            </button>
+                                                            {% if item.manually_edited %}
+                                                            <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'exclusions', {{ forloop.counter0 }})">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                </svg>
+                                                            </button>
+                                                            {% endif %}
+                                                            {% endif %}
                                                 </div>
-                                                {% if item.reason %}
+                                                {% if item.manually_edited %}
+                                                <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                                {% elif item.reason %}
                                                 <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
                                                 {% endif %}
                                             </div>
@@ -1087,8 +1229,8 @@
                                 </div>
                                 {% endif %}
                                 
+                                </div>
                             </div>
-                        </div>
                         {% endwith %}
                         {% endfor %}
                     </div>
@@ -1108,6 +1250,35 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Checklist Edit Modal -->
+<dialog id="checklist-edit-modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Edit Checklist Item</h3>
+        <div class="mb-4">
+            <p class="text-sm text-base-content/70 mb-2" id="edit-modal-criterion"></p>
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Status</span>
+                </label>
+                <select class="select select-bordered w-full" id="edit-modal-status">
+                    <option value="yes">✓ Yes</option>
+                    <option value="no">✗ No</option>
+                    <option value="unknown">? Unknown</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-action">
+            <form method="dialog">
+                <button type="button" class="btn" onclick="document.getElementById('checklist-edit-modal').close()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-checklist-edit-btn">Save</button>
+            </form>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -1605,6 +1776,273 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Render all pie charts
     document.querySelectorAll('.checklist-pie-chart').forEach(renderPieChart);
+    
+    // Checklist edit functionality
+    let currentEditData = null;
+    
+    window.openChecklistEditModal = function(matchId, checklistType, itemIndex, currentStatus, criterion) {
+        currentEditData = {
+            matchId: matchId,
+            checklistType: checklistType,
+            itemIndex: itemIndex
+        };
+        
+        document.getElementById('edit-modal-criterion').textContent = criterion;
+        document.getElementById('edit-modal-status').value = currentStatus || 'unknown';
+        document.getElementById('checklist-edit-modal').showModal();
+    };
+    
+    document.getElementById('save-checklist-edit-btn').addEventListener('click', function() {
+        if (!currentEditData) return;
+        
+        const newStatus = document.getElementById('edit-modal-status').value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`/companies/grant_match_results/${currentEditData.matchId}/edit_checklist/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                checklist_type: currentEditData.checklistType,
+                item_index: currentEditData.itemIndex,
+                status: newStatus
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the UI
+                const checklistItem = document.querySelector(
+                    `.checklist-item[data-match-id="${currentEditData.matchId}"][data-checklist-type="${currentEditData.checklistType}"][data-item-index="${currentEditData.itemIndex}"]`
+                );
+                
+                if (checklistItem) {
+                    // Update status icon
+                    const statusIcon = checklistItem.querySelector('.checklist-status-icon');
+                    if (statusIcon) {
+                        if (newStatus === 'yes') {
+                            statusIcon.textContent = '✓';
+                            statusIcon.className = 'text-success text-lg checklist-status-icon';
+                        } else if (newStatus === 'no') {
+                            statusIcon.textContent = '✗';
+                            statusIcon.className = 'text-error text-lg checklist-status-icon';
+                        } else {
+                            statusIcon.textContent = '?';
+                            statusIcon.className = 'text-warning text-lg checklist-status-icon';
+                        }
+                    }
+                    
+                    // Update reason/manually edited text
+                    const reasonP = checklistItem.querySelector('p.text-xs');
+                    if (reasonP) {
+                        reasonP.className = 'text-xs font-bold text-accent mt-1';
+                        reasonP.textContent = 'Manually edited';
+                    } else {
+                        // Create new paragraph if it doesn't exist
+                        const flexDiv = checklistItem.querySelector('.flex-1');
+                        if (flexDiv) {
+                            const newP = document.createElement('p');
+                            newP.className = 'text-xs font-bold text-accent mt-1';
+                            newP.textContent = 'Manually edited';
+                            flexDiv.appendChild(newP);
+                        }
+                    }
+                    
+                    // Recalculate scores and update pie chart
+                    updateChecklistScores(checklistItem);
+                    updatePieChartForMatch(currentEditData.matchId);
+                }
+                
+                document.getElementById('checklist-edit-modal').close();
+                currentEditData = null;
+            } else {
+                alert('Error updating checklist item: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating checklist item');
+        });
+    });
+    
+    function updateChecklistScores(checklistItem) {
+        // Trigger the existing score calculation functions
+        const container = checklistItem.closest('.eligibility-checklist-items, .competitiveness-checklist-items, .exclusions-checklist-items');
+        if (container) {
+            if (container.classList.contains('eligibility-checklist-items')) {
+                // Recalculate eligibility score
+                const items = container.querySelectorAll('.checklist-item');
+                let yesCount = 0;
+                let totalCount = items.length;
+                
+                items.forEach(item => {
+                    const icon = item.querySelector('.checklist-status-icon');
+                    if (icon && icon.textContent.includes('✓')) {
+                        yesCount++;
+                    }
+                });
+                
+                const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
+                const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+                
+                const collapseSection = container.closest('.collapse');
+                const scoreSpan = collapseSection ? collapseSection.querySelector('.eligibility-checklist-score') : null;
+                if (scoreSpan && totalCount > 0) {
+                    scoreSpan.textContent = scoreText;
+                }
+                
+                const card = container.closest('.card');
+                const breakdownPercentage = card ? card.querySelector('.eligibility-breakdown-percentage') : null;
+                if (breakdownPercentage && totalCount > 0) {
+                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${scoreText}</span>`;
+                }
+            } else if (container.classList.contains('competitiveness-checklist-items')) {
+                // Recalculate competitiveness score
+                const items = container.querySelectorAll('.checklist-item');
+                let yesCount = 0;
+                let totalCount = items.length;
+                
+                items.forEach(item => {
+                    const icon = item.querySelector('.checklist-status-icon');
+                    if (icon && icon.textContent.includes('✓')) {
+                        yesCount++;
+                    }
+                });
+                
+                const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
+                const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+                
+                const collapseSection = container.closest('.collapse');
+                const scoreSpan = collapseSection ? collapseSection.querySelector('.competitiveness-checklist-score') : null;
+                if (scoreSpan && totalCount > 0) {
+                    scoreSpan.textContent = scoreText;
+                }
+                
+                const card = container.closest('.card');
+                const breakdownPercentage = card ? card.querySelector('.competitiveness-breakdown-percentage') : null;
+                if (breakdownPercentage && totalCount > 0) {
+                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${scoreText}</span>`;
+                }
+            } else if (container.classList.contains('exclusions-checklist-items')) {
+                // Recalculate exclusions score (for exclusions, "no" is good)
+                const items = container.querySelectorAll('.checklist-item');
+                let noCount = 0;
+                let yesCount = 0;
+                let totalCount = items.length;
+                
+                items.forEach(item => {
+                    const icon = item.querySelector('.checklist-status-icon');
+                    if (icon) {
+                        if (icon.textContent.includes('✓')) {
+                            noCount++; // "no" status shows green checkmark (not excluded = good)
+                        } else if (icon.textContent.includes('✗')) {
+                            yesCount++; // "yes" status shows red X (excluded = bad)
+                        }
+                    }
+                });
+                
+                const scoreText = totalCount > 0 ? `(${noCount}/${totalCount})` : '';
+                const percentage = totalCount > 0 ? Math.round((noCount / totalCount) * 100) : 0;
+                
+                const collapseSection = container.closest('.collapse');
+                const scoreSpan = collapseSection ? collapseSection.querySelector('.exclusions-checklist-score') : null;
+                if (scoreSpan && totalCount > 0) {
+                    scoreSpan.textContent = scoreText;
+                }
+                
+                const card = container.closest('.card');
+                const breakdownPercentage = card ? card.querySelector('.exclusions-breakdown-percentage') : null;
+                if (breakdownPercentage && totalCount > 0) {
+                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 exclusions-breakdown-count ml-1">${scoreText}</span>`;
+                    const warningIcon = breakdownPercentage.querySelector('.exclusions-breakdown-warning-icon');
+                    if (warningIcon) {
+                        warningIcon.style.display = yesCount > 0 ? 'inline' : 'none';
+                    }
+                }
+            }
+        }
+    }
+    
+    function updatePieChartForMatch(matchId) {
+        // Find the pie chart SVG for this match
+        const svg = document.querySelector(`.checklist-pie-chart[data-match-id="${matchId}"]`);
+        if (!svg) return;
+        
+        // Re-read checklist data from the DOM
+        const card = svg.closest('.card');
+        if (!card) return;
+        
+        // Collect all checklist items for this match
+        const eligibilityItems = Array.from(card.querySelectorAll('.eligibility-checklist-items .checklist-item')).map(item => {
+            const icon = item.querySelector('.checklist-status-icon');
+            return {
+                status: icon && icon.textContent.includes('✓') ? 'yes' : 
+                       icon && icon.textContent.includes('✗') ? 'no' : 'unknown'
+            };
+        });
+        
+        const competitivenessItems = Array.from(card.querySelectorAll('.competitiveness-checklist-items .checklist-item')).map(item => {
+            const icon = item.querySelector('.checklist-status-icon');
+            return {
+                status: icon && icon.textContent.includes('✓') ? 'yes' : 
+                       icon && icon.textContent.includes('✗') ? 'no' : 'unknown'
+            };
+        });
+        
+        const exclusionsItems = Array.from(card.querySelectorAll('.exclusions-checklist-items .checklist-item')).map(item => {
+            const icon = item.querySelector('.checklist-status-icon');
+            return {
+                status: icon && icon.textContent.includes('✓') ? 'no' :  // Inverted: ✓ means 'no' exclusion
+                       icon && icon.textContent.includes('✗') ? 'yes' : 'unknown'
+            };
+        });
+        
+        // Update data attributes
+        svg.setAttribute('data-eligibility', JSON.stringify(eligibilityItems));
+        svg.setAttribute('data-competitiveness', JSON.stringify(competitivenessItems));
+        svg.setAttribute('data-exclusions', JSON.stringify(exclusionsItems));
+        
+        // Re-render the pie chart
+        renderPieChart(svg);
+    }
+    
+    // Undo checklist edit function
+    window.undoChecklistEdit = function(matchId, checklistType, itemIndex) {
+        if (!confirm('Reset this checklist item to the AI-generated value?')) {
+            return;
+        }
+        
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`/companies/grant_match_results/${matchId}/undo_checklist/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+                checklist_type: checklistType,
+                item_index: itemIndex
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload the page to show the restored values
+                window.location.reload();
+            } else {
+                alert('Error undoing checklist edit: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error undoing checklist edit');
+        });
+    };
 });
 
 // Toggle remaining grants section

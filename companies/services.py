@@ -513,7 +513,10 @@ You must:
 10. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist.
 11. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist.
 12. Calculate exclusions_score (0.0-1.0) based on percentage of "no" answers in exclusions checklist (higher is better - means fewer exclusions apply).
-13. Provide an overall explanation (2-3 sentences).
+13. Provide three separate summary sections:
+    - "project_type_and_trl_focus": Describe the project type and TRL (Technology Readiness Level) focus, including what stage of development this project is at and how it aligns with the grant's TRL requirements (2-3 sentences).
+    - "why_it_matches": Explain why this project matches this grant opportunity, highlighting key alignment points (2-3 sentences).
+    - "key_risks_and_uncertainties": Identify key risks and uncertainties that could affect the project's success with this grant, including potential challenges or gaps (2-3 sentences).
 
 CRITICAL REQUIREMENTS:
 - If a grant provides checklists, you MUST copy the criterion text EXACTLY as shown - character for character, word for word. Do not modify, rephrase, or summarize the criterion text.
@@ -544,7 +547,9 @@ Format:
         {{"criterion": "Use the exact criterion text from the provided exclusions checklist", "status": "no", "reason": "Project does not fall into this exclusion category"}},
         {{"criterion": "Another exclusion from the checklist", "status": "yes", "reason": "Project does fall into this exclusion - this is disqualifying"}}
     ],
-    "explanation": "This grant is highly relevant because..."
+    "project_type_and_trl_focus": "Describe the project type and TRL focus...",
+    "why_it_matches": "Explain why this project matches this grant...",
+    "key_risks_and_uncertainties": "Identify key risks and uncertainties..."
 }}
 
 IMPORTANT: 
@@ -560,7 +565,7 @@ IMPORTANT:
                 messages=[
                     {
                         "role": "system", 
-                        "content": "You are a grant matching expert. Always respond with valid JSON. For the grant:\n1. If the grant provides an Eligibility Checklist, you MUST copy the criterion text EXACTLY as shown - do not modify, rephrase, or summarize. Use those exact items in the exact order.\n2. If the grant provides a Competitiveness Checklist, you MUST copy the criterion text EXACTLY as shown - do not modify, rephrase, or summarize. Use those exact items in the exact order.\n3. If checklists are not provided, extract eligibility criteria and competitiveness factors from the grant description.\n4. For each checklist item (provided or extracted), evaluate based ONLY on the provided project description and assign status: 'yes' (meets), 'no' (does not meet), or 'don't know' (insufficient information).\n5. The 'criterion' field in your response must match the original text EXACTLY if provided in the checklist.\n6. Calculate eligibility_score and competitiveness_score (0.0-1.0) based on percentage of 'yes' answers in each checklist.\n7. Provide a brief explanation. Return a single JSON object (not an array) with grant_index: 0."
+                        "content": "You are a grant matching expert. Always respond with valid JSON. For the grant:\n1. If the grant provides an Eligibility Checklist, you MUST copy the criterion text EXACTLY as shown - do not modify, rephrase, or summarize. Use those exact items in the exact order.\n2. If the grant provides a Competitiveness Checklist, you MUST copy the criterion text EXACTLY as shown - do not modify, rephrase, or summarize. Use those exact items in the exact order.\n3. If checklists are not provided, extract eligibility criteria and competitiveness factors from the grant description.\n4. For each checklist item (provided or extracted), evaluate based ONLY on the provided project description and assign status: 'yes' (meets), 'no' (does not meet), or 'don't know' (insufficient information).\n5. The 'criterion' field in your response must match the original text EXACTLY if provided in the checklist.\n6. Calculate eligibility_score and competitiveness_score (0.0-1.0) based on percentage of 'yes' answers in each checklist.\n7. Provide three summary sections: 'project_type_and_trl_focus' (project type and TRL focus), 'why_it_matches' (why the project matches), and 'key_risks_and_uncertainties' (risks and uncertainties). Return a single JSON object (not an array) with grant_index: 0."
                     },
                     {"role": "user", "content": prompt}
                 ],

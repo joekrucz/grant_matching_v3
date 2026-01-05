@@ -598,10 +598,22 @@ def funding_search_download_report(request, id):
             
             elements.append(Paragraph(" | ".join(grant_details), normal_style))
             
-            # Summary/Explanation
-            if match.match_reasons and match.match_reasons.get('explanation'):
+            # Summary sections
+            match_reasons = match.match_reasons or {}
+            if match_reasons.get('project_type_and_trl_focus') or match_reasons.get('why_it_matches') or match_reasons.get('key_risks_and_uncertainties'):
                 elements.append(Spacer(1, 0.1*inch))
-                elements.append(Paragraph(f"<b>Summary:</b> {match.match_reasons.get('explanation', '')}", normal_style))
+                if match_reasons.get('project_type_and_trl_focus'):
+                    elements.append(Paragraph(f"<b>Project type and TRL focus:</b> {match_reasons.get('project_type_and_trl_focus', '')}", normal_style))
+                    elements.append(Spacer(1, 0.05*inch))
+                if match_reasons.get('why_it_matches'):
+                    elements.append(Paragraph(f"<b>Why it matches:</b> {match_reasons.get('why_it_matches', '')}", normal_style))
+                    elements.append(Spacer(1, 0.05*inch))
+                if match_reasons.get('key_risks_and_uncertainties'):
+                    elements.append(Paragraph(f"<b>Key risks and uncertainties:</b> {match_reasons.get('key_risks_and_uncertainties', '')}", normal_style))
+            elif match_reasons.get('explanation'):
+                # Fallback to old explanation format for backward compatibility
+                elements.append(Spacer(1, 0.1*inch))
+                elements.append(Paragraph(f"<b>Summary:</b> {match_reasons.get('explanation', '')}", normal_style))
             
             # Checklists
             match_reasons = match.match_reasons or {}
@@ -691,6 +703,137 @@ def funding_search_download_report(request, id):
     doc.build(elements)
     
     return response
+
+
+@login_required
+def edit_checklist_item(request, match_id):
+    """Edit a checklist item status manually."""
+    import json
+    
+    if request.method != 'POST':
+        from django.http import JsonResponse
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    # Get the match result
+    match_result = get_object_or_404(GrantMatchResult, id=match_id)
+    
+    # Check if user has permission (owner of funding search or admin)
+    if request.user != match_result.funding_search.user and not request.user.admin:
+        from django.http import JsonResponse
+        return JsonResponse({'error': 'You do not have permission to edit this checklist.'}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+        checklist_type = data.get('checklist_type')  # 'eligibility', 'competitiveness', or 'exclusions'
+        item_index = data.get('item_index')
+        new_status = data.get('status')  # 'yes', 'no', or 'unknown'
+        
+        if checklist_type not in ['eligibility', 'competitiveness', 'exclusions']:
+            from django.http import JsonResponse
+            return JsonResponse({'error': 'Invalid checklist type'}, status=400)
+        
+        if new_status not in ['yes', 'no', 'unknown']:
+            from django.http import JsonResponse
+            return JsonResponse({'error': 'Invalid status'}, status=400)
+        
+        # Get the match_reasons
+        match_reasons = match_result.match_reasons or {}
+        checklist_key = f'{checklist_type}_checklist'
+        checklist = match_reasons.get(checklist_key, [])
+        
+        if item_index < 0 or item_index >= len(checklist):
+            from django.http import JsonResponse
+            return JsonResponse({'error': 'Invalid item index'}, status=400)
+        
+        # Store original values if this is the first time editing
+        if not checklist[item_index].get('manually_edited'):
+            checklist[item_index]['original_status'] = checklist[item_index].get('status')
+            checklist[item_index]['original_reason'] = checklist[item_index].get('reason')
+        
+        # Update the item
+        checklist[item_index]['status'] = new_status
+        checklist[item_index]['manually_edited'] = True
+        
+        # Save back to match_reasons
+        match_reasons[checklist_key] = checklist
+        match_result.match_reasons = match_reasons
+        match_result.save()
+        
+        from django.http import JsonResponse
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        from django.http import JsonResponse
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+def undo_checklist_item(request, match_id):
+    """Undo a manual checklist edit and restore the original AI-generated values."""
+    import json
+    
+    if request.method != 'POST':
+        from django.http import JsonResponse
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    # Get the match result
+    match_result = get_object_or_404(GrantMatchResult, id=match_id)
+    
+    # Check if user has permission (owner of funding search or admin)
+    if request.user != match_result.funding_search.user and not request.user.admin:
+        from django.http import JsonResponse
+        return JsonResponse({'error': 'You do not have permission to undo this checklist edit.'}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+        checklist_type = data.get('checklist_type')  # 'eligibility', 'competitiveness', or 'exclusions'
+        item_index = data.get('item_index')
+        
+        if checklist_type not in ['eligibility', 'competitiveness', 'exclusions']:
+            from django.http import JsonResponse
+            return JsonResponse({'error': 'Invalid checklist type'}, status=400)
+        
+        # Get the match_reasons
+        match_reasons = match_result.match_reasons or {}
+        checklist_key = f'{checklist_type}_checklist'
+        checklist = match_reasons.get(checklist_key, [])
+        
+        if item_index < 0 or item_index >= len(checklist):
+            from django.http import JsonResponse
+            return JsonResponse({'error': 'Invalid item index'}, status=400)
+        
+        # Check if item was manually edited
+        if not checklist[item_index].get('manually_edited'):
+            from django.http import JsonResponse
+            return JsonResponse({'error': 'This item was not manually edited'}, status=400)
+        
+        # Restore original values
+        original_status = checklist[item_index].get('original_status')
+        original_reason = checklist[item_index].get('original_reason')
+        
+        if original_status is not None:
+            checklist[item_index]['status'] = original_status
+        if original_reason is not None:
+            checklist[item_index]['reason'] = original_reason
+        
+        # Remove manual edit flags
+        checklist[item_index]['manually_edited'] = False
+        if 'original_status' in checklist[item_index]:
+            del checklist[item_index]['original_status']
+        if 'original_reason' in checklist[item_index]:
+            del checklist[item_index]['original_reason']
+        
+        # Save back to match_reasons
+        match_reasons[checklist_key] = checklist
+        match_result.match_reasons = match_reasons
+        match_result.save()
+        
+        from django.http import JsonResponse
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        from django.http import JsonResponse
+        return JsonResponse({'error': str(e)}, status=400)
 
 
 @login_required

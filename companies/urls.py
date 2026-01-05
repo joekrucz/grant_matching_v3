@@ -29,6 +29,8 @@ urlpatterns = [
     path('funding_searches/<int:id>/download_report', views.funding_search_download_report, name='funding_search_download_report'),
     path('funding_searches/<int:id>/cancel', views.funding_search_cancel, name='funding_search_cancel'),
     path('funding_searches/<int:id>/status', views.funding_search_status, name='funding_search_status'),
+    path('grant_match_results/<int:match_id>/edit_checklist/', views.edit_checklist_item, name='edit_checklist_item'),
+    path('grant_match_results/<int:match_id>/undo_checklist/', views.undo_checklist_item, name='undo_checklist_item'),
     path('search', views.company_search, name='search'),
     path('<int:id>/onboarding', views.company_onboarding, name='onboarding'),
 ]

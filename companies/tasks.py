@@ -380,7 +380,10 @@ if CELERY_TASKS_AVAILABLE:
                             'eligibility_score': eligibility_score,
                             'competitiveness_score': competitiveness_score,
                             'match_reasons': {
-                                'explanation': result.get('explanation', ''),
+                                'explanation': result.get('explanation', ''),  # Keep for backward compatibility
+                                'project_type_and_trl_focus': result.get('project_type_and_trl_focus', ''),
+                                'why_it_matches': result.get('why_it_matches', ''),
+                                'key_risks_and_uncertainties': result.get('key_risks_and_uncertainties', ''),
                                 'eligibility_checklist': eligibility_checklist_result,
                                 'competitiveness_checklist': competitiveness_checklist_result,
                                 'exclusions_checklist': exclusions_checklist_result,
