@@ -172,97 +172,6 @@
                         {% endif %}
                     </div>
                 </div>
-                <!-- TRL Levels Selection -->
-                {% if can_edit %}
-                <form method="post" id="trl-levels-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %}>
-                    {% csrf_token %}
-                    {# Preserve grant sources when submitting TRL levels form #}
-                    {% if funding_search.selected_grant_sources %}
-                        {% for source_code in funding_search.selected_grant_sources %}
-                            <input type="hidden" name="grant_sources" value="{{ source_code }}">
-                        {% endfor %}
-                    {% endif %}
-                    <div class="form-control mb-6">
-                        <label class="label">
-                            <span class="label-text flex items-center gap-2">
-                                TRL Levels
-                                <div class="tooltip tooltip-right" data-tip="Click to view TRL level explanations">
-                                    <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick="document.getElementById('trl-info-modal').showModal()">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </button>
-                                </div>
-                                <label class="label cursor-pointer gap-2 ml-auto">
-                                    <span class="label-text text-sm">Let system decide</span>
-                                    <input type="checkbox" name="let_system_decide_trl" id="let-system-decide-trl" class="checkbox checkbox-sm" {% if funding_search.let_system_decide_trl %}checked{% endif %} {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
-                        </label>
-                            </span>
-                        </label>
-                        <div class="relative mb-2" style="padding: 0.5rem 0;" id="trl-slider-container">
-                            <div class="relative" style="height: 20px;">
-                                <input type="range" min="1" max="9" value="1" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-min" style="z-index: 2;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
-                                <input type="range" min="1" max="9" value="9" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-max" style="z-index: 3;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
-                                <div class="absolute w-full h-2 bg-base-300 rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
-                                <div id="trl-range-track" class="absolute h-2 bg-primary rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
-                            </div>
-                            <div class="flex justify-between text-xs text-base-content/60 mt-1" style="padding: 0 10px;">
-                                {% for i in "123456789" %}
-                                <span>{{ i }}</span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {# Hidden inputs to store selected TRL levels #}
-                        <div id="trl-levels-hidden-inputs"></div>
-                    </div>
-                </form>
-                
-                <!-- TRL Info Modal -->
-                <dialog id="trl-info-modal" class="modal">
-                    <div class="modal-box">
-                        <h3 class="font-bold text-lg mb-4">TRL Level Explanations</h3>
-                        <div class="space-y-3">
-                                {% for value, label in trl_levels %}
-                            <div class="border-b border-base-300 pb-2 last:border-b-0">
-                                <div class="font-semibold text-sm">{{ value }}</div>
-                                <div class="text-xs text-base-content/70 mt-1">{{ label }}</div>
-                            </div>
-                                {% endfor %}
-                    </div>
-                        <div class="modal-action">
-                            <form method="dialog">
-                                <button class="btn">Close</button>
-                            </form>
-                    </div>
-                    </div>
-                    <form method="dialog" class="modal-backdrop">
-                        <button>close</button>
-                </form>
-                </dialog>
-                {% else %}
-                <!-- Display TRL levels for non-editors -->
-                {% if funding_search.trl_levels or funding_search.trl_level %}
-                <div class="mb-6">
-                    <div class="text-sm font-semibold mb-2">TRL Levels</div>
-                    <div class="flex flex-wrap gap-2">
-                        {% for trl_value in funding_search.trl_levels %}
-                        {% for value, label in trl_levels %}
-                                {% if value == trl_value %}
-                                <span class="badge badge-primary">{{ label }}</span>
-                                {% endif %}
-                            {% endfor %}
-                        {% endfor %}
-                        {% if funding_search.trl_level and funding_search.trl_level not in funding_search.trl_levels %}
-                            {% for value, label in trl_levels %}
-                                {% if value == funding_search.trl_level %}
-                                <span class="badge badge-primary">{{ label }}</span>
-                                {% endif %}
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
-                {% endif %}
                 
                 {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
                 <div class="space-y-4">
@@ -273,31 +182,31 @@
                                 <div class="font-semibold">
                                     Attachments
                                     {% if funding_search.uploaded_file %}(1){% endif %}
-                                </div>
-                                {% if can_edit %}
-                                <form method="post" enctype="multipart/form-data" action="{% url 'companies:funding_search_upload' funding_search.id %}" id="file-upload-form" class="inline-block">
-                                    {% csrf_token %}
-                                    <input 
-                                        type="file" 
-                                        name="file" 
-                                        accept=".pdf,.docx,.txt" 
-                                        id="file-input"
-                                        class="hidden"
-                                        {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                                    >
-                                    <button 
-                                        type="button" 
-                                        class="btn btn-circle btn-primary btn-sm"
-                                        onclick="document.getElementById('file-input').click()"
-                                        {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                        </svg>
-                                    </button>
-                                </form>
-                                {% endif %}
-                            </div>
+                    </div>
+        {% if can_edit %}
+                        <form method="post" enctype="multipart/form-data" action="{% url 'companies:funding_search_upload' funding_search.id %}" id="file-upload-form" class="inline-block">
+            {% csrf_token %}
+                    <input 
+                            type="file" 
+                            name="file" 
+                            accept=".pdf,.docx,.txt" 
+                                id="file-input"
+                                class="hidden"
+                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                            >
+                            <button 
+                                type="button" 
+                                class="btn btn-circle btn-primary btn-sm"
+                                onclick="document.getElementById('file-input').click()"
+                                {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                </svg>
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
                             {% if funding_search.uploaded_file %}
                             <div class="space-y-2">
                                 <div class="flex items-center gap-3 p-2 bg-base-200 rounded group">
@@ -305,10 +214,10 @@
                                     <div class="flex-1">
                                         <div class="font-medium text-sm">{{ uploaded_file_name|default:funding_search.uploaded_file.name }}</div>
                                     </div>
-                                    {% if can_edit %}
+                {% if can_edit %}
                                     <div class="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <form method="post" action="{% url 'companies:funding_search_delete_file' funding_search.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this file? This action cannot be undone.');">
-                                            {% csrf_token %}
+                    {% csrf_token %}
                                             <button type="submit" class="btn btn-ghost btn-sm text-error hover:bg-error/20 p-1">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -316,11 +225,11 @@
                                             </button>
                                         </form>
                                     </div>
-                                    {% endif %}
-                                </div>
+                    {% endif %}
                             </div>
+                    </div>
                             {% endif %}
-                        </div>
+                    </div>
                     
                         <!-- Selected Company Sources -->
                         {% if selected_files or funding_search.use_company_website %}
@@ -331,27 +240,27 @@
                                 Company Sources
                                 {% if file_count > 0 or funding_search.use_company_website %}
                                 ({% if file_count > 0 %}{{ file_count }} file{{ file_count|pluralize }}{% endif %}{% if file_count > 0 and funding_search.use_company_website %}, {% endif %}{% if funding_search.use_company_website %}Website{% endif %})
-                                {% endif %}
-                            </div>
+                        {% endif %}
+                    </div>
                             {% if can_edit %}
                             <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="btn btn-sm btn-outline {% if funding_search.matching_status == 'running' %}btn-disabled{% endif %}">
                                 Edit Sources
                             </a>
-                            {% endif %}
+                {% endif %}
                         </div>
                         <div class="space-y-2">
-                            <!-- Company Website -->
-                            {% if funding_search.use_company_website and funding_search.company.website %}
+                    <!-- Company Website -->
+                    {% if funding_search.use_company_website and funding_search.company.website %}
                             <div class="flex items-center gap-3 p-2 bg-base-200 rounded">
                                 <div class="badge badge-outline">Website</div>
-                                <div class="flex-1">
+                            <div class="flex-1">
                                     <a href="{{ funding_search.company.website }}" target="_blank" class="link link-primary text-sm font-medium">
-                                        {{ funding_search.company.website }}
-                                    </a>
-                                </div>
-                            </div>
-                            {% endif %}
-                            
+                                    {{ funding_search.company.website }}
+                                </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                             {% for file in selected_files %}
                             <div class="flex items-center gap-3 p-2 bg-base-200 rounded">
                                 <div class="badge badge-outline">File</div>
@@ -410,7 +319,7 @@
         {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
         <div class="card bg-base-100 border border-base-300">
             <div class="card-body">
-                <h2 class="card-title text-xl">Grant Matching</h2>
+                <h2 class="card-title text-xl">Settings</h2>
                 
                 <!-- Grant Sources Selection -->
                 <div class="mb-6">
@@ -458,60 +367,100 @@
                     {% endif %}
                 </div>
                 {% endif %}
-            </div>
-        </div>
                 
-                <div class="flex flex-col gap-2">
-                    <div class="flex gap-2">
-                        <form method="post" action="{% url 'companies:funding_search_match' funding_search.id %}" id="matching-form" class="flex-1">
+                <!-- TRL Levels Selection -->
+                {% if can_edit %}
+                <form method="post" id="trl-levels-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %}>
                     {% csrf_token %}
-                    <button 
-                        type="submit" 
-                        class="btn btn-primary btn-lg w-full" 
-                        {% if funding_search.matching_status == 'running' %}disabled{% endif %}
-                                id="run-matching-btn"
-                    >
-                        {% if funding_search.matching_status == 'running' %}
-                            <span class="loading loading-spinner loading-md"></span>
-                                    <span id="matching-button-text">
-                                        {% if funding_search.matching_progress %}
-                                            Matching in progress... {{ funding_search.matching_progress.current|default:0 }} of {{ funding_search.matching_progress.total|default:0 }} grants checked ({{ funding_search.matching_progress.percentage|default:0 }}%)
-                                        {% else %}
-                                            Matching in progress...
-                                        {% endif %}
-                                    </span>
-                        {% elif funding_search.matching_status == 'completed' %}
-                            Run Matching Job Again
-                        {% else %}
-                            Run Matching Job
-                        {% endif %}
-                    </button>
+                    {# Preserve grant sources when submitting TRL levels form #}
+                    {% if funding_search.selected_grant_sources %}
+                        {% for source_code in funding_search.selected_grant_sources %}
+                            <input type="hidden" name="grant_sources" value="{{ source_code }}">
+                        {% endfor %}
+                    {% endif %}
+                    <div class="form-control mb-6">
+                        <label class="label">
+                            <span class="label-text flex items-center gap-2">
+                                TRL Levels
+                                <div class="tooltip tooltip-right" data-tip="Click to view TRL level explanations">
+                                    <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick="document.getElementById('trl-info-modal').showModal()">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </button>
+            </div>
+                                <label class="label cursor-pointer gap-2 ml-auto">
+                                    <span class="label-text text-sm">Let system decide</span>
+                                    <input type="checkbox" name="let_system_decide_trl" id="let-system-decide-trl" class="checkbox checkbox-sm" {% if funding_search.let_system_decide_trl %}checked{% endif %} {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
+                                </label>
+                            </span>
+                        </label>
+                        <div class="relative mb-2" style="padding: 0.5rem 0;" id="trl-slider-container">
+                            <div class="relative" style="height: 20px;">
+                                <input type="range" min="1" max="9" value="1" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-min" style="z-index: 2;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
+                                <input type="range" min="1" max="9" value="9" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-max" style="z-index: 3;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
+                                <div class="absolute w-full h-2 bg-base-300 rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
+                                <div id="trl-range-track" class="absolute h-2 bg-primary rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
+        </div>
+                            <div class="flex justify-between text-xs text-base-content/60 mt-1" style="padding: 0 10px;">
+                                {% for i in "123456789" %}
+                                <span>{{ i }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {# Hidden inputs to store selected TRL levels #}
+                        <div id="trl-levels-hidden-inputs"></div>
+                    </div>
                 </form>
-                {% if funding_search.matching_status == 'running' %}
-                        <form method="post" action="{% url 'companies:funding_search_cancel' funding_search.id %}" id="cancel-matching-form">
-                            {% csrf_token %}
-                            <button 
-                                type="submit" 
-                                class="btn btn-error btn-lg"
-                                id="cancel-matching-btn"
-                            >
-                                Cancel
-                            </button>
-                        </form>
-                        {% elif funding_search.matching_status != 'running' %}
-                        <form method="post" action="{% url 'companies:funding_search_match_test' funding_search.id %}" id="test-matching-form">
-                            {% csrf_token %}
-                            <button 
-                                type="submit" 
-                                class="btn btn-outline btn-lg"
-                                id="run-test-matching-btn"
-                            >
-                                Test Match (First 5 Grants)
-                            </button>
-                        </form>
+                
+                <!-- TRL Info Modal -->
+                <dialog id="trl-info-modal" class="modal">
+                    <div class="modal-box">
+                        <h3 class="font-bold text-lg mb-4">TRL Level Explanations</h3>
+                        <div class="space-y-3">
+                                {% for value, label in trl_levels %}
+                            <div class="border-b border-base-300 pb-2 last:border-b-0">
+                                <div class="font-semibold text-sm">{{ value }}</div>
+                                <div class="text-xs text-base-content/70 mt-1">{{ label }}</div>
+                            </div>
+                                {% endfor %}
+                    </div>
+                        <div class="modal-action">
+                            <form method="dialog">
+                                <button class="btn">Close</button>
+                            </form>
+                    </div>
+                    </div>
+                    <form method="dialog" class="modal-backdrop">
+                        <button>close</button>
+                </form>
+                </dialog>
+                {% else %}
+                <!-- Display TRL levels for non-editors -->
+                {% if funding_search.trl_levels or funding_search.trl_level %}
+                <div class="mb-6">
+                    <div class="text-sm font-semibold mb-2">TRL Levels</div>
+                    <div class="flex flex-wrap gap-2">
+                        {% for trl_value in funding_search.trl_levels %}
+                        {% for value, label in trl_levels %}
+                                {% if value == trl_value %}
+                                <span class="badge badge-primary">{{ label }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                        {% if funding_search.trl_level and funding_search.trl_level not in funding_search.trl_levels %}
+                            {% for value, label in trl_levels %}
+                                {% if value == funding_search.trl_level %}
+                                <span class="badge badge-primary">{{ label }}</span>
+                                {% endif %}
+                            {% endfor %}
                         {% endif %}
                     </div>
                 </div>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
                 
                 <script>
                 // Show progress section immediately when form is submitted
@@ -602,28 +551,88 @@
 </div>
 
 <!-- Match Results Section -->
-{% if match_results %}
 <div class="card bg-base-200 border border-base-300 mt-6">
     <div class="card-body">
         <div class="flex justify-between items-center mb-4">
             <h2 class="card-title text-2xl">Grant Matching Results</h2>
             <div class="flex gap-2">
+                {% if match_results %}
                 <a href="{% url 'companies:funding_search_download_report' funding_search.id %}" class="btn btn-sm btn-primary">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     Download Report
                 </a>
-            {% if can_edit %}
+                {% if can_edit %}
                 <form method="post" action="{% url 'companies:funding_search_clear_results' funding_search.id %}" onsubmit="return confirm('Are you sure you want to clear all {{ match_results|length }} matching result{{ match_results|length|pluralize }}? This action cannot be undone.');">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm btn-error btn-outline">
                 Clear
             </button>
                 </form>
-            {% endif %}
+                {% endif %}
+                {% endif %}
             </div>
         </div>
+        
+        <!-- Matching Buttons -->
+        <div class="flex flex-col gap-2 mb-6">
+            <div class="flex gap-2">
+                <form method="post" action="{% url 'companies:funding_search_match' funding_search.id %}" id="matching-form" class="flex-1">
+                    {% csrf_token %}
+                    <button 
+                        type="submit" 
+                        class="btn btn-primary btn-lg w-full" 
+                        {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                        id="run-matching-btn"
+                    >
+                        {% if funding_search.matching_status == 'running' %}
+                            <span class="loading loading-spinner loading-md"></span>
+                            <span id="matching-button-text">
+                                {% if funding_search.matching_progress %}
+                                    Matching in progress... {{ funding_search.matching_progress.current|default:0 }} of {{ funding_search.matching_progress.total|default:0 }} grants checked ({{ funding_search.matching_progress.percentage|default:0 }}%)
+                                {% else %}
+                                    Matching in progress...
+                                {% endif %}
+                            </span>
+                        {% elif funding_search.matching_status == 'completed' %}
+                            Run Matching Job Again
+                        {% else %}
+                            Run Matching Job
+                        {% endif %}
+                    </button>
+                </form>
+                {% if funding_search.matching_status == 'running' %}
+                <form method="post" action="{% url 'companies:funding_search_cancel' funding_search.id %}" id="cancel-matching-form">
+                    {% csrf_token %}
+                    <button 
+                        type="submit" 
+                        class="btn btn-error btn-lg"
+                        id="cancel-matching-btn"
+                    >
+                        Cancel
+                    </button>
+                </form>
+                {% elif funding_search.matching_status != 'running' %}
+                <form method="post" action="{% url 'companies:funding_search_match_test' funding_search.id %}" id="test-matching-form">
+                    {% csrf_token %}
+                    <button 
+                        type="submit" 
+                        class="btn btn-outline btn-lg"
+                        id="run-test-matching-btn"
+                    >
+                        Test Match (First 5 Grants)
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if not match_results %}
+        <p class="text-sm text-base-content/60 text-center mb-6">
+            No matching results yet. Run a matching job above to find grants that match your criteria.
+        </p>
+        {% else %}
         <p class="text-sm text-base-content/70 mb-6">
             Found {{ match_results|length }} matching grant{{ match_results|length|pluralize }} 
             {% if funding_search.last_matched_at %}
@@ -664,28 +673,267 @@
                                 {% endif %}
                             </div>
                             {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
-                            <div class="text-base-content mt-3 text-sm space-y-3">
-                                {% if match.match_reasons.project_type_and_trl_focus %}
-                                <div>
-                                    <strong>Project type and TRL focus:</strong>
-                                    <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                            <div class="text-base-content mt-3">
+                                <div class="mt-4 -mx-4 -mb-2">
+                                    <div class="collapse">
+                                        <input type="checkbox" />
+                                        <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                            Summary
+                                        </div>
+                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="space-y-2">
+                                                {% if match.match_reasons.project_type_and_trl_focus %}
+                                                <div class="mt-2">
+                                                    <div class="collapse">
+                                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                            </svg>
+                                                            Project type and TRL focus
+                                                        </div>
+                                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                                            <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                                {% if match.match_reasons.why_it_matches %}
+                                                <div class="mt-2">
+                                                    <div class="collapse">
+                                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                            </svg>
+                                                            Why it matches
+                                                        </div>
+                                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                                            <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                                {% if match.match_reasons.key_risks_and_uncertainties %}
+                                                <div class="mt-2">
+                                                    <div class="collapse">
+                                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                            </svg>
+                                                            Key risks and uncertainties
+                                                        </div>
+                                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                                            <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                {% endif %}
-                                {% if match.match_reasons.why_it_matches %}
-                                <div>
-                                    <strong>Why it matches:</strong>
-                                    <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
-                                </div>
-                                {% endif %}
-                                {% if match.match_reasons.key_risks_and_uncertainties %}
-                                <div>
-                                    <strong>Key risks and uncertainties:</strong>
-                                    <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
-                                </div>
-                                {% endif %}
                             </div>
                             {% elif match.match_reasons.explanation %}
                             <p class="text-base-content mt-3 text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
+                            {% endif %}
+                            
+                            {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                            <div class="mt-4 -mx-4 -mb-2">
+                                <div class="collapse">
+                                    <input type="checkbox" />
+                                    <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
+                                        <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                        </svg>
+                                        Checklists
+                                    </div>
+                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="space-y-2">
+                        {% if match.match_reasons.eligibility_checklist %}
+                                            <div class="mt-2">
+                                                <div class="collapse">
+                                    <input type="checkbox" />
+                                                    <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                        <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                        </svg>
+                                        Eligibility Checklist 
+                                        <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
+                                            (calculating...)
+                                        </span>
+                                    </div>
+                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="space-y-2 eligibility-checklist-items">
+                            {% for item in match.match_reasons.eligibility_checklist %}
+                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
+                                {% if item.status == "yes" %}
+                                <span class="text-success text-lg checklist-status-icon">✓</span>
+                                {% elif item.status == "no" %}
+                                <span class="text-error text-lg checklist-status-icon">✗</span>
+                                {% else %}
+                                <span class="text-warning text-lg checklist-status-icon">?</span>
+                                {% endif %}
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                        {% if can_edit %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'eligibility', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                        {% if item.manually_edited %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'eligibility', {{ forloop.counter0 }})">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </button>
+                                        {% endif %}
+                                        {% endif %}
+                                    </div>
+                                    {% if item.manually_edited %}
+                                    <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                    {% elif item.reason %}
+                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                        
+                        {% if match.match_reasons.competitiveness_checklist %}
+                                            <div class="mt-2">
+                                <div class="collapse">
+                                    <input type="checkbox" />
+                                                    <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                        <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                        </svg>
+                                        Competitiveness Checklist
+                                        <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
+                                            (calculating...)
+                                        </span>
+                                    </div>
+                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="space-y-2 competitiveness-checklist-items">
+                            {% for item in match.match_reasons.competitiveness_checklist %}
+                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
+                                {% if item.status == "yes" %}
+                                <span class="text-success text-lg checklist-status-icon">✓</span>
+                                {% elif item.status == "no" %}
+                                <span class="text-error text-lg checklist-status-icon">✗</span>
+                                {% else %}
+                                <span class="text-warning text-lg checklist-status-icon">?</span>
+                                {% endif %}
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                        {% if can_edit %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'competitiveness', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                        {% if item.manually_edited %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'competitiveness', {{ forloop.counter0 }})">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </button>
+                                        {% endif %}
+                                        {% endif %}
+                                    </div>
+                                    {% if item.manually_edited %}
+                                    <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                    {% elif item.reason %}
+                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                        
+                        {% if match.match_reasons.exclusions_checklist %}
+                                            <div class="mt-2">
+                                <div class="collapse">
+                                    <input type="checkbox" />
+                                                    <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                        <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                        </svg>
+                                        Exclusions Checklist
+                                        <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
+                                            (calculating...)
+                                        </span>
+                                        <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                                    </div>
+                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="space-y-2 exclusions-checklist-items">
+                            {% for item in match.match_reasons.exclusions_checklist %}
+                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
+                                        {% if item.status == "yes" %}
+                                                <span class="text-error text-lg checklist-status-icon">✗</span>
+                                        {% elif item.status == "no" %}
+                                                <span class="text-success text-lg checklist-status-icon">✓</span>
+                                        {% else %}
+                                <span class="text-warning text-lg checklist-status-icon">?</span>
+                                        {% endif %}
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
+                                        {% if can_edit %}
+                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'exclusions', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                                {% if item.manually_edited %}
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <p class="text-xs font-bold text-accent">Manually edited</p>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs text-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'exclusions', {{ forloop.counter0 }})">
+                                                        Undo
+                                                    </button>
+                                                    {% endif %}
+                                                </div>
+                                                {% elif item.reason %}
+                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
+                            <div class="mt-4">
+                                <div class="alert alert-info">
+                                    <span class="text-sm">Checklists not available. Please run a new matching job to see eligibility and competitiveness checklists.</span>
+                                </div>
+                            </div>
                             {% endif %}
                         </div>
                         <div class="lg:text-right lg:ml-4 min-w-[200px]">
@@ -750,204 +998,8 @@
                             {% endif %}
                         </div>
                     </div>
-                    
-                    
-                    {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
-                    <div class="mt-4 -mx-4 -mb-2">
-                        <div class="collapse">
-                            <input type="checkbox" />
-                            <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
-                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                                Checklists
-                            </div>
-                            <div class="collapse-content px-4 pb-2 pt-2">
-                                <div class="space-y-2">
-                    {% if match.match_reasons.eligibility_checklist %}
-                                    <div class="mt-2">
-                                        <div class="collapse">
-                            <input type="checkbox" />
-                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                                Eligibility Checklist 
-                                <span class="text-sm font-normal text-base-content/70 eligibility-checklist-score">
-                                    (calculating...)
-                                </span>
-                            </div>
-                            <div class="collapse-content px-4 pb-2 pt-2">
-                                <div class="space-y-2 eligibility-checklist-items">
-                            {% for item in match.match_reasons.eligibility_checklist %}
-                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
-                                {% if item.status == "yes" %}
-                                <span class="text-success text-lg checklist-status-icon">✓</span>
-                                {% elif item.status == "no" %}
-                                <span class="text-error text-lg checklist-status-icon">✗</span>
-                                {% else %}
-                                <span class="text-warning text-lg checklist-status-icon">?</span>
-                                {% endif %}
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                        {% if can_edit %}
-                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'eligibility', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        {% if item.manually_edited %}
-                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'eligibility', {{ forloop.counter0 }})">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                        </button>
-                                        {% endif %}
-                                        {% endif %}
-                                    </div>
-                                    {% if item.manually_edited %}
-                                    <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
-                                    {% elif item.reason %}
-                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if match.match_reasons.competitiveness_checklist %}
-                                    <div class="mt-2">
-                        <div class="collapse">
-                            <input type="checkbox" />
-                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                                Competitiveness Checklist
-                                <span class="text-sm font-normal text-base-content/70 competitiveness-checklist-score">
-                                    (calculating...)
-                                </span>
-                            </div>
-                            <div class="collapse-content px-4 pb-2 pt-2">
-                                <div class="space-y-2 competitiveness-checklist-items">
-                            {% for item in match.match_reasons.competitiveness_checklist %}
-                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
-                                {% if item.status == "yes" %}
-                                <span class="text-success text-lg checklist-status-icon">✓</span>
-                                {% elif item.status == "no" %}
-                                <span class="text-error text-lg checklist-status-icon">✗</span>
-                                {% else %}
-                                <span class="text-warning text-lg checklist-status-icon">?</span>
-                                {% endif %}
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                        {% if can_edit %}
-                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'competitiveness', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        {% if item.manually_edited %}
-                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'competitiveness', {{ forloop.counter0 }})">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                        </button>
-                                        {% endif %}
-                                        {% endif %}
-                                    </div>
-                                    {% if item.manually_edited %}
-                                    <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
-                                    {% elif item.reason %}
-                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if match.match_reasons.exclusions_checklist %}
-                                    <div class="mt-2">
-                        <div class="collapse">
-                            <input type="checkbox" />
-                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                </svg>
-                                Exclusions Checklist
-                                <span class="text-sm font-normal text-base-content/70 exclusions-checklist-score">
-                                    (calculating...)
-                                </span>
-                                <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
-                            </div>
-                            <div class="collapse-content px-4 pb-2 pt-2">
-                                <div class="space-y-2 exclusions-checklist-items">
-                            {% for item in match.match_reasons.exclusions_checklist %}
-                            <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
-                                        {% if item.status == "yes" %}
-                                                <span class="text-error text-lg checklist-status-icon">✗</span>
-                                        {% elif item.status == "no" %}
-                                                <span class="text-success text-lg checklist-status-icon">✓</span>
-                                        {% else %}
-                                <span class="text-warning text-lg checklist-status-icon">?</span>
-                                        {% endif %}
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-sm font-medium">{{ item.criterion }}</span>
-                                        {% if can_edit %}
-                                        <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'exclusions', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                                {% if item.manually_edited %}
-                                                <div class="flex items-center gap-2 mt-1">
-                                                    <p class="text-xs font-bold text-accent">Manually edited</p>
-                                                    {% if can_edit %}
-                                                    <button type="button" class="btn btn-ghost btn-xs text-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'exclusions', {{ forloop.counter0 }})">
-                                                        Undo
-                                                    </button>
-                                                    {% endif %}
-                                                </div>
-                                                {% elif item.reason %}
-                                    <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
-                    <div class="mt-4">
-                        <div class="alert alert-info">
-                            <span class="text-sm">Checklists not available. Please run a new matching job to see eligibility and competitiveness checklists.</span>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    </div>
                 </div>
+            </div>
             {% endwith %}
             {% endfor %}
         </div>
@@ -1060,31 +1112,70 @@
                                 </div>
                                 
                                 {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
-                                <div class="mt-4 space-y-3">
-                                    {% if match.match_reasons.project_type_and_trl_focus %}
-                                    <div>
-                                        <p class="text-base-content/90 text-sm">
-                                            <strong>Project type and TRL focus:</strong>
-                                        </p>
-                                        <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                <div class="mt-4">
+                                    <div class="mt-4 -mx-4 -mb-2">
+                                        <div class="collapse">
+                                            <input type="checkbox" />
+                                            <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
+                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                </svg>
+                                                Summary
+                                            </div>
+                                            <div class="collapse-content px-4 pb-2 pt-2">
+                                                <div class="space-y-2">
+                                                    {% if match.match_reasons.project_type_and_trl_focus %}
+                                                    <div class="mt-2">
+                                                        <div class="collapse">
+                                                            <input type="checkbox" />
+                                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                                </svg>
+                                                                Project type and TRL focus
+                                                            </div>
+                                                            <div class="collapse-content px-4 pb-2 pt-2">
+                                                                <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if match.match_reasons.why_it_matches %}
+                                                    <div class="mt-2">
+                                                        <div class="collapse">
+                                                            <input type="checkbox" />
+                                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                                </svg>
+                                                                Why it matches
+                                                            </div>
+                                                            <div class="collapse-content px-4 pb-2 pt-2">
+                                                                <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.why_it_matches }}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if match.match_reasons.key_risks_and_uncertainties %}
+                                                    <div class="mt-2">
+                                                        <div class="collapse">
+                                                            <input type="checkbox" />
+                                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
+                                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                                </svg>
+                                                                Key risks and uncertainties
+                                                            </div>
+                                                            <div class="collapse-content px-4 pb-2 pt-2">
+                                                                <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    {% endif %}
-                                    {% if match.match_reasons.why_it_matches %}
-                                    <div>
-                                        <p class="text-base-content/90 text-sm">
-                                            <strong>Why it matches:</strong>
-                                        </p>
-                                        <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.why_it_matches }}</p>
-                                    </div>
-                                    {% endif %}
-                                    {% if match.match_reasons.key_risks_and_uncertainties %}
-                                    <div>
-                                        <p class="text-base-content/90 text-sm">
-                                            <strong>Key risks and uncertainties:</strong>
-                                        </p>
-                                        <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
-                                    </div>
-                                    {% endif %}
                                 </div>
                                 {% elif match.match_reasons.explanation %}
                                 <div class="mt-4">
@@ -1298,17 +1389,9 @@
         </div>
         {% endwith %}
         {% endif %}
+        {% endif %}
     </div>
 </div>
-{% elif funding_search.matching_status == 'completed' %}
-<div class="card bg-base-200 border border-base-300 mt-6">
-    <div class="card-body">
-        <div class="alert alert-info">
-            <span>No matching grants found above the threshold. Try adjusting your input sources or run the matching again.</span>
-        </div>
-    </div>
-</div>
-{% endif %}
 
 <!-- Checklist Edit Modal -->
 <dialog id="checklist-edit-modal" class="modal">
