@@ -162,22 +162,29 @@
         
         
         <!-- Selected Sources Section -->
-        <div class="card bg-base-100 border border-base-300 {% if funding_search.matching_status == 'running' %}opacity-60{% endif %}">
-            <div class="card-body">
-                <div class="flex justify-between items-center mb-4">
-                    <div class="flex items-center gap-2">
-                    <h2 class="card-title text-xl">Input Sources</h2>
-                        {% if funding_search.matching_status == 'running' %}
-                        <div class="badge badge-warning">Locked - Matching in progress</div>
-                        {% endif %}
+        <div class="card bg-white {% if funding_search.matching_status == 'running' %}opacity-60{% endif %}">
+            <div class="card-body py-2">
+                <div class="collapse">
+                    <input type="checkbox" />
+                    <div class="collapse-title p-0 min-h-0 flex items-center gap-2">
+                        <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                        <div class="flex justify-between items-center w-full">
+                            <div class="flex items-center gap-2">
+                                <h2 class="card-title text-xl">Input Sources</h2>
+                                {% if funding_search.matching_status == 'running' %}
+                                <div class="badge badge-warning">Locked - Matching in progress</div>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
+                    <div class="collapse-content p-0 pt-4">
+                        {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
                 <div class="space-y-4">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Attachments -->
-                        <div class="border border-base-300 rounded-lg p-4">
+                        <div class="border border-base-300 rounded-lg p-4 bg-white">
                             <div class="flex justify-between items-center mb-3">
                                 <div class="font-semibold">
                                     Attachments
@@ -233,7 +240,7 @@
                     
                         <!-- Selected Company Sources -->
                         {% if selected_files or funding_search.use_company_website %}
-                    <div class="border border-base-300 rounded-lg p-4">
+                    <div class="border border-base-300 rounded-lg p-4 bg-white">
                         {% with file_count=selected_files|length %}
                         <div class="flex justify-between items-center mb-3">
                             <div class="font-semibold">
@@ -311,17 +318,26 @@
                     {% endif %}
                     </span>
                 </div>
-                {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
         
         <!-- Matching Section -->
         {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
-        <div class="card bg-base-100 border border-base-300">
-            <div class="card-body">
-                <h2 class="card-title text-xl">Settings</h2>
-                
-                <!-- Grant Sources Selection -->
+        <div class="card bg-white">
+            <div class="card-body py-2">
+                <div class="collapse">
+                    <input type="checkbox" />
+                    <div class="collapse-title p-0 min-h-0 flex items-center gap-2">
+                        <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                        <h2 class="card-title text-xl">Settings</h2>
+                    </div>
+                    <div class="collapse-content p-0 pt-4">
+                        <!-- Grant Sources Selection -->
                 <div class="mb-6">
                     <div class="flex items-center gap-4 flex-wrap">
                         <h3 class="text-lg font-semibold">Grant Sources</h3>
@@ -538,7 +554,9 @@
                     </div>
                     {% endif %}
                 </div>
-                {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
         {% else %}
@@ -940,7 +958,7 @@
                             <div class="flex items-center justify-end gap-3 mb-3">
                                 {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
                                 <div>
-                                    <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                    <svg width="90" height="90" viewBox="0 0 60 60" class="checklist-pie-chart" 
                                          data-match-id="{{ match.id }}"
                                          data-eligibility='{{ match_data.eligibility_json }}'
                                          data-competitiveness='{{ match_data.competitiveness_json }}'
@@ -950,7 +968,7 @@
                                 </div>
                                 {% endif %}
                                 <div>
-                            <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                            <div class="stat-value text-primary text-5xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                     <div class="stat-desc text-xs">Overall Match</div>
                                 </div>
                             </div>
@@ -1051,7 +1069,7 @@
                                         <div class="flex items-center justify-end gap-3 mb-3">
                                             {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
                                             <div>
-                                                <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                                <svg width="90" height="90" viewBox="0 0 60 60" class="checklist-pie-chart" 
                                                      data-match-id="{{ match.id }}"
                                                      data-eligibility='{{ match_data.eligibility_json }}'
                                                      data-competitiveness='{{ match_data.competitiveness_json }}'
@@ -1061,7 +1079,7 @@
                                             </div>
                                             {% endif %}
                                             <div>
-                                        <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-value text-primary text-5xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                                 <div class="stat-desc text-xs">Overall Match</div>
                                             </div>
                                         </div>
@@ -1989,8 +2007,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set initial state
         const collapse = checkbox.closest('.collapse');
         const arrow = collapse.querySelector('.collapse-arrow-icon');
-        if (arrow && checkbox.checked) {
-            arrow.style.transform = 'rotate(90deg)';
+        if (arrow) {
+            if (checkbox.checked) {
+                arrow.style.transform = 'rotate(90deg)';
+            } else {
+                arrow.style.transform = 'rotate(0deg)';
+            }
         }
     });
     
