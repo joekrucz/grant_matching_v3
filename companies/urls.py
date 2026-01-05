@@ -26,6 +26,7 @@ urlpatterns = [
     path('funding_searches/<int:id>/match', views.funding_search_match, name='funding_search_match'),
     path('funding_searches/<int:id>/match_test', views.funding_search_match_test, name='funding_search_match_test'),
     path('funding_searches/<int:id>/clear_results', views.funding_search_clear_results, name='funding_search_clear_results'),
+    path('funding_searches/<int:id>/download_report', views.funding_search_download_report, name='funding_search_download_report'),
     path('funding_searches/<int:id>/cancel', views.funding_search_cancel, name='funding_search_cancel'),
     path('funding_searches/<int:id>/status', views.funding_search_status, name='funding_search_status'),
     path('search', views.company_search, name='search'),

@@ -11,6 +11,13 @@ from django.db.models.functions import Lower
 from django.db.models import Q
 from django.conf import settings
 from django.urls import reverse
+from django.http import HttpResponse
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from .models import Company, FundingSearch, GrantMatchResult, CompanyFile, CompanyNote
 from .services import (
     CompaniesHouseService,
@@ -468,6 +475,19 @@ def funding_search_detail(request, id):
         funding_search=funding_search
     ).select_related('grant').order_by('-match_score')[:50]
     
+    # Convert checklist data to JSON strings for pie charts
+    import json
+    match_results_with_json = []
+    for match in match_results:
+        match_reasons = match.match_reasons or {}
+        match_dict = {
+            'match': match,
+            'eligibility_json': json.dumps(match_reasons.get('eligibility_checklist', [])),
+            'competitiveness_json': json.dumps(match_reasons.get('competitiveness_checklist', [])),
+            'exclusions_json': json.dumps(match_reasons.get('exclusions_checklist', [])),
+        }
+        match_results_with_json.append(match_dict)
+    
     # Get selected sources (company files and notes)
     selected_files = funding_search.selected_company_files.all().order_by('-created_at')
     selected_notes = funding_search.selected_company_notes.all().order_by('-created_at')
@@ -478,10 +498,199 @@ def funding_search_detail(request, id):
         'trl_levels': TRL_LEVELS,
         'grant_sources': GRANT_SOURCES,
         'match_results': match_results,
+        'match_results_with_json': match_results_with_json,
         'selected_files': selected_files,
         'selected_notes': selected_notes,
     }
     return render(request, 'companies/funding_search_detail.html', context)
+
+
+@login_required
+def funding_search_download_report(request, id):
+    """Generate and download a PDF report of all grant matches for a funding search."""
+    from datetime import datetime
+    
+    # SECURITY: Check authorization before loading data
+    funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to view (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to view this funding search.')
+        return redirect('companies:list')
+    
+    # Get match results (limited to 50, same as displayed on page)
+    match_results = GrantMatchResult.objects.filter(
+        funding_search=funding_search
+    ).select_related('grant').order_by('-match_score')[:50]
+    
+    # Create the HttpResponse object with PDF headers
+    response = HttpResponse(content_type='application/pdf')
+    filename = f"grant_matches_{funding_search.name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    # Create the PDF object
+    doc = SimpleDocTemplate(response, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    
+    # Container for the 'Flowable' objects
+    elements = []
+    
+    # Define styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1e40af'),
+        spaceAfter=12,
+        alignment=TA_LEFT,
+    )
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#1e40af'),
+        spaceAfter=8,
+        spaceBefore=12,
+    )
+    normal_style = styles['Normal']
+    normal_style.fontSize = 10
+    normal_style.leading = 14
+    
+    # Title
+    elements.append(Paragraph(f"Grant Matching Report: {funding_search.name}", title_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Company and search info
+    elements.append(Paragraph(f"<b>Company:</b> {funding_search.company.name}", normal_style))
+    elements.append(Paragraph(f"<b>Created:</b> {funding_search.created_at.strftime('%B %d, %Y at %I:%M %p')}", normal_style))
+    if funding_search.last_matched_at:
+        elements.append(Paragraph(f"<b>Last Matched:</b> {funding_search.last_matched_at.strftime('%B %d, %Y at %I:%M %p')}", normal_style))
+    match_results_list = list(match_results)
+    elements.append(Paragraph(f"<b>Total Matches:</b> {len(match_results_list)}", normal_style))
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Grant matches
+    if match_results_list:
+        for idx, match in enumerate(match_results_list, 1):
+            grant = match.grant
+            
+            # Grant title and score
+            elements.append(Paragraph(f"<b>{idx}. {grant.title}</b>", heading_style))
+            
+            # Score information
+            score_info = f"Match Score: {match.match_score:.1%}"
+            if match.eligibility_score is not None:
+                score_info += f" | Eligibility: {match.eligibility_score:.1%}"
+            if match.competitiveness_score is not None:
+                score_info += f" | Competitiveness: {match.competitiveness_score:.1%}"
+            elements.append(Paragraph(score_info, normal_style))
+            
+            # Grant details
+            grant_details = []
+            grant_details.append(f"<b>Source:</b> {grant.get_source_display()}")
+            grant_details.append(f"<b>Status:</b> {grant.computed_status.title()}")
+            if grant.opening_date:
+                grant_details.append(f"<b>Opening Date:</b> {grant.opening_date.strftime('%B %d, %Y')}")
+            if grant.deadline:
+                grant_details.append(f"<b>Closing Date:</b> {grant.deadline.strftime('%B %d, %Y')}")
+            elif grant.deadline is None and grant.computed_status == 'open':
+                grant_details.append(f"<b>Closing Date:</b> Open - no closing date")
+            
+            elements.append(Paragraph(" | ".join(grant_details), normal_style))
+            
+            # Summary/Explanation
+            if match.match_reasons and match.match_reasons.get('explanation'):
+                elements.append(Spacer(1, 0.1*inch))
+                elements.append(Paragraph(f"<b>Summary:</b> {match.match_reasons.get('explanation', '')}", normal_style))
+            
+            # Checklists
+            match_reasons = match.match_reasons or {}
+            if match_reasons.get('eligibility_checklist') or match_reasons.get('competitiveness_checklist') or match_reasons.get('exclusions_checklist'):
+                elements.append(Spacer(1, 0.15*inch))
+                checklist_heading = ParagraphStyle(
+                    'ChecklistHeading',
+                    parent=styles['Heading3'],
+                    fontSize=11,
+                    textColor=colors.HexColor('#4b5563'),
+                    spaceAfter=6,
+                    spaceBefore=8,
+                )
+                checklist_item_style = ParagraphStyle(
+                    'ChecklistItem',
+                    parent=normal_style,
+                    fontSize=9,
+                    leftIndent=20,
+                    spaceAfter=4,
+                )
+                
+                # Eligibility Checklist
+                if match_reasons.get('eligibility_checklist'):
+                    elements.append(Paragraph("<b>Eligibility Checklist</b>", checklist_heading))
+                    for item in match_reasons.get('eligibility_checklist', []):
+                        status = item.get('status', '')
+                        if status == 'yes':
+                            status_symbol = '<font color="green">✓</font>'
+                        elif status == 'no':
+                            status_symbol = '<font color="red">✗</font>'
+                        else:
+                            status_symbol = '<font color="orange">?</font>'
+                        criterion = item.get('criterion', '')
+                        reason = item.get('reason', '')
+                        checklist_text = f"{status_symbol} {criterion}"
+                        if reason:
+                            checklist_text += f"<br/><i>{reason}</i>"
+                        elements.append(Paragraph(checklist_text, checklist_item_style))
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Competitiveness Checklist
+                if match_reasons.get('competitiveness_checklist'):
+                    elements.append(Paragraph("<b>Competitiveness Checklist</b>", checklist_heading))
+                    for item in match_reasons.get('competitiveness_checklist', []):
+                        status = item.get('status', '')
+                        if status == 'yes':
+                            status_symbol = '<font color="green">✓</font>'
+                        elif status == 'no':
+                            status_symbol = '<font color="red">✗</font>'
+                        else:
+                            status_symbol = '<font color="orange">?</font>'
+                        criterion = item.get('criterion', '')
+                        reason = item.get('reason', '')
+                        checklist_text = f"{status_symbol} {criterion}"
+                        if reason:
+                            checklist_text += f"<br/><i>{reason}</i>"
+                        elements.append(Paragraph(checklist_text, checklist_item_style))
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Exclusions Checklist
+                if match_reasons.get('exclusions_checklist'):
+                    elements.append(Paragraph("<b>Exclusions Checklist</b>", checklist_heading))
+                    for item in match_reasons.get('exclusions_checklist', []):
+                        # For exclusions: ✓ means exclusion does NOT apply (good), ✗ means it DOES apply (bad)
+                        status = item.get('status', '')
+                        if status == 'no':
+                            status_symbol = '<font color="green">✓</font>'
+                        elif status == 'yes':
+                            status_symbol = '<font color="red">✗</font>'
+                        else:
+                            status_symbol = '<font color="orange">?</font>'
+                        criterion = item.get('criterion', '')
+                        reason = item.get('reason', '')
+                        checklist_text = f"{status_symbol} {criterion}"
+                        if reason:
+                            checklist_text += f"<br/><i>{reason}</i>"
+                        elements.append(Paragraph(checklist_text, checklist_item_style))
+            
+            # Add spacing between grants
+            if idx < len(match_results):
+                elements.append(Spacer(1, 0.3*inch))
+                elements.append(PageBreak())
+    else:
+        elements.append(Paragraph("No grant matches found.", normal_style))
+    
+    # Build PDF
+    doc.build(elements)
+    
+    return response
 
 
 @login_required

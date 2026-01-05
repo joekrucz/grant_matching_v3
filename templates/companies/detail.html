@@ -500,20 +500,25 @@ details[open] summary .collapse-indicator::after {
             {% for search in funding_searches %}
             <div class="card bg-base-300 border border-base-300">
                 <div class="card-body py-3">
-                    <a href="{% url 'companies:funding_search_detail' search.id %}" class="card-title text-lg link link-primary">
-                        {{ search.name }}
-                    </a>
-                    {% if search.trl_levels or search.trl_level %}
-                    <div class="flex flex-wrap gap-1 mt-1">
-                        {% if search.trl_levels %}
-                            {% for trl in search.trl_levels %}
-                            <div class="badge badge-outline">{{ trl }}</div>
-                            {% endfor %}
-                        {% elif search.trl_level %}
-                            <div class="badge badge-outline">{{ search.trl_level }}</div>
+                    <div class="flex items-center justify-between mb-1">
+                        <a href="{% url 'companies:funding_search_detail' search.id %}" class="card-title text-lg link link-primary">
+                            {{ search.name }}
+                        </a>
+                        {% if search.matching_status == 'pending' %}
+                            <div class="badge badge-ghost">Pending</div>
+                        {% elif search.matching_status == 'running' %}
+                            <div class="badge badge-warning">Running</div>
+                        {% elif search.matching_status == 'completed' %}
+                            <div class="badge badge-success">Completed</div>
+                        {% elif search.matching_status == 'error' %}
+                            <div class="badge badge-error">Error</div>
+                        {% elif search.matching_status == 'cancelled' %}
+                            <div class="badge badge-neutral">Cancelled</div>
                         {% endif %}
                     </div>
-                    {% endif %}
+                    <div class="text-sm text-base-content/70 mt-1">
+                        Created by {{ search.user.email }} on {{ search.created_at|date:"M d, Y" }}
+                    </div>
                 </div>
             </div>
             {% endfor %}

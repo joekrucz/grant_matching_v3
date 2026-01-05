@@ -580,14 +580,22 @@
     <div class="card-body">
         <div class="flex justify-between items-center mb-4">
             <h2 class="card-title text-2xl">Grant Matching Results</h2>
+            <div class="flex gap-2">
+                <a href="{% url 'companies:funding_search_download_report' funding_search.id %}" class="btn btn-sm btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download Report
+                </a>
             {% if can_edit %}
-            <form method="post" action="{% url 'companies:funding_search_clear_results' funding_search.id %}" onsubmit="return confirm('Are you sure you want to clear all {{ match_results|length }} matching result{{ match_results|length|pluralize }}? This action cannot be undone.');">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-error btn-outline">
+                <form method="post" action="{% url 'companies:funding_search_clear_results' funding_search.id %}" onsubmit="return confirm('Are you sure you want to clear all {{ match_results|length }} matching result{{ match_results|length|pluralize }}? This action cannot be undone.');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-error btn-outline">
                 Clear
             </button>
-            </form>
+                </form>
             {% endif %}
+            </div>
         </div>
         <p class="text-sm text-base-content/70 mb-6">
             Found {{ match_results|length }} matching grant{{ match_results|length|pluralize }} 
@@ -598,7 +606,8 @@
         
         <!-- Top 5 Results -->
         <div class="space-y-4">
-            {% for match in match_results|slice:":5" %}
+            {% for match_data in match_results_with_json|slice:":5" %}
+            {% with match=match_data.match %}
             <div class="card bg-base-100 border border-base-300 {% if forloop.first %}border-2 border-primary{% endif %}">
                 <div class="card-body">
                     <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
@@ -624,8 +633,23 @@
                             {% endif %}
                         </div>
                         <div class="lg:text-right lg:ml-4 min-w-[200px]">
-                            <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
-                            <div class="stat-desc text-xs mb-3">Overall Match</div>
+                            <div class="flex items-center justify-end gap-3 mb-3">
+                                {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                <div>
+                                    <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                         data-match-id="{{ match.id }}"
+                                         data-eligibility='{{ match_data.eligibility_json }}'
+                                         data-competitiveness='{{ match_data.competitiveness_json }}'
+                                         data-exclusions='{{ match_data.exclusions_json }}'>
+                                        <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                    </svg>
+                                </div>
+                                {% endif %}
+                                <div>
+                                    <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                    <div class="stat-desc text-xs">Overall Match</div>
+                                </div>
+                            </div>
                             {% if match.eligibility_score is not None or match.competitiveness_score is not None or match.match_reasons.exclusions_checklist %}
                             <div class="border-t border-base-300 pt-3 mt-3">
                                 <div class="space-y-2">
@@ -808,6 +832,7 @@
                     
                 </div>
             </div>
+            {% endwith %}
             {% endfor %}
         </div>
         
@@ -830,7 +855,8 @@
             <div id="remaining-grants-section" class="hidden mt-4">
                 <div class="border border-base-300 rounded-lg p-4 bg-base-100" style="max-height: 600px; overflow-y: auto;">
                     <div class="space-y-4">
-                        {% for match in match_results|slice:"5:" %}
+                        {% for match_data in match_results_with_json|slice:"5:" %}
+                        {% with match=match_data.match %}
                         <div class="card bg-base-100 border border-base-300">
                             <div class="card-body">
                                 <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
@@ -856,8 +882,23 @@
                                         {% endif %}
                                     </div>
                                     <div class="lg:text-right lg:ml-4 min-w-[200px]">
-                                        <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
-                                        <div class="stat-desc text-xs mb-3">Overall Match</div>
+                                        <div class="flex items-center justify-end gap-3 mb-3">
+                                            {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                            <div>
+                                                <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                                     data-match-id="{{ match.id }}"
+                                                     data-eligibility='{{ match_data.eligibility_json }}'
+                                                     data-competitiveness='{{ match_data.competitiveness_json }}'
+                                                     data-exclusions='{{ match_data.exclusions_json }}'>
+                                                    <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                                </svg>
+                                            </div>
+                                            {% endif %}
+                                            <div>
+                                                <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                                <div class="stat-desc text-xs">Overall Match</div>
+                                            </div>
+                                        </div>
                                         {% if match.eligibility_score is not None or match.competitiveness_score is not None or match.match_reasons.exclusions_checklist %}
                                         <div class="border-t border-base-300 pt-3 mt-3">
                                             <div class="text-sm font-semibold text-base-content/80 mb-2">Score Breakdown</div>
@@ -1048,6 +1089,7 @@
                                 
                             </div>
                         </div>
+                        {% endwith %}
                         {% endfor %}
                     </div>
                 </div>
@@ -1444,6 +1486,125 @@ document.addEventListener('DOMContentLoaded', function() {
             window.scrollTo(0, parseInt(savedScrollPosition));
         }, 100);
     }
+    
+    // Render pie charts for checklist summaries
+    function renderPieChart(svg) {
+        try {
+            const eligibilityStr = svg.getAttribute('data-eligibility') || '[]';
+            const competitivenessStr = svg.getAttribute('data-competitiveness') || '[]';
+            const exclusionsStr = svg.getAttribute('data-exclusions') || '[]';
+            
+            const eligibility = JSON.parse(eligibilityStr);
+            const competitiveness = JSON.parse(competitivenessStr);
+            const exclusions = JSON.parse(exclusionsStr);
+            
+            // Count ticks (yes), crosses (no), and question marks (unknown) across all checklists
+            let ticks = 0, crosses = 0, questions = 0;
+            
+            // Process eligibility and competitiveness checklists
+            [...eligibility, ...competitiveness].forEach(item => {
+                const status = item.status;
+                if (status === 'yes') ticks++;
+                else if (status === 'no') crosses++;
+                else questions++;
+            });
+            
+            // Process exclusions checklist (inverted logic: 'no' = good/✓, 'yes' = bad/✗)
+            exclusions.forEach(item => {
+                const status = item.status;
+                if (status === 'no') ticks++;  // Exclusion doesn't apply = good
+                else if (status === 'yes') crosses++;  // Exclusion applies = bad
+                else questions++;
+            });
+            
+            const total = ticks + crosses + questions;
+            if (total === 0) {
+                // Show empty circle
+                return;
+            }
+            
+            // Calculate angles for pie chart
+            const radius = 25;
+            const centerX = 30;
+            const centerY = 30;
+            let currentAngle = -90; // Start at top
+            
+            // Colors: green for ticks, red for crosses, orange/yellow for questions
+            const colors = {
+                ticks: '#22c55e',    // green
+                crosses: '#ef4444',  // red
+                questions: '#f59e0b' // orange/yellow
+            };
+            
+            // Clear existing paths
+            svg.innerHTML = '';
+            
+            // Draw ticks segment (green)
+            if (ticks > 0) {
+                const ticksAngle = (ticks / total) * 360;
+                const ticksPath = createPieSegment(centerX, centerY, radius, currentAngle, currentAngle + ticksAngle);
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', ticksPath);
+                path.setAttribute('fill', colors.ticks);
+                path.setAttribute('stroke', '#fff');
+                path.setAttribute('stroke-width', '1');
+                svg.appendChild(path);
+                currentAngle += ticksAngle;
+            }
+            
+            // Draw crosses segment (red)
+            if (crosses > 0) {
+                const crossesAngle = (crosses / total) * 360;
+                const crossesPath = createPieSegment(centerX, centerY, radius, currentAngle, currentAngle + crossesAngle);
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', crossesPath);
+                path.setAttribute('fill', colors.crosses);
+                path.setAttribute('stroke', '#fff');
+                path.setAttribute('stroke-width', '1');
+                svg.appendChild(path);
+                currentAngle += crossesAngle;
+            }
+            
+            // Draw questions segment (orange/yellow)
+            if (questions > 0) {
+                const questionsAngle = (questions / total) * 360;
+                const questionsPath = createPieSegment(centerX, centerY, radius, currentAngle, currentAngle + questionsAngle);
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', questionsPath);
+                path.setAttribute('fill', colors.questions);
+                path.setAttribute('stroke', '#fff');
+                path.setAttribute('stroke-width', '1');
+                svg.appendChild(path);
+            }
+        } catch (e) {
+            console.error('Error rendering pie chart:', e);
+        }
+    }
+    
+    // Helper function to create pie segment path
+    function createPieSegment(cx, cy, r, startAngle, endAngle) {
+        const start = polarToCartesian(cx, cy, r, endAngle);
+        const end = polarToCartesian(cx, cy, r, startAngle);
+        const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+        return [
+            "M", cx, cy,
+            "L", start.x, start.y,
+            "A", r, r, 0, largeArcFlag, 0, end.x, end.y,
+            "Z"
+        ].join(" ");
+    }
+    
+    // Helper function to convert polar to cartesian coordinates
+    function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+        const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+        return {
+            x: centerX + (radius * Math.cos(angleInRadians)),
+            y: centerY + (radius * Math.sin(angleInRadians))
+        };
+    }
+    
+    // Render all pie charts
+    document.querySelectorAll('.checklist-pie-chart').forEach(renderPieChart);
 });
 
 // Toggle remaining grants section
