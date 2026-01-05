@@ -151,7 +151,8 @@ if CELERY_TASKS_AVAILABLE:
             match_results = matcher.match_all_grants(
                 project_text,
                 grants_list,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                let_system_decide_trl=funding_search.let_system_decide_trl
             )
             logger.info(f"Matching completed. Got {len(match_results)} results")
             

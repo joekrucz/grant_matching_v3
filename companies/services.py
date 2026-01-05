@@ -483,14 +483,29 @@ Grant #{index + 1}:
         
         return grant_text
     
-    def match_grants_batch(self, project_description, grants_batch):
+    def match_grants_batch(self, project_description, grants_batch, let_system_decide_trl=False):
         """
         Match a batch of grants (1 at a time) against project.
         Returns list of match results.
+        
+        Args:
+            project_description: The project description text
+            grants_batch: List of grant data dictionaries
+            let_system_decide_trl: If True, the AI should assess the TRL level of the project
         """
         # Since batch_size is 1, grants_batch will always have 1 grant
         grant = grants_batch[0]
         grant_text = self.format_grant_for_batch(grant, 0)
+        
+        trl_instruction = ""
+        trl_focus_instruction = ""
+        if let_system_decide_trl:
+            trl_instruction = """
+IMPORTANT: The user has requested that you assess the Technology Readiness Level (TRL) of this project yourself. 
+Based on the PROJECT DESCRIPTION, determine what TRL level (1-9) this project is currently at, and evaluate how well 
+it aligns with the grant's TRL requirements. Include this assessment in the "project_type_and_trl_focus" section.
+"""
+            trl_focus_instruction = " Explicitly state the assessed TRL level (1-9) of the project."
         
         prompt = f"""You are an expert grant matching assistant. Analyze how well a research project aligns with this funding opportunity.
 
@@ -499,7 +514,7 @@ PROJECT DESCRIPTION:
 
 FUNDING OPPORTUNITY:
 {grant_text}
-
+{trl_instruction}
 You must:
 1. If the grant has an "Eligibility Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
 2. If the grant has a "Competitiveness Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
@@ -514,7 +529,7 @@ You must:
 11. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist.
 12. Calculate exclusions_score (0.0-1.0) based on percentage of "no" answers in exclusions checklist (higher is better - means fewer exclusions apply).
 13. Provide three separate summary sections:
-    - "project_type_and_trl_focus": Describe the project type and TRL (Technology Readiness Level) focus, including what stage of development this project is at and how it aligns with the grant's TRL requirements (2-3 sentences).
+    - "project_type_and_trl_focus": Describe the project type and TRL (Technology Readiness Level) focus, including what stage of development this project is at and how it aligns with the grant's TRL requirements (2-3 sentences).{trl_focus_instruction}
     - "why_it_matches": Explain why this project matches this grant opportunity, highlighting key alignment points (2-3 sentences).
     - "key_risks_and_uncertainties": Identify key risks and uncertainties that could affect the project's success with this grant, including potential challenges or gaps (2-3 sentences).
 
@@ -646,7 +661,7 @@ IMPORTANT:
             # Will be handled by retry logic
             raise
     
-    def match_all_grants(self, project_description, grants_data, progress_callback=None):
+    def match_all_grants(self, project_description, grants_data, progress_callback=None, let_system_decide_trl=False):
         """
         Match all grants in batches with retry logic.
         
@@ -654,6 +669,7 @@ IMPORTANT:
             project_description: Project text to match against
             grants_data: List of grant dicts
             progress_callback: Optional function(current, total) for progress updates
+            let_system_decide_trl: If True, let AI assess TRL level during matching
         
         Returns:
             List of match results with grant_index, score, explanation, etc.
@@ -678,7 +694,7 @@ IMPORTANT:
                         progress_callback(batch_num, len(grants_data))
                     
                     logger.info(f"Batch {batch_num_display}, attempt {attempt + 1}/{max_retries}: Calling match_grants_batch...")
-                    batch_results = self.match_grants_batch(project_description, batch)
+                    batch_results = self.match_grants_batch(project_description, batch, let_system_decide_trl=let_system_decide_trl)
                     logger.info(f"Batch {batch_num_display}: Got {len(batch_results)} results from match_grants_batch")
                     
                     # Adjust grant_index to match original position

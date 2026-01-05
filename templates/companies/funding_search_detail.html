@@ -211,7 +211,7 @@
                         {% endfor %}
                     {% endif %}
                     <div class="form-control mb-6">
-                        <label class="label" for="trl-range-min">
+                        <label class="label">
                             <span class="label-text flex items-center gap-2">
                                 TRL Levels
                                 <div class="tooltip tooltip-right" data-tip="Click to view TRL level explanations">
@@ -221,12 +221,16 @@
                                         </svg>
                                     </button>
                                 </div>
+                                <label class="label cursor-pointer gap-2 ml-auto">
+                                    <span class="label-text text-sm">Let system decide</span>
+                                    <input type="checkbox" name="let_system_decide_trl" id="let-system-decide-trl" class="checkbox checkbox-sm" {% if funding_search.let_system_decide_trl %}checked{% endif %} {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
+                        </label>
                             </span>
                         </label>
-                        <div class="relative mb-2" style="padding: 0.5rem 0;">
+                        <div class="relative mb-2" style="padding: 0.5rem 0;" id="trl-slider-container">
                             <div class="relative" style="height: 20px;">
-                                <input type="range" min="1" max="9" value="1" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-min" style="z-index: 2;" {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
-                                <input type="range" min="1" max="9" value="9" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-max" style="z-index: 3;" {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
+                                <input type="range" min="1" max="9" value="1" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-min" style="z-index: 2;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
+                                <input type="range" min="1" max="9" value="9" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-max" style="z-index: 3;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
                                 <div class="absolute w-full h-2 bg-base-300 rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
                                 <div id="trl-range-track" class="absolute h-2 bg-primary rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
                             </div>
@@ -290,38 +294,57 @@
                 
                 {% if selected_files or selected_notes or funding_search.uploaded_file or funding_search.use_company_website %}
                 <div class="space-y-4">
-                    <!-- Company Website -->
-                    {% if funding_search.use_company_website and funding_search.company.website %}
-                    <div class="border border-base-300 rounded-lg p-4 bg-base-200">
-                        <div class="flex items-start gap-3">
-                            <div class="flex-1">
-                                <div class="font-semibold mb-1">Company Website</div>
-                                <a href="{{ funding_search.company.website }}" target="_blank" class="link link-primary text-sm">
-                                    {{ funding_search.company.website }}
-                                </a>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Attachments -->
+                        {% if funding_search.uploaded_file %}
+                        <div class="border border-base-300 rounded-lg p-4">
+                            <div class="font-semibold mb-3">Attachments (1)</div>
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-3 p-2 bg-base-200 rounded group">
+                                    <div class="badge badge-outline">File</div>
+                                    <div class="flex-1">
+                                        <div class="font-medium text-sm">{{ uploaded_file_name|default:funding_search.uploaded_file.name }}</div>
+                                    </div>
+                                    {% if can_edit %}
+                                    <div class="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <form method="post" action="{% url 'companies:funding_search_delete_file' funding_search.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this file? This action cannot be undone.');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-ghost btn-sm text-error hover:bg-error/20 p-1">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    {% endif %}
-                    
-                    <!-- Uploaded File -->
-                {% if funding_search.uploaded_file %}
-                    <div class="border border-base-300 rounded-lg p-4 bg-base-200">
-                        <div class="flex items-start gap-3">
-                            <div class="badge badge-primary">File</div>
-                            <div class="flex-1">
-                                <div class="font-semibold mb-1">{{ funding_search.uploaded_file.name }}</div>
-                                <div class="text-xs text-base-content/60">Type: {{ funding_search.file_type|upper }}</div>
-                            </div>
+                        {% endif %}
+                        
+                        <!-- Selected Company Sources -->
+                        {% if selected_files or funding_search.use_company_website %}
+                        <div class="border border-base-300 rounded-lg p-4">
+                        {% with file_count=selected_files|length %}
+                        <div class="font-semibold mb-3">
+                            Company Sources
+                            {% if file_count > 0 or funding_search.use_company_website %}
+                            ({% if file_count > 0 %}{{ file_count }} file{{ file_count|pluralize }}{% endif %}{% if file_count > 0 and funding_search.use_company_website %}, {% endif %}{% if funding_search.use_company_website %}Website{% endif %})
+                            {% endif %}
                         </div>
-                    </div>
-                    {% endif %}
-                    
-                    <!-- Selected Company Files -->
-                    {% if selected_files %}
-                    <div class="border border-base-300 rounded-lg p-4">
-                        <div class="font-semibold mb-3">Company Files ({{ selected_files|length }})</div>
                         <div class="space-y-2">
+                            <!-- Company Website -->
+                            {% if funding_search.use_company_website and funding_search.company.website %}
+                            <div class="flex items-center gap-3 p-2 bg-base-200 rounded">
+                                <div class="badge badge-outline">Website</div>
+                                <div class="flex-1">
+                                    <a href="{{ funding_search.company.website }}" target="_blank" class="link link-primary text-sm font-medium">
+                                        {{ funding_search.company.website }}
+                                    </a>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
                             {% for file in selected_files %}
                             <div class="flex items-center gap-3 p-2 bg-base-200 rounded">
                                 <div class="badge badge-outline">File</div>
@@ -334,8 +357,10 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% endwith %}
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
                     
                     <!-- Selected Company Notes -->
                     {% if selected_notes %}
@@ -727,10 +752,10 @@
                             </div>
                             <div class="collapse-content px-4 pb-2 pt-2">
                                 <div class="space-y-2">
-                                    {% if match.match_reasons.eligibility_checklist %}
+                    {% if match.match_reasons.eligibility_checklist %}
                                     <div class="mt-2">
                                         <div class="collapse">
-                                            <input type="checkbox" />
+                            <input type="checkbox" />
                                             <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
                                 <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -1071,10 +1096,10 @@
                                         </div>
                                         <div class="collapse-content px-4 pb-2 pt-2">
                                             <div class="space-y-2">
-                                                {% if match.match_reasons.eligibility_checklist %}
+                                {% if match.match_reasons.eligibility_checklist %}
                                                 <div class="mt-2">
                                                     <div class="collapse">
-                                                        <input type="checkbox" />
+                                        <input type="checkbox" />
                                                         <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
                                             <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -1309,12 +1334,66 @@ document.addEventListener('DOMContentLoaded', function() {
     const rangeMin = document.getElementById('trl-range-min');
     const rangeMax = document.getElementById('trl-range-max');
     const hiddenInputsContainer = document.getElementById('trl-levels-hidden-inputs');
+    const letSystemDecideCheckbox = document.getElementById('let-system-decide-trl');
+    const trlSliderContainer = document.getElementById('trl-slider-container');
     
     // Check if matching is running
     const isMatchingRunning = {% if funding_search.matching_status == 'running' %}true{% else %}false{% endif %};
     
     if (!rangeMin || !rangeMax || !hiddenInputsContainer) {
         return; // Elements not found
+    }
+    
+    // Handle "Let system decide" checkbox
+    if (letSystemDecideCheckbox) {
+        function updateSliderState() {
+            const isChecked = letSystemDecideCheckbox.checked;
+            if (rangeMin) rangeMin.disabled = isChecked || isMatchingRunning;
+            if (rangeMax) rangeMax.disabled = isChecked || isMatchingRunning;
+            if (trlSliderContainer) {
+                if (isChecked) {
+                    trlSliderContainer.style.opacity = '0.5';
+                    trlSliderContainer.style.pointerEvents = 'none';
+                } else {
+                    trlSliderContainer.style.opacity = '1';
+                    trlSliderContainer.style.pointerEvents = 'auto';
+                }
+            }
+        }
+        
+        // Set initial state
+        updateSliderState();
+        
+        // Update on change
+        letSystemDecideCheckbox.addEventListener('change', function() {
+            updateSliderState();
+            // Save the checkbox state via AJAX
+            const form = document.getElementById('trl-levels-form');
+            if (form) {
+                const formData = new FormData(form);
+                formData.append('let_system_decide_trl', this.checked ? 'on' : '');
+                
+                // Use current page URL if form doesn't have action
+                const formAction = form.action || window.location.pathname;
+                
+                fetch(formAction, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('TRL preference saved');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving TRL preference:', error);
+                });
+            }
+        });
     }
     
     // TRL levels data
@@ -1512,7 +1591,7 @@ document.addEventListener('DOMContentLoaded', function() {
         #trl-range-max:disabled::-moz-range-thumb {
             background: hsl(var(--bc) / 0.3);
             cursor: not-allowed;
-        }
+    }
     `;
     document.head.appendChild(style);
     

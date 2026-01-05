@@ -329,6 +329,7 @@ class FundingSearch(models.Model):
     notes = models.TextField(blank=True, null=True)
     trl_level = models.CharField(max_length=255, choices=TRL_LEVELS, blank=True, null=True)  # Legacy single TRL level (deprecated)
     trl_levels = models.JSONField(default=list, blank=True)  # Multiple TRL levels stored as list
+    let_system_decide_trl = models.BooleanField(default=False)  # If True, let AI assess TRL level during matching
     
     # Matching fields
     project_description = models.TextField(blank=True, null=True)  # Text input or extracted from file

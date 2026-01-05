@@ -452,10 +452,16 @@ def funding_search_detail(request, id):
         # Handle regular form submission (name, notes, trl_levels, grant_sources)
         funding_search.name = request.POST.get('name', funding_search.name)
         funding_search.notes = request.POST.get('notes', funding_search.notes)
-        # Get multiple TRL levels from form
-        trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
-        trl_levels = [level for level in trl_levels if level]  # Remove empty values
-        funding_search.trl_levels = trl_levels
+        # Get "Let system decide TRL" checkbox
+        funding_search.let_system_decide_trl = request.POST.get('let_system_decide_trl') == 'on'
+        # Get multiple TRL levels from form (only if not letting system decide)
+        if not funding_search.let_system_decide_trl:
+            trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
+            trl_levels = [level for level in trl_levels if level]  # Remove empty values
+            funding_search.trl_levels = trl_levels
+        else:
+            # Clear TRL levels if letting system decide
+            funding_search.trl_levels = []
         # Get selected grant sources from form
         grant_sources = request.POST.getlist('grant_sources')  # getlist for multiple values
         grant_sources = [source for source in grant_sources if source]  # Remove empty values
@@ -492,6 +498,11 @@ def funding_search_detail(request, id):
     selected_files = funding_search.selected_company_files.all().order_by('-created_at')
     selected_notes = funding_search.selected_company_notes.all().order_by('-created_at')
     
+    # Extract just the filename from the uploaded file path
+    uploaded_file_name = None
+    if funding_search.uploaded_file:
+        uploaded_file_name = os.path.basename(funding_search.uploaded_file.name)
+    
     context = {
         'funding_search': funding_search,
         'can_edit': can_edit,
@@ -501,6 +512,7 @@ def funding_search_detail(request, id):
         'match_results_with_json': match_results_with_json,
         'selected_files': selected_files,
         'selected_notes': selected_notes,
+        'uploaded_file_name': uploaded_file_name,
     }
     return render(request, 'companies/funding_search_detail.html', context)
 
@@ -1136,6 +1148,33 @@ def funding_search_upload(request, id):
         except Exception as e:
             messages.error(request, f'Error uploading file: {str(e)}')
     
+    return redirect('companies:funding_search_detail', id=id)
+
+
+@login_required
+@require_POST
+def funding_search_delete_file(request, id):
+    """Delete uploaded file from funding search (owner or admin only)."""
+    # SECURITY: Check authorization before loading data
+    funding_search = get_object_or_404(FundingSearch, id=id)
+    
+    # Check if user has permission to edit (owner or admin)
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to delete files for this funding search.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    if not funding_search.uploaded_file:
+        messages.error(request, 'No file to delete.')
+        return redirect('companies:funding_search_detail', id=id)
+    
+    # Delete the file
+    file_name = funding_search.uploaded_file.name
+    funding_search.uploaded_file.delete(save=False)
+    funding_search.uploaded_file = None
+    funding_search.file_type = None
+    funding_search.save()
+    
+    messages.success(request, f'File "{file_name}" deleted successfully.')
     return redirect('companies:funding_search_detail', id=id)
 
 

@@ -23,6 +23,7 @@ urlpatterns = [
     path('funding_searches/<int:id>/delete', views.funding_search_delete, name='funding_search_delete'),
     path('funding_searches/<int:id>/copy', views.funding_search_copy, name='funding_search_copy'),
     path('funding_searches/<int:id>/upload', views.funding_search_upload, name='funding_search_upload'),
+    path('funding_searches/<int:id>/delete_file', views.funding_search_delete_file, name='funding_search_delete_file'),
     path('funding_searches/<int:id>/match', views.funding_search_match, name='funding_search_match'),
     path('funding_searches/<int:id>/match_test', views.funding_search_match_test, name='funding_search_match_test'),
     path('funding_searches/<int:id>/clear_results', views.funding_search_clear_results, name='funding_search_clear_results'),
