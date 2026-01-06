@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load percentage %}
+{% load json_filter %}
 
 {% block title %}{{ funding_search.name }} - Grants Aggregator{% endblock %}
 
@@ -1517,7 +1518,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize sliders from current TRL levels
     {% if funding_search.trl_levels and funding_search.trl_levels|length > 0 %}
-    const currentLevels = {{ funding_search.trl_levels|safe }};
+    const currentLevels = {{ funding_search.trl_levels|json }};
     if (currentLevels && currentLevels.length > 0) {
         // Find min and max TRL levels from current selection
         const trlNumbers = currentLevels.map(level => {

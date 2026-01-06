@@ -6,6 +6,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.contrib import messages
+from django_ratelimit.decorators import ratelimit
 from django.core.paginator import Paginator
 from django.db.models.functions import Lower
 from django.db.models import Q
@@ -97,9 +98,31 @@ def company_detail(request, id):
             return redirect('companies:detail', id=id)
         
         # Handle website/notes update
-        company.website = request.POST.get('website', company.website)
-        company.notes = request.POST.get('notes', company.notes)
-        company.save()
+        website = request.POST.get('website', company.website or '').strip()
+        # SECURITY: Validate website URL to prevent SSRF
+        if website:
+            from .security import validate_website_url
+            is_valid, error_msg = validate_website_url(website)
+            if not is_valid:
+                messages.error(request, f'Invalid website URL: {error_msg}')
+                return redirect('companies:detail', id=id)
+        # SECURITY: Use explicit allowlist to prevent mass assignment
+        allowed_fields = []
+        
+        company.website = website if website else None
+        allowed_fields.append('website')
+        
+        # SECURITY: Validate notes length
+        notes = request.POST.get('notes', company.notes or '')
+        if notes is not None:
+            if len(notes) > 50000:  # Reasonable limit for notes
+                messages.error(request, 'Notes must be 50000 characters or less.')
+                return redirect('companies:detail', id=id)
+            company.notes = notes
+            allowed_fields.append('notes')
+        
+        # SECURITY: Only save explicitly allowed fields
+        company.save(update_fields=allowed_fields)
 
         # Handle optional file upload
         uploaded_file = request.FILES.get('company_file')
@@ -136,6 +159,7 @@ def company_detail(request, id):
 
 
 @login_required
+@ratelimit(key='user_or_ip', rate='20/h', method='POST', block=True)
 def company_file_delete(request, file_id):
     """Delete a company file (owner or admin)."""
     company_file = get_object_or_404(CompanyFile, id=file_id)
@@ -402,17 +426,47 @@ def funding_search_create(request, company_id):
                 'trl_levels': TRL_LEVELS,
             })
         
+        # SECURITY: Validate name length
+        if len(name) > 255:
+            messages.error(request, 'Name must be 255 characters or less.')
+            return render(request, 'companies/funding_search_create.html', {
+                'company': company,
+                'trl_levels': TRL_LEVELS,
+            })
+        
+        # SECURITY: Validate notes length
+        notes = request.POST.get('notes', '').strip()
+        if len(notes) > 10000:
+            messages.error(request, 'Notes must be 10000 characters or less.')
+            return render(request, 'companies/funding_search_create.html', {
+                'company': company,
+                'trl_levels': TRL_LEVELS,
+            })
+        
         # Get multiple TRL levels from form
         trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
         trl_levels = [level for level in trl_levels if level]  # Remove empty values
+        
+        # SECURITY: Validate TRL levels against allowed choices
+        valid_trl_values = [choice[0] for choice in TRL_LEVELS]
+        validated_trl_levels = []
+        for level in trl_levels:
+            if level in valid_trl_values:
+                validated_trl_levels.append(level)
+            else:
+                messages.error(request, f'Invalid TRL level: {level}')
+                return render(request, 'companies/funding_search_create.html', {
+                    'company': company,
+                    'trl_levels': TRL_LEVELS,
+                })
         
         funding_search = FundingSearch.objects.create(
             company=company,
             user=request.user,
             name=name,
-            notes=request.POST.get('notes', ''),
+            notes=notes,
             trl_level=request.POST.get('trl_level', '') or None,  # Keep for backwards compatibility
-            trl_levels=trl_levels,
+            trl_levels=validated_trl_levels,
         )
         
         messages.success(request, 'Funding search created successfully.')
@@ -449,24 +503,73 @@ def funding_search_detail(request, id):
             messages.error(request, 'You do not have permission to edit this funding search.')
             return redirect('companies:funding_search_detail', id=id)
         
-        # Handle regular form submission (name, notes, trl_levels, grant_sources)
-        funding_search.name = request.POST.get('name', funding_search.name)
-        funding_search.notes = request.POST.get('notes', funding_search.notes)
+        # SECURITY: Use explicit allowlist to prevent mass assignment
+        # Only allow specific fields to be updated
+        allowed_fields = []
+        
+        # Validate and update name (max 255 chars)
+        name = request.POST.get('name', '').strip()
+        if name:
+            if len(name) > 255:
+                messages.error(request, 'Name must be 255 characters or less.')
+                return redirect('companies:funding_search_detail', id=id)
+            funding_search.name = name
+            allowed_fields.append('name')
+        
+        # Validate and update notes (max 10000 chars)
+        notes = request.POST.get('notes', '').strip()
+        if notes is not None:  # Allow empty notes
+            if len(notes) > 10000:
+                messages.error(request, 'Notes must be 10000 characters or less.')
+                return redirect('companies:funding_search_detail', id=id)
+            funding_search.notes = notes
+            allowed_fields.append('notes')
+        
         # Get "Let system decide TRL" checkbox
         funding_search.let_system_decide_trl = request.POST.get('let_system_decide_trl') == 'on'
-        # Get multiple TRL levels from form (only if not letting system decide)
+        allowed_fields.append('let_system_decide_trl')
+        
+        # SECURITY: Validate TRL levels against allowed choices
         if not funding_search.let_system_decide_trl:
             trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
             trl_levels = [level for level in trl_levels if level]  # Remove empty values
-            funding_search.trl_levels = trl_levels
+            
+            # Validate each TRL level against allowed choices
+            valid_trl_values = [choice[0] for choice in TRL_LEVELS]
+            validated_trl_levels = []
+            for level in trl_levels:
+                if level in valid_trl_values:
+                    validated_trl_levels.append(level)
+                else:
+                    messages.error(request, f'Invalid TRL level: {level}')
+                    return redirect('companies:funding_search_detail', id=id)
+            
+            funding_search.trl_levels = validated_trl_levels
         else:
             # Clear TRL levels if letting system decide
             funding_search.trl_levels = []
-        # Get selected grant sources from form
+        allowed_fields.append('trl_levels')
+        
+        # SECURITY: Validate grant sources against allowed sources
+        from grants.models import GRANT_SOURCES
         grant_sources = request.POST.getlist('grant_sources')  # getlist for multiple values
         grant_sources = [source for source in grant_sources if source]  # Remove empty values
-        funding_search.selected_grant_sources = grant_sources if grant_sources else []  # Default to empty list if none selected
-        funding_search.save()
+        
+        # Validate each grant source
+        valid_source_codes = [source[0] for source in GRANT_SOURCES]
+        validated_grant_sources = []
+        for source in grant_sources:
+            if source in valid_source_codes:
+                validated_grant_sources.append(source)
+            else:
+                messages.error(request, f'Invalid grant source: {source}')
+                return redirect('companies:funding_search_detail', id=id)
+        
+        funding_search.selected_grant_sources = validated_grant_sources if validated_grant_sources else []
+        allowed_fields.append('selected_grant_sources')
+        
+        # SECURITY: Only save explicitly allowed fields
+        funding_search.save(update_fields=allowed_fields)
         
         # If AJAX request, return JSON response instead of redirecting
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -734,8 +837,12 @@ def edit_checklist_item(request, match_id):
         from django.http import JsonResponse
         return JsonResponse({'error': 'You do not have permission to edit this checklist.'}, status=403)
     
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    data, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     try:
-        data = json.loads(request.body)
         checklist_type = data.get('checklist_type')  # 'eligibility', 'competitiveness', or 'exclusions'
         item_index = data.get('item_index')
         new_status = data.get('status')  # 'yes', 'no', or 'unknown'
@@ -796,8 +903,12 @@ def undo_checklist_item(request, match_id):
         from django.http import JsonResponse
         return JsonResponse({'error': 'You do not have permission to undo this checklist edit.'}, status=403)
     
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    data, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     try:
-        data = json.loads(request.body)
         checklist_type = data.get('checklist_type')  # 'eligibility', 'competitiveness', or 'exclusions'
         item_index = data.get('item_index')
         
@@ -1067,6 +1178,7 @@ def extract_text_from_file(file, file_type):
 
 
 @login_required
+@ratelimit(key='user_or_ip', rate='10/h', method='POST', block=True)
 def funding_search_upload(request, id):
     """Handle file upload."""
     # SECURITY: Check authorization before loading data
@@ -1095,18 +1207,42 @@ def funding_search_upload(request, id):
             messages.error(request, 'File size exceeds 10MB limit.')
             return redirect('companies:funding_search_detail', id=id)
         
-        # SECURITY: Validate file type by extension AND content
-        file_name = uploaded_file.name.lower()
+        # SECURITY: Sanitize filename to prevent path traversal and XSS
+        import os
+        import re
+        original_filename = uploaded_file.name
+        # Remove any path components
+        safe_filename = os.path.basename(original_filename)
+        # Remove any non-alphanumeric characters except dots, hyphens, underscores
+        safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', safe_filename)
+        # Limit filename length
+        if len(safe_filename) > 255:
+            name, ext = os.path.splitext(safe_filename)
+            safe_filename = name[:250] + ext
+        
+        # SECURITY: Validate file type by extension, MIME type, AND content
+        file_name = safe_filename.lower()
         
         # Check extension first
         if file_name.endswith('.pdf'):
             expected_type = 'pdf'
+            expected_mime_types = ['application/pdf']
         elif file_name.endswith('.docx'):
             expected_type = 'docx'
+            expected_mime_types = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip']
         elif file_name.endswith('.txt'):
             expected_type = 'txt'
+            expected_mime_types = ['text/plain', 'text/plain; charset=utf-8', 'text/plain; charset=us-ascii']
         else:
             messages.error(request, 'Unsupported file type. Please upload PDF, DOCX, or TXT.')
+            return redirect('companies:funding_search_detail', id=id)
+        
+        # SECURITY: Validate MIME type if provided
+        content_type = uploaded_file.content_type
+        if content_type and content_type not in expected_mime_types:
+            # Allow if content_type is empty (some browsers don't send it)
+            # But if it's provided and doesn't match, reject it
+            messages.error(request, f'Invalid file type. Expected {expected_type.upper()} file.')
             return redirect('companies:funding_search_detail', id=id)
         
         # Validate content type (basic check)
@@ -1139,10 +1275,12 @@ def funding_search_upload(request, id):
         file_type = expected_type
         
         try:
-            # Save file without extracting text
+            # SECURITY: Save file with sanitized filename
+            # Update the file's name attribute before saving
+            uploaded_file.name = safe_filename
             funding_search.uploaded_file = uploaded_file
             funding_search.file_type = file_type
-            funding_search.save()
+            funding_search.save(update_fields=['uploaded_file', 'file_type'])
             
             messages.success(request, f'File uploaded successfully.')
         except Exception as e:
@@ -1153,6 +1291,7 @@ def funding_search_upload(request, id):
 
 @login_required
 @require_POST
+@ratelimit(key='user_or_ip', rate='20/h', method='POST', block=True)
 def funding_search_delete_file(request, id):
     """Delete uploaded file from funding search (owner or admin only)."""
     # SECURITY: Check authorization before loading data
@@ -1388,9 +1527,11 @@ def funding_search_cancel(request, id):
 
 
 @login_required
+@ratelimit(key='user_or_ip', rate='30/m', method='GET', block=True)
 def company_search(request):
     """API endpoint to search Companies House by company name."""
     from django.http import JsonResponse
+    from django.conf import settings
     
     query = request.GET.get('q', '').strip()
     
@@ -1403,7 +1544,12 @@ def company_search(request):
     except CompaniesHouseError as e:
         return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
-        return JsonResponse({'error': f'Unexpected error: {str(e)}'}, status=500)
+        # SECURITY: Don't expose internal error details in production
+        if settings.DEBUG:
+            error_msg = f'Unexpected error: {str(e)}'
+        else:
+            error_msg = 'An error occurred processing your request'
+        return JsonResponse({'error': error_msg}, status=500)
 
 
 @login_required
@@ -1428,6 +1574,12 @@ def company_onboarding(request, id):
             # Save website
             website = request.POST.get('website', '').strip()
             if website:
+                # SECURITY: Validate website URL to prevent SSRF
+                from .security import validate_website_url
+                is_valid, error_msg = validate_website_url(website)
+                if not is_valid:
+                    messages.error(request, f'Invalid website URL: {error_msg}')
+                    return redirect('companies:onboarding', id=id)
                 company.website = website
                 company.save(update_fields=['website'])
                 saved_items.append('website')
@@ -1447,11 +1599,27 @@ def company_onboarding(request, id):
             # Save file
             uploaded_file = request.FILES.get('company_file')
             if uploaded_file:
+                # SECURITY: Validate file size (10MB max)
+                if uploaded_file.size > 10 * 1024 * 1024:
+                    messages.error(request, 'File size exceeds 10MB limit.')
+                    return redirect('companies:onboarding', id=id)
+                
+                # SECURITY: Sanitize filename
+                import os
+                import re
+                original_filename = uploaded_file.name
+                safe_filename = os.path.basename(original_filename)
+                safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', safe_filename)
+                if len(safe_filename) > 255:
+                    name, ext = os.path.splitext(safe_filename)
+                    safe_filename = name[:250] + ext
+                
+                uploaded_file.name = safe_filename
                 CompanyFile.objects.create(
                     company=company,
                     uploaded_by=request.user,
                     file=uploaded_file,
-                    original_name=uploaded_file.name,
+                    original_name=original_filename[:255],  # Store original but limit length
                 )
                 saved_items.append('file')
             

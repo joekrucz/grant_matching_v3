@@ -8,6 +8,7 @@ from django.core.cache import cache
 
 def health_check(request):
     """Simple health check endpoint."""
+    from django.conf import settings
     try:
         # Check database
         with connection.cursor() as cursor:
@@ -23,8 +24,13 @@ def health_check(request):
             'cache': 'ok'
         })
     except Exception as e:
+        # SECURITY: Don't expose internal error details in production
+        if settings.DEBUG:
+            error_message = str(e)
+        else:
+            error_message = 'Service unavailable'
         return JsonResponse({
             'status': 'unhealthy',
-            'error': str(e)
+            'error': error_message
         }, status=503)
 

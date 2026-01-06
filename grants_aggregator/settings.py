@@ -22,7 +22,11 @@ DEBUG = env('DEBUG', default=False)
 
 # ALLOWED_HOSTS: Allow Railway domains by default
 # Railway provides RAILWAY_PUBLIC_DOMAIN or you can set ALLOWED_HOSTS manually
-default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', 'web']
+# SECURITY: Remove '0.0.0.0' and 'web' from production defaults
+if DEBUG:
+    default_hosts = ['localhost', '127.0.0.1', '0.0.0.0', 'web']
+else:
+    default_hosts = ['localhost', '127.0.0.1']  # Production: only localhost for local connections
 
 # Check for Railway environment variables
 if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
@@ -46,14 +50,17 @@ default_csrf_origins = []
 # Add Railway public domain if available
 if 'RAILWAY_PUBLIC_DOMAIN' in os.environ:
     railway_domain = os.environ['RAILWAY_PUBLIC_DOMAIN']
-    # Add both http and https versions
-    default_csrf_origins.append(f'https://{railway_domain.split(":")[0]}')
-    default_csrf_origins.append(f'http://{railway_domain.split(":")[0]}')
+    # SECURITY: Only add HTTPS in production, allow HTTP only in DEBUG mode
+    domain_base = railway_domain.split(":")[0]
+    default_csrf_origins.append(f'https://{domain_base}')
+    if DEBUG:
+        default_csrf_origins.append(f'http://{domain_base}')
 # Add custom domain if available
 if 'RAILWAY_CUSTOM_DOMAIN' in os.environ:
     custom_domain = os.environ['RAILWAY_CUSTOM_DOMAIN']
     default_csrf_origins.append(f'https://{custom_domain}')
-    default_csrf_origins.append(f'http://{custom_domain}')
+    if DEBUG:
+        default_csrf_origins.append(f'http://{custom_domain}')
 
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=default_csrf_origins)
 
@@ -67,6 +74,10 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=not DEBUG)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
+# SECURITY: Session timeout settings
+SESSION_COOKIE_AGE = 86400 * 7  # 7 days (in seconds)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Sessions persist across browser restarts
+SESSION_SAVE_EVERY_REQUEST = True  # Update session expiry on each request (sliding expiration)
 
 # Proxy settings for Railway
 # Railway is behind a proxy, so we need to trust the X-Forwarded-* headers

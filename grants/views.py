@@ -366,10 +366,11 @@ def grant_detail(request, slug):
 @ratelimit(key='user_or_ip', rate='30/h', block=True)
 def eligibility_checklist(request):
     """API endpoint: generate eligibility checklist for a grant."""
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON payload"}, status=400)
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     grant_id = payload.get("grant_id")
     if not grant_id:
@@ -422,10 +423,11 @@ def eligibility_checklist(request):
 @ratelimit(key='user_or_ip', rate='30/h', block=True)
 def competitiveness_checklist(request):
     """API endpoint: generate competitiveness checklist for a grant."""
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON payload"}, status=400)
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     grant_id = payload.get("grant_id")
     if not grant_id:
@@ -478,10 +480,11 @@ def competitiveness_checklist(request):
 @ratelimit(key='user_or_ip', rate='30/h', block=True)
 def exclusions_checklist(request):
     """API endpoint: generate exclusions checklist for a grant."""
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON payload"}, status=400)
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     grant_id = payload.get("grant_id")
     if not grant_id:

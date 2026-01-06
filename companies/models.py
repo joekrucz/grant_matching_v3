@@ -479,40 +479,47 @@ class FundingSearch(models.Model):
         # Add company website if selected (scrape content)
         if self.use_company_website and self.company.website:
             try:
-                import requests
-                from bs4 import BeautifulSoup
-                from urllib.parse import urljoin, urlparse
-                
-                # Fetch website content
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-                response = requests.get(self.company.website, headers=headers, timeout=10)
-                response.raise_for_status()
-                
-                # Parse HTML and extract text
-                soup = BeautifulSoup(response.content, 'html.parser')
-                
-                # Remove script and style elements
-                for script in soup(["script", "style", "nav", "footer", "header"]):
-                    script.decompose()
-                
-                # Get text content
-                website_text = soup.get_text()
-                
-                # Clean up whitespace
-                lines = (line.strip() for line in website_text.splitlines())
-                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                website_text = ' '.join(chunk for chunk in chunks if chunk)
-                
-                # Limit to reasonable length (first 5000 characters)
-                if len(website_text) > 5000:
-                    website_text = website_text[:5000] + "... (truncated)"
-                
-                if website_text:
-                    text_parts.append(f"Company Website: {self.company.website}\n{website_text}\n")
+                # SECURITY: Validate URL to prevent SSRF attacks
+                from .security import validate_url_for_ssrf
+                is_valid, error_msg = validate_url_for_ssrf(self.company.website)
+                if not is_valid:
+                    text_parts.append(f"Company Website: {self.company.website} (URL validation failed: {error_msg})\n")
                 else:
-                    text_parts.append(f"Company Website: {self.company.website} (no text content found)\n")
+                    import requests
+                    from bs4 import BeautifulSoup
+                    from urllib.parse import urljoin, urlparse
+                    
+                    # Fetch website content
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                    # SECURITY: Disable redirects to prevent SSRF via redirects
+                    response = requests.get(self.company.website, headers=headers, timeout=10, allow_redirects=False)
+                    response.raise_for_status()
+                    
+                    # Parse HTML and extract text
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Remove script and style elements
+                    for script in soup(["script", "style", "nav", "footer", "header"]):
+                        script.decompose()
+                    
+                    # Get text content
+                    website_text = soup.get_text()
+                    
+                    # Clean up whitespace
+                    lines = (line.strip() for line in website_text.splitlines())
+                    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                    website_text = ' '.join(chunk for chunk in chunks if chunk)
+                    
+                    # Limit to reasonable length (first 5000 characters)
+                    if len(website_text) > 5000:
+                        website_text = website_text[:5000] + "... (truncated)"
+                    
+                    if website_text:
+                        text_parts.append(f"Company Website: {self.company.website}\n{website_text}\n")
+                    else:
+                        text_parts.append(f"Company Website: {self.company.website} (no text content found)\n")
             except Exception as e:
                 # If scraping fails, just include the URL
                 text_parts.append(f"Company Website: {self.company.website} (scraping failed: {str(e)})\n")

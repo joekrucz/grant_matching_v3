@@ -54,8 +54,9 @@ def sign_in(request):
             email = form.cleaned_data['email']
             password = form.cleaned_data['password']
             
-            # SECURITY: Add small random delay to prevent timing attacks
-            time.sleep(0.1 + (hash(email) % 100) / 1000)  # 0.1-0.2 second delay
+            # SECURITY: Add random delay to prevent timing attacks
+            import random
+            time.sleep(0.1 + random.uniform(0, 0.1))  # Random delay between 0.1-0.2 seconds
             
             try:
                 user = User.objects.get(email=email)
@@ -201,13 +202,31 @@ def profile(request):
     if request.method == 'POST':
         user = request.user
         
-        # Handle profile updates
-        user.name = request.POST.get('name', user.name)
+        # SECURITY: Use explicit allowlist to prevent mass assignment
+        allowed_fields = []
+        
+        # Validate and update name (max 255 chars)
+        name = request.POST.get('name', '').strip()
+        if name is not None:  # Allow empty name
+            if len(name) > 255:
+                messages.error(request, 'Name must be 255 characters or less.')
+                return redirect('users:profile')
+            user.name = name
+            allowed_fields.append('name')
+        
+        # Validate and update theme
         theme = request.POST.get('theme', '').strip()
+        # SECURITY: Validate theme against allowed values
+        allowed_themes = ['light', 'dark', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'synthwave', 'retro', 'cyberpunk', 'valentine', 'halloween', 'garden', 'forest', 'aqua', 'lofi', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'custom', None, '']
+        if theme and theme not in allowed_themes:
+            messages.error(request, 'Invalid theme selected.')
+            return redirect('users:profile')
         user.theme = theme if theme else None
+        allowed_fields.append('theme')
         
         # Handle custom theme colors
         import json
+        import re
         custom_theme_data = {}
         if request.POST.get('use_custom_theme') == 'true':
             # Collect custom theme color values
@@ -216,14 +235,24 @@ def profile(request):
             for field in color_fields:
                 color_value = request.POST.get(f'custom_theme_{field}', '').strip()
                 if color_value:
+                    # SECURITY: Validate hex color format (#RRGGBB or #RRGGBBAA)
+                    if not re.match(r'^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$', color_value):
+                        messages.error(request, f'Invalid color format for {field}. Use hex format (#RRGGBB).')
+                        return redirect('users:profile')
+                    # SECURITY: Limit color value length
+                    if len(color_value) > 9:  # Max #RRGGBBAA
+                        messages.error(request, f'Color value too long for {field}.')
+                        return redirect('users:profile')
                     custom_theme_data[field] = color_value
             user.custom_theme = custom_theme_data
             # Set theme to 'custom' if custom colors are provided
             if custom_theme_data:
                 user.theme = 'custom'
+                allowed_fields.append('theme')
         else:
             # Clear custom theme if not using it
             user.custom_theme = {}
+        allowed_fields.append('custom_theme')
         
         # Handle password change if provided
         current_password = request.POST.get('current_password', '').strip()
@@ -231,28 +260,36 @@ def profile(request):
         confirm_password = request.POST.get('confirm_password', '').strip()
         
         if new_password:  # User wants to change password
+            # SECURITY: Validate password length
+            if len(new_password) < 8:
+                messages.error(request, 'Password must be at least 8 characters long.')
+                return redirect('users:profile')
+            if len(new_password) > 128:
+                messages.error(request, 'Password must be 128 characters or less.')
+                return redirect('users:profile')
+            
             if not current_password:
                 messages.error(request, 'Please enter your current password to change it.')
-                return render(request, 'users/profile.html')
+                return redirect('users:profile')
             
             if not user.check_password(current_password):
                 messages.error(request, 'Current password is incorrect.')
-                return render(request, 'users/profile.html')
+                return redirect('users:profile')
             
             if new_password != confirm_password:
                 messages.error(request, 'New passwords do not match.')
-                return render(request, 'users/profile.html')
-            
-            if len(new_password) < 8:
-                messages.error(request, 'Password must be at least 8 characters long.')
-                return render(request, 'users/profile.html')
+                return redirect('users:profile')
             
             user.set_password(new_password)
+            allowed_fields.append('password')  # Note: password is hashed, so this is safe
             messages.success(request, 'Password updated successfully.')
         
-        user.save()
-        if not new_password:  # Only show profile update message if password wasn't changed
-            messages.success(request, 'Profile updated successfully.')
+        # SECURITY: Only save explicitly allowed fields
+        if allowed_fields:
+            user.save(update_fields=allowed_fields)
+        else:
+            messages.info(request, 'No changes to save.')
+        
         return redirect('users:profile')
     
     return render(request, 'users/profile.html')

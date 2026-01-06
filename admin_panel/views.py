@@ -256,10 +256,11 @@ def ai_summarise_grant(request):
     """API endpoint: summarise a single grant for an admin."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     grant_id = payload.get("grant_id")
     conversation_id = payload.get("conversation_id")
     page_type = payload.get("page_type", "grant")
@@ -362,10 +363,11 @@ def ai_summarise_company(request):
     """API endpoint: summarise a single company for an admin."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     company_id = payload.get("company_id")
     conversation_id = payload.get("conversation_id")
     page_type = payload.get("page_type", "company")
@@ -468,10 +470,11 @@ def ai_contextual_qa(request):
     """API endpoint: contextual Q&A for an admin based on current page context."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
 
     question = (payload.get("message") or "").strip()
     page_type = (payload.get("page_type") or "unknown").strip()
@@ -490,8 +493,19 @@ def ai_contextual_qa(request):
             return _json_bad_request("Conversation not found", status=404)
     else:
         # Create new conversation if none provided
-        grant = get_object_or_404(Grant, id=grant_id) if grant_id else None
-        company = get_object_or_404(Company, id=company_id) if company_id else None
+        grant = None
+        company = None
+        
+        # SECURITY: Check authorization before accessing grants/companies
+        if grant_id:
+            grant = get_object_or_404(Grant, id=grant_id)
+            # Grants are public, but we could add additional checks here if needed
+        
+        if company_id:
+            company = get_object_or_404(Company, id=company_id)
+            # SECURITY: Check if user has permission to access this company
+            if company.user != request.user and not request.user.admin:
+                return _json_bad_request("You do not have permission to access this company", status=403)
         
         # Generate title based on context
         title = None
@@ -508,8 +522,15 @@ def ai_contextual_qa(request):
             initial_company_id=company_id,
         )
 
-    grant = grant if 'grant' in locals() else (get_object_or_404(Grant, id=grant_id) if grant_id else None)
-    company = company if 'company' in locals() else (get_object_or_404(Company, id=company_id) if company_id else None)
+    # SECURITY: Re-fetch and verify authorization if not already set
+    if grant_id and 'grant' not in locals() or (grant and grant.id != grant_id):
+        grant = get_object_or_404(Grant, id=grant_id)
+    
+    if company_id and ('company' not in locals() or (company and company.id != company_id)):
+        company = get_object_or_404(Company, id=company_id)
+        # SECURITY: Verify authorization again
+        if company.user != request.user and not request.user.admin:
+            return _json_bad_request("You do not have permission to access this company", status=403)
 
     # Load previous messages from conversation for context
     previous_messages = []
@@ -706,10 +727,11 @@ def ai_grant_company_fit(request):
     """API endpoint: analyze how well a grant fits a company."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     grant_id = payload.get("grant_id")
     company_id = payload.get("company_id")
@@ -838,10 +860,11 @@ def ai_search_grants_for_company(request):
     """API endpoint: search grants in DB that match a company."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     company_id = payload.get("company_id")
     conversation_id = payload.get("conversation_id")
@@ -1077,10 +1100,11 @@ def ai_conversation_create(request):
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
     
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     conversation = Conversation.objects.create(
         user=request.user,
@@ -1108,10 +1132,11 @@ def ai_conversation_add_message(request, conversation_id):
     
     conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
     
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     role = payload.get("role")  # "user" or "assistant"
     content = payload.get("content", "").strip()
@@ -1157,10 +1182,11 @@ def ai_conversation_update(request, conversation_id):
     
     conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
     
-    try:
-        payload = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _json_bad_request("Invalid JSON payload")
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
     
     # Update title if provided
     if "title" in payload:

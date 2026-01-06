@@ -1,10 +1,25 @@
 """
 Template filter for JSON formatting.
 """
-import json
+import json as json_module
 from django import template
+from django.utils.safestring import mark_safe
 
 register = template.Library()
+
+
+@register.filter(name='json')
+def json_filter(value):
+    """Safely encode value as JSON for JavaScript use (prevents XSS)."""
+    if value is None:
+        return "null"
+    try:
+        # Use json.dumps to properly encode the value
+        # This escapes special characters and prevents XSS
+        return mark_safe(json_module.dumps(value, ensure_ascii=False))
+    except (TypeError, ValueError):
+        # If value can't be serialized, return empty array as safe fallback
+        return "[]"
 
 
 @register.filter
@@ -13,7 +28,7 @@ def json_pretty(value):
     if value is None:
         return ""
     try:
-        return json.dumps(value, indent=2, ensure_ascii=False)
+        return json_module.dumps(value, indent=2, ensure_ascii=False)
     except (TypeError, ValueError):
         return str(value)
 

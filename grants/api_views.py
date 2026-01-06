@@ -45,8 +45,12 @@ def upsert_grants(request):
     if not verify_api_key(request):
         return JsonResponse({'error': 'Unauthorized'}, status=401)
     
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    data, error_response = safe_json_loads(request, max_size=25 * 1024 * 1024)  # 25MB for scraper upserts
+    if error_response:
+        return error_response
     try:
-        data = json.loads(request.body)
         grants_data = data.get('grants', [])
         log_id = data.get('log_id')
         grants_found = data.get('grants_found')  # Get grants_found from payload
