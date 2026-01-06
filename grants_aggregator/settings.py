@@ -351,6 +351,20 @@ LOGGING = {
             'level': 'INFO' if not DEBUG else 'DEBUG',  # SECURITY: Don't use DEBUG in production
             'propagate': False,
         },
+        # SECURITY: Don't log sensitive information
+        'sentry_sdk': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
     },
 }
+
+# Sentry Error Tracking (optional - only if SENTRY_DSN is set)
+# Sentry is initialized in wsgi.py to catch startup errors
+SENTRY_DSN = env('SENTRY_DSN', default=None)
+if SENTRY_DSN:
+    logger.info("Sentry DSN configured - error tracking enabled")
+else:
+    logger.info("Sentry DSN not configured - error tracking disabled (this is OK for development)")
 

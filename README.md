@@ -32,6 +32,9 @@ Key environment variables:
 - `COMPANIES_HOUSE_API_KEY` - Companies House API key
 - `SCRAPER_API_KEY` - API key for scraper service authentication
 - `EMAIL_*` - Email configuration for sending confirmation emails
+- `SENTRY_DSN` - (Optional) Sentry DSN for error tracking in production
+- `ENVIRONMENT` - (Optional) Environment name (e.g., 'production', 'staging') for Sentry
+- `RELEASE_VERSION` - (Optional) Release version for Sentry tracking
 
 ### Running with Docker
 
@@ -167,6 +170,26 @@ python manage.py migrate
 
 1. Create superuser (see setup above)
 2. Visit http://localhost:8000/admin
+
+## Error Tracking
+
+The application includes optional Sentry integration for error tracking in production. To enable:
+
+1. Sign up for a free account at [sentry.io](https://sentry.io)
+2. Create a new Django project in Sentry
+3. Copy your DSN from the project settings
+4. Set the `SENTRY_DSN` environment variable:
+   ```bash
+   SENTRY_DSN=https://your-dsn@sentry.io/project-id
+   ```
+
+Sentry will automatically:
+- Track all unhandled exceptions
+- Capture errors from Django views and Celery tasks
+- Provide performance monitoring (10% sample rate in production)
+- Send error notifications via email/Slack (configured in Sentry)
+
+If `SENTRY_DSN` is not set, the application will run normally without error tracking (useful for local development).
 
 ## License
 

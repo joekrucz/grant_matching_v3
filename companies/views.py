@@ -27,7 +27,7 @@ from .services import (
     ThreeSixtyGivingError,
 )
 from grants_aggregator import CELERY_AVAILABLE
-from grants.models import Grant, GRANT_SOURCES, GRANT_SOURCES
+from grants.models import Grant, GRANT_SOURCES
 
 # Import tasks only if Celery is available
 if CELERY_AVAILABLE:
@@ -551,7 +551,6 @@ def funding_search_detail(request, id):
         allowed_fields.append('trl_levels')
         
         # SECURITY: Validate grant sources against allowed sources
-        from grants.models import GRANT_SOURCES
         grant_sources = request.POST.getlist('grant_sources')  # getlist for multiple values
         grant_sources = [source for source in grant_sources if source]  # Remove empty values
         
