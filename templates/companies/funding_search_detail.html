@@ -6,6 +6,24 @@
 
 {% block content %}
 <script>
+    // Toast notification system for user feedback
+    function showToast(message, type = 'error') {
+        const toast = document.createElement('div');
+        toast.className = `alert fixed top-4 right-4 z-50 shadow-lg max-w-md ${type === 'error' ? 'alert-error' : type === 'success' ? 'alert-success' : 'alert-info'}`;
+        toast.innerHTML = `
+            <span>${escapeHtml(message)}</span>
+            <button class="btn btn-sm btn-ghost" onclick="this.parentElement.remove()">×</button>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
     // Real-time progress polling for matching status
     let progressPollInterval = null;
     
@@ -18,7 +36,12 @@
         // Poll every 1 second for real-time updates
         progressPollInterval = setInterval(function() {
             fetch(`/companies/funding_searches/${fundingSearchId}/status`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     // Update button text with progress
                     const buttonText = document.getElementById('matching-button-text');
@@ -71,7 +94,8 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Error polling matching status:', error);
+                    // Silently handle polling errors - they're expected if server is unavailable
+                    // Errors are logged server-side if needed
                 });
         }, 1000); // Poll every 1 second
     }
@@ -1489,21 +1513,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Use current page URL if form doesn't have action
                 const formAction = form.action || window.location.pathname;
                 
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (!csrfToken) {
+                    showToast('CSRF token not found. Please refresh the page.', 'error');
+                    return;
+                }
+                
                 fetch(formAction, {
                     method: 'POST',
                     body: formData,
                     headers: {
+                        'X-CSRFToken': csrfToken.value,
                         'X-Requested-With': 'XMLHttpRequest',
                     }
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => {
+                            throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                        }).catch(() => {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
-                        console.log('TRL preference saved');
+                        // Success - no user feedback needed for auto-save
+                    } else {
+                        showToast('Error saving TRL preference. Please try again.', 'error');
                     }
                 })
                 .catch(error => {
-                    console.error('Error saving TRL preference:', error);
+                    showToast('Error saving TRL preference. Please try again.', 'error');
                 });
             }
         });
@@ -1578,10 +1621,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Update hidden inputs for form submission
-        hiddenInputsContainer.innerHTML = selectedLevels.map(level => 
-            `<input type="hidden" name="trl_levels" value="${level.value}">`
-            ).join('');
+        // Update hidden inputs for form submission (escape values to prevent XSS)
+        hiddenInputsContainer.innerHTML = selectedLevels.map(level => {
+            const escapedValue = escapeHtml(level.value);
+            return `<input type="hidden" name="trl_levels" value="${escapedValue}">`;
+        }).join('');
     }
     
     // Initialize display
@@ -1637,13 +1681,12 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => {
                 if (response.ok) {
                     // Success - no page refresh needed
-                    console.log('TRL levels saved successfully');
-        } else {
-                    console.error('Error saving TRL levels');
+                } else {
+                    showToast('Error saving TRL levels. Please try again.', 'error');
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
+                showToast('Error saving TRL levels. Please try again.', 'error');
             });
         }, 500); // Debounce: wait 500ms after last change
     }
@@ -1847,13 +1890,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             window.location.reload();
                         }
                     } else {
-                        console.error('Error updating grant sources');
+                        showToast('Error updating grant sources. Please try again.', 'error');
                         // Revert checkbox on error
                         this.checked = !this.checked;
                     }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
+                    showToast('Error updating grant sources. Please try again.', 'error');
                     // Revert checkbox on error
                     this.checked = !this.checked;
                 });
@@ -2036,14 +2079,32 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('save-checklist-edit-btn').addEventListener('click', function() {
         if (!currentEditData) return;
         
+        // Validate matchId
+        if (!currentEditData.matchId || !Number.isInteger(Number(currentEditData.matchId))) {
+            showToast('Invalid match ID. Please refresh the page.', 'error');
+            return;
+        }
+        if (!currentEditData.checklistType || !['eligibility', 'competitiveness', 'exclusions'].includes(currentEditData.checklistType)) {
+            showToast('Invalid checklist type.', 'error');
+            return;
+        }
+        if (!Number.isInteger(Number(currentEditData.itemIndex)) || Number(currentEditData.itemIndex) < 0) {
+            showToast('Invalid item index.', 'error');
+            return;
+        }
+        
         const newStatus = document.getElementById('edit-modal-status').value;
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfToken) {
+            showToast('CSRF token not found. Please refresh the page.', 'error');
+            return;
+        }
         
         fetch(`/companies/grant_match_results/${currentEditData.matchId}/edit_checklist/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
+                'X-CSRFToken': csrfToken.value,
                 'X-Requested-With': 'XMLHttpRequest',
             },
             body: JSON.stringify({
@@ -2052,7 +2113,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 status: newStatus
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                }).catch(() => {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 // Update the UI
@@ -2100,12 +2170,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('checklist-edit-modal').close();
                 currentEditData = null;
             } else {
-                alert('Error updating checklist item: ' + (data.error || 'Unknown error'));
+                showToast('Error updating checklist item: ' + (data.error || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
+            {% if debug %}
             console.error('Error:', error);
-            alert('Error updating checklist item');
+            {% endif %}
+            showToast('Error updating checklist item. Please try again.', 'error');
         });
     });
     
@@ -2138,7 +2210,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const card = container.closest('.card');
                 const breakdownPercentage = card ? card.querySelector('.eligibility-breakdown-percentage') : null;
                 if (breakdownPercentage && totalCount > 0) {
-                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${scoreText}</span>`;
+                    // Safe: percentage and scoreText are numbers/calculated values, not user input
+                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
                 }
             } else if (container.classList.contains('competitiveness-checklist-items')) {
                 // Recalculate competitiveness score
@@ -2165,7 +2238,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const card = container.closest('.card');
                 const breakdownPercentage = card ? card.querySelector('.competitiveness-breakdown-percentage') : null;
                 if (breakdownPercentage && totalCount > 0) {
-                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${scoreText}</span>`;
+                    // Safe: percentage and scoreText are numbers/calculated values, not user input
+                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
                 }
             } else if (container.classList.contains('exclusions-checklist-items')) {
                 // Recalculate exclusions score (for exclusions, "no" is good)
@@ -2197,7 +2271,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const card = container.closest('.card');
                 const breakdownPercentage = card ? card.querySelector('.exclusions-breakdown-percentage') : null;
                 if (breakdownPercentage && totalCount > 0) {
-                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 exclusions-breakdown-count ml-1">${scoreText}</span>`;
+                    // Safe: percentage and scoreText are numbers/calculated values, not user input
+                    breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 exclusions-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
                     const warningIcon = breakdownPercentage.querySelector('.exclusions-breakdown-warning-icon');
                     if (warningIcon) {
                         warningIcon.style.display = yesCount > 0 ? 'inline' : 'none';
@@ -2256,13 +2331,31 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        // Validate inputs
+        if (!matchId || !Number.isInteger(Number(matchId))) {
+            showToast('Invalid match ID. Please refresh the page.', 'error');
+            return;
+        }
+        if (!checklistType || !['eligibility', 'competitiveness', 'exclusions'].includes(checklistType)) {
+            showToast('Invalid checklist type.', 'error');
+            return;
+        }
+        if (!Number.isInteger(Number(itemIndex)) || Number(itemIndex) < 0) {
+            showToast('Invalid item index.', 'error');
+            return;
+        }
+        
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfToken) {
+            showToast('CSRF token not found. Please refresh the page.', 'error');
+            return;
+        }
         
         fetch(`/companies/grant_match_results/${matchId}/undo_checklist/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
+                'X-CSRFToken': csrfToken.value,
                 'X-Requested-With': 'XMLHttpRequest',
             },
             body: JSON.stringify({
@@ -2270,18 +2363,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 item_index: itemIndex
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `HTTP error! status: ${response.status}`);
+                }).catch(() => {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 // Reload the page to show the restored values
                 window.location.reload();
             } else {
-                alert('Error undoing checklist edit: ' + (data.error || 'Unknown error'));
+                showToast('Error undoing checklist edit: ' + (data.error || 'Unknown error'), 'error');
             }
         })
         .catch(error => {
+            {% if debug %}
             console.error('Error:', error);
-            alert('Error undoing checklist edit');
+            {% endif %}
+            showToast('Error undoing checklist edit. Please try again.', 'error');
         });
     };
 });
@@ -2340,36 +2444,46 @@ function editName() {
             const formData = new FormData();
             formData.append('name', newName);
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-            if (csrfToken) {
-                formData.append('csrfmiddlewaretoken', csrfToken.value);
+            if (!csrfToken) {
+                showToast('CSRF token not found. Please refresh the page.', 'error');
+                nameElement.style.display = '';
+                editBtn.style.display = '';
+                input.remove();
+                return;
             }
+            formData.append('csrfmiddlewaretoken', csrfToken.value);
             
             // Submit via fetch
             fetch(window.location.href, {
                 method: 'POST',
                 body: formData,
                 headers: {
+                    'X-CSRFToken': csrfToken.value,
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             })
             .then(response => {
                 if (response.ok) {
-                    nameElement.textContent = newName;
-                    nameElement.style.display = '';
-                    editBtn.style.display = '';
-                    input.remove();
-                    // Reload page to show updated name
-                    window.location.reload();
+                    return response.json().catch(() => ({})); // Try to parse JSON, but allow non-JSON responses
                 } else {
-                    alert('Error updating name. Please try again.');
-                    nameElement.style.display = '';
-                    editBtn.style.display = '';
-                    input.remove();
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Failed to update name');
+                    }).catch(() => {
+                        throw new Error('Failed to update name');
+                    });
                 }
             })
+            .then(data => {
+                nameElement.textContent = newName;
+                nameElement.style.display = '';
+                editBtn.style.display = '';
+                input.remove();
+                showToast('Name updated successfully.', 'success');
+                // Reload page to show updated name
+                setTimeout(() => window.location.reload(), 500);
+            })
             .catch(error => {
-                console.error('Error:', error);
-                alert('Error updating name. Please try again.');
+                showToast(error.message || 'Error updating name. Please try again.', 'error');
                 nameElement.style.display = '';
                 editBtn.style.display = '';
                 input.remove();
@@ -2428,7 +2542,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const card = container.closest('.card');
         const breakdownPercentage = card ? card.querySelector('.eligibility-breakdown-percentage') : null;
         if (breakdownPercentage && totalCount > 0) {
-            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${scoreText}</span>`;
+            // Safe: percentage and scoreText are numbers/calculated values, not user input
+            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
         }
         
         // Store eligibility score for this card
@@ -2467,7 +2582,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const card = container.closest('.card');
         const breakdownPercentage = card ? card.querySelector('.competitiveness-breakdown-percentage') : null;
         if (breakdownPercentage && totalCount > 0) {
-            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${scoreText}</span>`;
+            // Safe: percentage and scoreText are numbers/calculated values, not user input
+            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
         }
         
         // Store competitiveness score for this card
@@ -2514,8 +2630,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const card = container.closest('.card');
         const breakdownPercentage = card ? card.querySelector('.exclusions-breakdown-percentage') : null;
         if (breakdownPercentage && totalCount > 0) {
+            // Safe: percentage and scoreText are numbers/calculated values, not user input
             const warningIconHtml = yesCount > 0 ? '<span class="exclusions-breakdown-warning-icon" style="display: inline; margin-left: 0.5rem;">⚠️</span>' : '<span class="exclusions-breakdown-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>';
-            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 exclusions-breakdown-count ml-1">${scoreText}</span>${warningIconHtml}`;
+            breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 exclusions-breakdown-count ml-1">${escapeHtml(scoreText)}</span>${warningIconHtml}`;
         }
         
         // Show warning icon in heading if any exclusion is met
