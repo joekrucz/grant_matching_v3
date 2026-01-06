@@ -105,6 +105,13 @@
         }
     });
 </script>
+<style>
+    .funding-search-content {
+        transform: scale(0.9);
+        transform-origin: top center;
+    }
+</style>
+<div class="funding-search-content">
 <div class="mb-6">
     <a href="{% url 'companies:detail' funding_search.company.id %}" class="btn btn-ghost btn-sm">
         ← Back to Company
@@ -160,7 +167,7 @@
 
 <div class="card bg-base-200 border border-base-300">
     <div class="card-body">
-        
+        <h2 class="card-title text-2xl mb-4">Setup</h2>
         
         <!-- Selected Sources Section -->
         <div class="card bg-white {% if funding_search.matching_status == 'running' %}opacity-60{% endif %}">
@@ -716,49 +723,31 @@
                                             <div class="space-y-2">
                                                 {% if match.match_reasons.project_type_and_trl_focus %}
                                                 <div class="mt-2">
-                                                    <div class="collapse">
-                                                        <input type="checkbox" />
-                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                            </svg>
-                                                            Project type and TRL focus
-                                                        </div>
-                                                        <div class="collapse-content px-4 pb-2 pt-2">
-                                                            <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
-                                                        </div>
+                                                    <div class="font-semibold text-sm px-4 mb-1">
+                                                        Project type and TRL focus
+                                                    </div>
+                                                    <div class="px-4 pb-2">
+                                                        <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
                                                     </div>
                                                 </div>
                                                 {% endif %}
                                                 {% if match.match_reasons.why_it_matches %}
                                                 <div class="mt-2">
-                                                    <div class="collapse">
-                                                        <input type="checkbox" />
-                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                            </svg>
-                                                            Why it matches
-                                                        </div>
-                                                        <div class="collapse-content px-4 pb-2 pt-2">
-                                                            <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
-                                                        </div>
+                                                    <div class="font-semibold text-sm px-4 mb-1">
+                                                        Why it matches
+                                                    </div>
+                                                    <div class="px-4 pb-2">
+                                                        <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
                                                     </div>
                                                 </div>
                                                 {% endif %}
                                                 {% if match.match_reasons.key_risks_and_uncertainties %}
                                                 <div class="mt-2">
-                                                    <div class="collapse">
-                                                        <input type="checkbox" />
-                                                        <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                            </svg>
-                                                            Key risks and uncertainties
-                                                        </div>
-                                                        <div class="collapse-content px-4 pb-2 pt-2">
-                                                            <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
-                                                        </div>
+                                                    <div class="font-semibold text-sm px-4 mb-1">
+                                                        Key risks and uncertainties
+                                                    </div>
+                                                    <div class="px-4 pb-2">
+                                                        <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
                                                     </div>
                                                 </div>
                                                 {% endif %}
@@ -1155,49 +1144,31 @@
                                                 <div class="space-y-2">
                                                     {% if match.match_reasons.project_type_and_trl_focus %}
                                                     <div class="mt-2">
-                                                        <div class="collapse">
-                                                            <input type="checkbox" />
-                                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                                </svg>
-                                                                Project type and TRL focus
-                                                            </div>
-                                                            <div class="collapse-content px-4 pb-2 pt-2">
-                                                                <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
-                                                            </div>
+                                                        <div class="font-semibold text-sm px-4 mb-1">
+                                                            Project type and TRL focus
+                                                        </div>
+                                                        <div class="px-4 pb-2">
+                                                            <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
                                                         </div>
                                                     </div>
                                                     {% endif %}
                                                     {% if match.match_reasons.why_it_matches %}
                                                     <div class="mt-2">
-                                                        <div class="collapse">
-                                                            <input type="checkbox" />
-                                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                                </svg>
-                                                                Why it matches
-                                                            </div>
-                                                            <div class="collapse-content px-4 pb-2 pt-2">
-                                                                <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.why_it_matches }}</p>
-                                                            </div>
+                                                        <div class="font-semibold text-sm px-4 mb-1">
+                                                            Why it matches
+                                                        </div>
+                                                        <div class="px-4 pb-2">
+                                                            <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.why_it_matches }}</p>
                                                         </div>
                                                     </div>
                                                     {% endif %}
                                                     {% if match.match_reasons.key_risks_and_uncertainties %}
                                                     <div class="mt-2">
-                                                        <div class="collapse">
-                                                            <input type="checkbox" />
-                                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
-                                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                                </svg>
-                                                                Key risks and uncertainties
-                                                            </div>
-                                                            <div class="collapse-content px-4 pb-2 pt-2">
-                                                                <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
-                                                            </div>
+                                                        <div class="font-semibold text-sm px-4 mb-1">
+                                                            Key risks and uncertainties
+                                                        </div>
+                                                        <div class="px-4 pb-2">
+                                                            <p class="text-base-content/90 text-sm mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
                                                         </div>
                                                     </div>
                                                     {% endif %}
@@ -2570,4 +2541,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+</div>
 {% endblock %}
