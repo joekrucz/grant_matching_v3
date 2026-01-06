@@ -17,5 +17,11 @@ urlpatterns = [
     path('grants/eligibility-questionnaire', views.eligibility_questionnaire, name='eligibility_questionnaire'),
     path('grants/questionnaires', views.questionnaires_list, name='questionnaires_list'),
     path('grants/questionnaires/<int:questionnaire_id>/', views.questionnaire_detail, name='questionnaire_detail'),
+    path('terms', views.terms_and_conditions, name='terms'),
+    path('cookies', views.cookie_policy, name='cookie_policy'),
+    path('cookies/preferences', views.cookie_preferences, name='cookie_preferences'),
+    path('privacy', views.privacy_policy, name='privacy'),
+    path('support', views.support, name='support'),
+    path('about', views.about, name='about'),
 ]
 

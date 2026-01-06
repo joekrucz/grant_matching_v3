@@ -24,6 +24,70 @@ def index(request):
     return render(request, 'grants/index.html')
 
 
+def terms_and_conditions(request):
+    """Terms and conditions page - publicly accessible."""
+    return render(request, 'grants/terms_and_conditions.html')
+
+
+def cookie_policy(request):
+    """Cookie policy page - publicly accessible."""
+    return render(request, 'grants/cookie_policy.html')
+
+
+def cookie_preferences(request):
+    """Cookie preferences page - allows users to view and manage cookie settings."""
+    from django.contrib import messages
+    
+    # Get current cookie preferences from session
+    cookie_prefs = request.session.get('cookie_preferences', {
+        'essential': True,  # Always required
+        'analytics': request.session.get('cookie_preferences', {}).get('analytics', False),
+        'marketing': request.session.get('cookie_preferences', {}).get('marketing', False),
+    })
+    
+    if request.method == 'POST':
+        # Update cookie preferences
+        analytics = request.POST.get('analytics', 'off') == 'on'
+        marketing = request.POST.get('marketing', 'off') == 'on'
+        
+        # Essential cookies are always enabled
+        cookie_prefs = {
+            'essential': True,
+            'analytics': analytics,
+            'marketing': marketing,
+        }
+        
+        request.session['cookie_preferences'] = cookie_prefs
+        request.session['cookie_preferences_updated'] = True
+        messages.success(request, 'Your cookie preferences have been saved.')
+        return redirect('grants:cookie_preferences')
+    
+    # Check if preferences have been set before
+    preferences_set = 'cookie_preferences' in request.session
+    
+    context = {
+        'cookie_prefs': cookie_prefs,
+        'preferences_set': preferences_set,
+    }
+    
+    return render(request, 'grants/cookie_preferences.html', context)
+
+
+def privacy_policy(request):
+    """Privacy policy page - publicly accessible."""
+    return render(request, 'grants/privacy_policy.html')
+
+
+def support(request):
+    """Support/contact page - publicly accessible."""
+    return render(request, 'grants/support.html')
+
+
+def about(request):
+    """About us page - publicly accessible."""
+    return render(request, 'grants/about.html')
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def eligibility_questionnaire(request):

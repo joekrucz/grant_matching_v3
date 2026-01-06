@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Support - Trellis{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-4xl font-bold mb-8">Support & Contact</h1>
+    
+    <div class="prose prose-lg max-w-none">
+        <p class="text-base-content/70 mb-6">
+            We're here to help! Get in touch with us for support, questions, or feedback about Trellis.
+        </p>
+
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Frequently Asked Questions</h2>
+            
+            <div class="space-y-4">
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="radio" name="faq-accordion" checked="checked" />
+                    <div class="collapse-title text-xl font-medium">
+                        How do I create an account?
+                    </div>
+                    <div class="collapse-content">
+                        <p>Click "Sign Up" in the top right corner, enter your email address, and follow the instructions. You'll receive a confirmation email to verify your account.</p>
+                    </div>
+                </div>
+
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="radio" name="faq-accordion" />
+                    <div class="collapse-title text-xl font-medium">
+                        How do I add a company to my account?
+                    </div>
+                    <div class="collapse-content">
+                        <p>Go to the Companies page and click "Add Company". You can search by Companies House number or manually enter company details for unregistered companies.</p>
+                    </div>
+                </div>
+
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="radio" name="faq-accordion" />
+                    <div class="collapse-title text-xl font-medium">
+                        How does the grant matching work?
+                    </div>
+                    <div class="collapse-content">
+                        <p>We use AI to analyze your company information and match it with relevant funding opportunities. Create a funding search for a company, and our system will identify grants that align with your company's profile, technology readiness level, and other criteria.</p>
+                    </div>
+                </div>
+
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="radio" name="faq-accordion" />
+                    <div class="collapse-title text-xl font-medium">
+                        Where does the grant information come from?
+                    </div>
+                    <div class="collapse-content">
+                        <p>We aggregate grants from multiple UK funding providers, including UKRI, NIHR, Catapult, and Innovate UK. Grant information is scraped from official sources and updated regularly.</p>
+                    </div>
+                </div>
+
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="radio" name="faq-accordion" />
+                    <div class="collapse-title text-xl font-medium">
+                        How do I reset my password?
+                    </div>
+                    <div class="collapse-content">
+                        <p>On the Sign In page, click "Forgot Password?" and enter your email address. You'll receive instructions to reset your password.</p>
+                    </div>
+                </div>
+
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="radio" name="faq-accordion" />
+                    <div class="collapse-title text-xl font-medium">
+                        Can I delete my account?
+                    </div>
+                    <div class="collapse-content">
+                        <p>Yes, you can request account deletion by contacting support. We will delete your account and associated data in accordance with our Privacy Policy and GDPR requirements.</p>
+                    </div>
+                </div>
+
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="radio" name="faq-accordion" />
+                    <div class="collapse-title text-xl font-medium">
+                        How do I exercise my GDPR rights?
+                    </div>
+                    <div class="collapse-content">
+                        <p>You can request access, correction, or deletion of your personal data by contacting us. Please see our <a href="{% url 'grants:privacy' %}" class="link link-primary">Privacy Policy</a> for more information about your rights.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Common Issues & Solutions</h2>
+            
+            <div class="card bg-base-200 shadow-lg mb-4">
+                <div class="card-body">
+                    <h3 class="card-title">I can't sign in to my account</h3>
+                    <ul class="list-disc list-inside space-y-2 ml-4">
+                        <li>Make sure you've confirmed your email address (check your inbox for the confirmation email)</li>
+                        <li>Try resetting your password using the "Forgot Password?" link</li>
+                        <li>Check that you're using the correct email address</li>
+                        <li>Clear your browser cookies and try again</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card bg-base-200 shadow-lg mb-4">
+                <div class="card-body">
+                    <h3 class="card-title">I'm not receiving emails</h3>
+                    <ul class="list-disc list-inside space-y-2 ml-4">
+                        <li>Check your spam/junk folder</li>
+                        <li>Verify that your email address is correct in your profile</li>
+                        <li>Make sure your email provider isn't blocking our emails</li>
+                        <li>Try requesting a new confirmation or password reset email</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card bg-base-200 shadow-lg mb-4">
+                <div class="card-body">
+                    <h3 class="card-title">Grant matching isn't working</h3>
+                    <ul class="list-disc list-inside space-y-2 ml-4">
+                        <li>Ensure your company profile has sufficient information</li>
+                        <li>Check that your funding search criteria are set correctly</li>
+                        <li>Try refreshing the grant matches for your company</li>
+                        <li>Make sure the grant sources you want are selected in your funding search</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Report a Problem</h2>
+            <p class="mb-4">
+                If you encounter a bug, error, or security issue, please contact us immediately. When reporting issues, please include:
+            </p>
+            <ul class="list-disc list-inside mb-4 space-y-2 ml-4">
+                <li>A description of the problem</li>
+                <li>Steps to reproduce the issue</li>
+                <li>Your browser and operating system</li>
+                <li>Any error messages you see</li>
+                <li>Screenshots if applicable</li>
+            </ul>
+        </section>
+
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Feedback & Suggestions</h2>
+            <p class="mb-4">
+                We value your feedback! If you have suggestions for new features, improvements, or general feedback about Trellis, 
+                please don't hesitate to reach out. Your input helps us make Trellis better for everyone.
+            </p>
+        </section>
+
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Data Protection Inquiries</h2>
+            <p class="mb-4">
+                For questions about data protection, GDPR rights, or privacy concerns, please contact us and clearly indicate that 
+                your inquiry relates to data protection. You can also review our <a href="{% url 'grants:privacy' %}" class="link link-primary">Privacy Policy</a> 
+                for detailed information about how we handle your data.
+            </p>
+        </section>
+
+
+        <div class="mt-12 pt-8 border-t border-base-300">
+            <div class="flex gap-4 justify-center">
+                <a href="{% url 'grants:privacy' %}" class="link link-primary">Privacy Policy</a>
+                <span class="text-base-content/50">|</span>
+                <a href="{% url 'grants:terms' %}" class="link link-primary">Terms and Conditions</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

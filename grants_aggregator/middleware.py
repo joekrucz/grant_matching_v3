@@ -28,6 +28,12 @@ class NonAdminRestrictionMiddleware:
     ALLOWED_PATHS = [
         '/',  # Landing page
         '/health/',  # Health check
+        '/about',  # About us
+        '/terms',  # Terms and conditions
+        '/privacy',  # Privacy policy
+        '/support',  # Support page
+        '/cookies',  # Cookie policy
+        '/cookies/preferences',  # Cookie preferences
         '/users/sign_in',
         '/users/sign_up',
         '/users/sign_out',

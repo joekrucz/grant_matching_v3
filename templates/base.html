@@ -1165,7 +1165,24 @@
     {% endif %}
 
     <footer class="footer footer-center bg-base-200 text-base-content border-t border-base-300 mt-12 p-6">
-
+        <div>
+            <p class="text-sm text-base-content/70">
+                © {{ "now"|date:"Y" }} Trellis. All rights reserved.
+            </p>
+            <div class="flex gap-4 justify-center mt-2 text-sm flex-wrap">
+                <a href="{% url 'grants:about' %}" class="link link-hover">About</a>
+                <span class="text-base-content/50">|</span>
+                <a href="{% url 'grants:support' %}" class="link link-hover">Support</a>
+                <span class="text-base-content/50">|</span>
+                <a href="{% url 'grants:privacy' %}" class="link link-hover">Privacy Policy</a>
+                <span class="text-base-content/50">|</span>
+                <a href="{% url 'grants:terms' %}" class="link link-hover">Terms and Conditions</a>
+                <span class="text-base-content/50">|</span>
+                <a href="{% url 'grants:cookie_policy' %}" class="link link-hover">Cookie Policy</a>
+                <span class="text-base-content/50">|</span>
+                <a href="{% url 'grants:cookie_preferences' %}" class="link link-hover">Cookie Preferences</a>
+            </div>
+        </div>
     </footer>
 </body>
 </html>

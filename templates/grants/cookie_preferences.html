@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Cookie Preferences - Trellis{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-4xl font-bold mb-8">Cookie Preferences</h1>
+    
+    <div class="prose prose-lg max-w-none">
+        <p class="text-base-content/70 mb-6">
+            Manage your cookie preferences for Trellis. You can enable or disable different types of cookies below.
+        </p>
+
+        <form method="POST" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Essential Cookies -->
+            <div class="card bg-base-200 shadow-lg">
+                <div class="card-body">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h2 class="card-title text-2xl mb-2">Essential Cookies</h2>
+                            <p class="text-base-content/70 mb-4">
+                                These cookies are strictly necessary for the website to function properly. They enable core 
+                                functionality such as security, authentication, and network management.
+                            </p>
+                        </div>
+                        <div class="form-control">
+                            <label class="label cursor-pointer">
+                                <input type="checkbox" checked disabled class="checkbox checkbox-primary" />
+                                <span class="label-text ml-2 font-semibold">Always Active</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-base-300 rounded-lg p-4 space-y-3">
+                        <div>
+                            <h3 class="font-semibold mb-2">Session Cookies</h3>
+                            <ul class="list-disc list-inside text-sm space-y-1 ml-4 text-base-content/80">
+                                <li><strong>Purpose:</strong> Maintain your login session and authentication state</li>
+                                <li><strong>Duration:</strong> 7 days or until you log out</li>
+                                <li><strong>Name:</strong> <code class="bg-base-100 px-2 py-1 rounded">sessionid</code></li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3 class="font-semibold mb-2">CSRF Protection Cookies</h3>
+                            <ul class="list-disc list-inside text-sm space-y-1 ml-4 text-base-content/80">
+                                <li><strong>Purpose:</strong> Protect against cross-site request forgery attacks</li>
+                                <li><strong>Duration:</strong> Session-based</li>
+                                <li><strong>Name:</strong> <code class="bg-base-100 px-2 py-1 rounded">csrftoken</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>These cookies cannot be disabled as they are essential for the website to function. Without them, you would not be able to sign in or use Trellis.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Cookies (Future) -->
+            <div class="card bg-base-200 shadow-lg">
+                <div class="card-body">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h2 class="card-title text-2xl mb-2">Analytics Cookies</h2>
+                            <p class="text-base-content/70 mb-4">
+                                These cookies help us understand how visitors interact with our website by collecting and 
+                                reporting information anonymously. Currently, we do not use analytics cookies, but this 
+                                setting will apply if we add them in the future.
+                            </p>
+                        </div>
+                        <div class="form-control">
+                            <label class="label cursor-pointer">
+                                <input type="checkbox" 
+                                       name="analytics" 
+                                       {% if cookie_prefs.analytics %}checked{% endif %}
+                                       class="checkbox checkbox-primary" />
+                                <span class="label-text ml-2 font-semibold">Enable Analytics Cookies</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span>Analytics cookies are not currently in use. This preference will be applied if we add analytics tracking in the future.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Marketing Cookies (Future) -->
+            <div class="card bg-base-200 shadow-lg">
+                <div class="card-body">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h2 class="card-title text-2xl mb-2">Marketing Cookies</h2>
+                            <p class="text-base-content/70 mb-4">
+                                These cookies are used to deliver advertisements and track campaign performance. Currently, 
+                                we do not use marketing cookies, but this setting will apply if we add them in the future.
+                            </p>
+                        </div>
+                        <div class="form-control">
+                            <label class="label cursor-pointer">
+                                <input type="checkbox" 
+                                       name="marketing" 
+                                       {% if cookie_prefs.marketing %}checked{% endif %}
+                                       class="checkbox checkbox-primary" />
+                                <span class="label-text ml-2 font-semibold">Enable Marketing Cookies</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span>Marketing cookies are not currently in use. This preference will be applied if we add marketing features in the future.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Active Cookies Info -->
+            <div class="card bg-base-200 shadow-lg">
+                <div class="card-body">
+                    <h2 class="card-title text-2xl mb-4">Currently Active Cookies</h2>
+                    <p class="text-base-content/70 mb-4">
+                        The following cookies are currently active in your browser for this website:
+                    </p>
+                    
+                    <div class="bg-base-300 rounded-lg p-4">
+                        <div class="space-y-3">
+                            <div>
+                                <h3 class="font-semibold mb-2">Essential Cookies (Active)</h3>
+                                <ul class="list-disc list-inside text-sm space-y-1 ml-4 text-base-content/80">
+                                    <li><code class="bg-base-100 px-2 py-1 rounded">sessionid</code> - Session management</li>
+                                    <li><code class="bg-base-100 px-2 py-1 rounded">csrftoken</code> - CSRF protection</li>
+                                </ul>
+                            </div>
+                            
+                            {% if cookie_prefs.analytics %}
+                            <div>
+                                <h3 class="font-semibold mb-2">Analytics Cookies</h3>
+                                <p class="text-sm text-base-content/60">No analytics cookies are currently active.</p>
+                            </div>
+                            {% endif %}
+                            
+                            {% if cookie_prefs.marketing %}
+                            <div>
+                                <h3 class="font-semibold mb-2">Marketing Cookies</h3>
+                                <p class="text-sm text-base-content/60">No marketing cookies are currently active.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4 justify-end mt-8">
+                <a href="{% url 'grants:cookie_policy' %}" class="btn btn-outline">
+                    View Cookie Policy
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    Save Preferences
+                </button>
+            </div>
+        </form>
+
+        <!-- Additional Information -->
+        <div class="mt-12 pt-8 border-t border-base-300">
+            <h2 class="text-2xl font-semibold mb-4">Managing Cookies in Your Browser</h2>
+            <p class="mb-4 text-base-content/70">
+                You can also manage cookies directly through your browser settings. Here are links to cookie management 
+                instructions for popular browsers:
+            </p>
+            <ul class="list-disc list-inside space-y-2 ml-4">
+                <li><a href="https://support.google.com/chrome/answer/95647" target="_blank" rel="noopener noreferrer" class="link link-primary">Chrome - Manage cookies</a></li>
+                <li><a href="https://support.mozilla.org/en-US/kb/cookies-information-websites-store-on-your-computer" target="_blank" rel="noopener noreferrer" class="link link-primary">Firefox - Manage cookies</a></li>
+                <li><a href="https://support.apple.com/en-gb/guide/safari/sfri11471/mac" target="_blank" rel="noopener noreferrer" class="link link-primary">Safari - Manage cookies</a></li>
+                <li><a href="https://support.microsoft.com/en-us/microsoft-edge/delete-cookies-in-microsoft-edge-63947406-40ac-c3b8-57b9-2a946a29ae09" target="_blank" rel="noopener noreferrer" class="link link-primary">Edge - Manage cookies</a></li>
+            </ul>
+            
+            <div class="alert alert-info mt-6">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>
+                    <strong>Note:</strong> If you disable cookies in your browser, you may not be able to use certain features 
+                    of Trellis, including signing in to your account.
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
