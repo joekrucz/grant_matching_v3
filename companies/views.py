@@ -605,6 +605,12 @@ def funding_search_detail(request, id):
     if funding_search.uploaded_file:
         uploaded_file_name = os.path.basename(funding_search.uploaded_file.name)
     
+    # Tab selection
+    allowed_tabs = ['setup', 'results']
+    current_tab = request.GET.get('tab', 'setup')
+    if current_tab not in allowed_tabs:
+        current_tab = 'setup'
+    
     context = {
         'funding_search': funding_search,
         'can_edit': can_edit,
@@ -615,6 +621,7 @@ def funding_search_detail(request, id):
         'selected_files': selected_files,
         'selected_notes': selected_notes,
         'uploaded_file_name': uploaded_file_name,
+        'current_tab': current_tab,
     }
     return render(request, 'companies/funding_search_detail.html', context)
 

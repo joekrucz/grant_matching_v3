@@ -30,35 +30,35 @@ details[open] summary .collapse-indicator::after {
 <div class="grid md:grid-cols-[220px,1fr] gap-4">
     <div class="md:hidden mb-2">
         <div class="tabs tabs-boxed w-full overflow-x-auto">
-            <a href="?tab=info" class="tab {% if current_tab == 'info' %}tab-active underline{% endif %}">Company Info</a>
-            <a href="?tab=notes" class="tab {% if current_tab == 'notes' %}tab-active underline{% endif %}">Website & Notes</a>
-            <a href="?tab=grants" class="tab {% if current_tab == 'grants' %}tab-active underline{% endif %}">Grants</a>
-            <a href="?tab=filings" class="tab {% if current_tab == 'filings' %}tab-active underline{% endif %}">Filings</a>
-            <a href="?tab=funding" class="tab {% if current_tab == 'funding' %}tab-active underline{% endif %}">Funding</a>
+            <a href="?tab=info" class="tab {% if current_tab == 'info' %}tab-active font-bold{% else %}hover:underline{% endif %}">Company Info</a>
+            <a href="?tab=notes" class="tab {% if current_tab == 'notes' %}tab-active font-bold{% else %}hover:underline{% endif %}">Website & Notes</a>
+            <a href="?tab=grants" class="tab {% if current_tab == 'grants' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grants</a>
+            <a href="?tab=filings" class="tab {% if current_tab == 'filings' %}tab-active font-bold{% else %}hover:underline{% endif %}">Filings</a>
+            <a href="?tab=funding" class="tab {% if current_tab == 'funding' %}tab-active font-bold{% else %}hover:underline{% endif %}">Funding</a>
             {% if can_edit %}
-            <a href="?tab=settings" class="tab {% if current_tab == 'settings' %}tab-active underline{% endif %}">Settings</a>
+            <a href="?tab=settings" class="tab {% if current_tab == 'settings' %}tab-active font-bold{% else %}hover:underline{% endif %}">Settings</a>
             {% endif %}
         </div>
     </div>
     <div class="hidden md:block">
         <div class="tabs tabs-vertical tabs-l flex flex-col gap-1 bg-base-200 border border-base-300 rounded-xl p-2 w-full">
-            <a href="?tab=info" class="tab w-full justify-start {% if current_tab == 'info' %}tab-active underline{% endif %}" data-company-tab="info">
+            <a href="?tab=info" class="tab w-full justify-start {% if current_tab == 'info' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="info">
                 Company Information
             </a>
-            <a href="?tab=notes" class="tab w-full justify-start {% if current_tab == 'notes' %}tab-active underline{% endif %}" data-company-tab="notes">
+            <a href="?tab=notes" class="tab w-full justify-start {% if current_tab == 'notes' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="notes">
                 Website & Notes
             </a>
-            <a href="?tab=grants" class="tab w-full justify-start {% if current_tab == 'grants' %}tab-active underline{% endif %}" data-company-tab="grants">
+            <a href="?tab=grants" class="tab w-full justify-start {% if current_tab == 'grants' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="grants">
                 Historic Grants
             </a>
-            <a href="?tab=filings" class="tab w-full justify-start {% if current_tab == 'filings' %}tab-active underline{% endif %}" data-company-tab="filings">
+            <a href="?tab=filings" class="tab w-full justify-start {% if current_tab == 'filings' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="filings">
                 Account Filings
             </a>
-            <a href="?tab=funding" class="tab w-full justify-start {% if current_tab == 'funding' %}tab-active underline{% endif %}" data-company-tab="funding">
+            <a href="?tab=funding" class="tab w-full justify-start {% if current_tab == 'funding' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="funding">
                 Funding Searches
             </a>
             {% if can_edit %}
-            <a href="?tab=settings" class="tab w-full justify-start {% if current_tab == 'settings' %}tab-active underline{% endif %}" data-company-tab="settings">
+            <a href="?tab=settings" class="tab w-full justify-start {% if current_tab == 'settings' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="settings">
                 Settings
             </a>
             {% endif %}
