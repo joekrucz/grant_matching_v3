@@ -606,7 +606,7 @@ def funding_search_detail(request, id):
         uploaded_file_name = os.path.basename(funding_search.uploaded_file.name)
     
     # Tab selection
-    allowed_tabs = ['setup', 'results']
+    allowed_tabs = ['setup', 'results', 'settings']
     current_tab = request.GET.get('tab', 'setup')
     if current_tab not in allowed_tabs:
         current_tab = 'setup'

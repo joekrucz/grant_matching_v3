@@ -136,10 +136,11 @@
     }
 </style>
 <div class="grid md:grid-cols-[220px,1fr] gap-4">
-    <div class="space-y-4 sticky top-20 self-start max-h-[calc(100vh-5rem)] overflow-y-auto">
+    <div class="space-y-4 sticky top-20 self-start max-h-[calc(100vh-5rem)] overflow-y-auto z-10">
         <div class="flex flex-col gap-2 mb-4">
-                <div class="flex items-center gap-2 group" id="name-editor-container">
-                <h1 class="text-2xl font-bold" id="funding-search-name">{{ funding_search.name }}</h1>
+                <div class="flex items-center justify-between gap-2 group" id="name-editor-container">
+                <div class="flex items-center gap-2">
+                    <h1 class="text-2xl font-bold" id="funding-search-name">{{ funding_search.name }}</h1>
                     {% if can_edit %}
                     <button 
                         type="button" 
@@ -152,19 +153,15 @@
                         </svg>
                     </button>
                     {% endif %}
-                </div>
-            <a href="{% url 'companies:detail' funding_search.company.id %}" class="link link-hover text-base-content/70 hover:text-primary text-sm">
-                    {{ funding_search.company.name }}
-                </a>
-            {% if can_edit %}
-            <div class="dropdown dropdown-start">
-                <div tabindex="0" role="button" class="btn btn-sm btn-ghost">
-                    Actions
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </div>
+                    {% if can_edit %}
+                    <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-sm btn-ghost opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
                     </svg>
                 </div>
-                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                <ul tabindex="0" class="dropdown-content z-[9999] menu p-2 shadow bg-base-100 rounded-box w-52">
                     <li>
                         <form method="post" action="{% url 'companies:funding_search_copy' funding_search.id %}" style="display: inline;">
                             {% csrf_token %}
@@ -181,20 +178,32 @@
             </div>
             {% endif %}
         </div>
+            <a href="{% url 'companies:detail' funding_search.company.id %}" class="link link-hover text-base-content/70 hover:text-primary text-sm">
+                    {{ funding_search.company.name }}
+                </a>
+        </div>
         <div class="md:hidden mb-2">
             <div class="tabs tabs-boxed w-full overflow-x-auto">
-                <a href="?tab=setup" class="tab {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}">Setup</a>
+                <a href="?tab=setup" class="tab {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grant Matching Setup</a>
                 <a href="?tab=results" class="tab {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grant Matching Results</a>
+                {% if can_edit %}
+                <a href="?tab=settings" class="tab {% if current_tab == 'settings' %}tab-active font-bold{% else %}hover:underline{% endif %}">Settings</a>
+                {% endif %}
             </div>
         </div>
         <div class="hidden md:block">
             <div class="tabs tabs-vertical tabs-l flex flex-col gap-1 bg-base-200 border border-base-300 rounded-xl p-2 w-full">
                 <a href="?tab=setup" class="tab w-full justify-start {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="setup">
-                    Setup
+                    Grant Matching Setup
                 </a>
                 <a href="?tab=results" class="tab w-full justify-start {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="results">
                     Grant Matching Results
                 </a>
+                {% if can_edit %}
+                <a href="?tab=settings" class="tab w-full justify-start {% if current_tab == 'settings' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="settings">
+                    Settings
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -203,7 +212,7 @@
 {% if current_tab == 'setup' %}
 <div id="tab-setup" class="card bg-base-200 border border-base-300">
             <div class="card-body">
-        <h2 class="card-title text-xl mb-4">Setup</h2>
+        <h2 class="card-title text-xl mb-4">Grant Matching Setup</h2>
         
                                 {% if funding_search.matching_status == 'running' %}
         <div class="mb-4">
@@ -502,7 +511,7 @@
 
 {% if current_tab == 'results' %}
 <div id="tab-results" class="card bg-base-200 border border-base-300">
-    <div class="card-body">
+    <div class="card-body pb-4">
         <div class="flex justify-between items-center mb-4">
             <h2 class="card-title text-2xl">Grant Matching Results</h2>
             <div class="flex items-center gap-2">
@@ -540,6 +549,16 @@
                                 </button>
                             </form>
                         </li>
+                        {% if funding_search.matching_status == 'completed' %}
+                        <li>
+                            <form method="post" action="{% url 'companies:funding_search_match' funding_search.id %}">
+                                {% csrf_token %}
+                                <button type="submit">
+                                    Run Matching Job Again
+                                </button>
+                            </form>
+                        </li>
+                {% endif %}
                 {% endif %}
                     </ul>
                 </div>
@@ -547,6 +566,7 @@
         </div>
         
         <!-- Matching Buttons -->
+        {% if funding_search.matching_status != 'completed' %}
         <div class="flex flex-col gap-2 mb-6">
             <div class="flex gap-2">
                 <form method="post" action="{% url 'companies:funding_search_match' funding_search.id %}" id="matching-form" class="flex-1">
@@ -566,8 +586,6 @@
                                     Matching in progress...
                                 {% endif %}
                             </span>
-                        {% elif funding_search.matching_status == 'completed' %}
-                            Run Matching Job Again
                         {% else %}
                             Run Matching Job
                         {% endif %}
@@ -587,6 +605,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
         
         {% if not match_results %}
         <p class="text-sm text-base-content/60 text-center mb-6">
@@ -608,14 +627,14 @@
                 {% if forloop.first %}
                 <div class="bg-primary text-primary-content px-4 py-2 rounded-t-lg">
                     <div class="flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                         </svg>
-                        <span class="font-semibold">Top Match</span>
+                        <span class="font-semibold text-yellow-400">Top Match</span>
                     </div>
                 </div>
                 {% endif %}
-                <div class="card-body">
+                <div class="card-body pb-0">
                     <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
                         <div class="flex-1">
                             <h3 class="card-title text-lg">
@@ -632,72 +651,66 @@
                                 <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
                                 {% endif %}
                             </div>
-                            {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
                             <div class="text-base-content mt-3">
                                 <div class="mt-4 -mx-4 -mb-2">
                                     <div class="collapse">
-                                        <input type="checkbox" />
-                                        <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
+                                        <input type="checkbox" id="more-details-{{ match.id }}" />
+                                        <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2 cursor-pointer">
                                             <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                                             </svg>
-                                            Summary
+                                            <span>Details</span>
                                         </div>
-                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="collapse-content px-4 pb-2 pt-0">
+                                            {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
+                                            <div class="mt-2">
+                                                <div class="font-semibold text-sm mb-2">Summary</div>
                                             <div class="space-y-2">
                                                 {% if match.match_reasons.project_type_and_trl_focus %}
                                                 <div class="mt-2">
-                                                    <div class="font-semibold text-sm px-4 mb-1">
+                                                        <div class="font-semibold text-sm mb-1">
                                                             Project type and TRL focus
                                                         </div>
-                                                    <div class="px-4 pb-2">
+                                                        <div class="pb-2">
                                                             <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
                                                     </div>
                                                 </div>
                                                 {% endif %}
                                                 {% if match.match_reasons.why_it_matches %}
                                                 <div class="mt-2">
-                                                    <div class="font-semibold text-sm px-4 mb-1">
+                                                        <div class="font-semibold text-sm mb-1">
                                                             Why it matches
                                                         </div>
-                                                    <div class="px-4 pb-2">
+                                                        <div class="pb-2">
                                                             <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
                                                     </div>
                                                 </div>
                                                 {% endif %}
                                                 {% if match.match_reasons.key_risks_and_uncertainties %}
                                                 <div class="mt-2">
-                                                    <div class="font-semibold text-sm px-4 mb-1">
+                                                        <div class="font-semibold text-sm mb-1">
                                                             Key risks and uncertainties
                                                         </div>
-                                                    <div class="px-4 pb-2">
+                                                        <div class="pb-2">
                                                             <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
                                                     </div>
                                                 </div>
                                                 {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                             {% elif match.match_reasons.explanation %}
-                            <p class="text-base-content mt-3 text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
+                                            <div class="mt-2">
+                                                <div class="font-semibold text-sm mb-2">Summary</div>
+                                                <p class="text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
+                                            </div>
                             {% endif %}
                             
                             {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
-                            <div class="mt-4 -mx-4 -mb-2">
-                                <div class="collapse">
-                                    <input type="checkbox" />
-                                    <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
-                                        <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                        </svg>
-                                        Checklists
-                                    </div>
-                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="mt-4">
+                                                <div class="font-semibold text-sm mb-2">Checklists</div>
                                         <div class="space-y-2">
                         {% if match.match_reasons.eligibility_checklist %}
-                                            <div class="mt-2">
+                                            <div>
                                                 <div class="collapse">
                                     <input type="checkbox" />
                                                     <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
@@ -709,16 +722,16 @@
                                             (calculating...)
                                         </span>
                                     </div>
-                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                    <div class="collapse-content px-4 pb-0 pt-2">
                                         <div class="space-y-2 eligibility-checklist-items">
                             {% for item in match.match_reasons.eligibility_checklist %}
                             <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
                                 {% if item.status == "yes" %}
-                                <span class="text-success text-lg checklist-status-icon">✓</span>
+                                <span class="text-success text-lg checklist-status-icon w-6 flex-shrink-0">✓</span>
                                 {% elif item.status == "no" %}
-                                <span class="text-error text-lg checklist-status-icon">✗</span>
+                                <span class="text-error text-lg checklist-status-icon w-6 flex-shrink-0">✗</span>
                                 {% else %}
-                                <span class="text-warning text-lg checklist-status-icon">?</span>
+                                <span class="text-warning text-lg checklist-status-icon w-6 flex-shrink-0">?</span>
                                 {% endif %}
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
@@ -753,7 +766,7 @@
                         {% endif %}
                         
                         {% if match.match_reasons.competitiveness_checklist %}
-                                            <div class="mt-2">
+                                            <div>
                                 <div class="collapse">
                                     <input type="checkbox" />
                                                     <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
@@ -765,16 +778,16 @@
                                             (calculating...)
                                         </span>
                                     </div>
-                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                    <div class="collapse-content px-4 pb-0 pt-2">
                                         <div class="space-y-2 competitiveness-checklist-items">
                             {% for item in match.match_reasons.competitiveness_checklist %}
                             <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
                                 {% if item.status == "yes" %}
-                                <span class="text-success text-lg checklist-status-icon">✓</span>
+                                <span class="text-success text-lg checklist-status-icon w-6 flex-shrink-0">✓</span>
                                 {% elif item.status == "no" %}
-                                <span class="text-error text-lg checklist-status-icon">✗</span>
+                                <span class="text-error text-lg checklist-status-icon w-6 flex-shrink-0">✗</span>
                                 {% else %}
-                                <span class="text-warning text-lg checklist-status-icon">?</span>
+                                <span class="text-warning text-lg checklist-status-icon w-6 flex-shrink-0">?</span>
                                 {% endif %}
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
@@ -809,7 +822,7 @@
                         {% endif %}
                         
                         {% if match.match_reasons.exclusions_checklist %}
-                                            <div class="mt-2">
+                                            <div>
                                 <div class="collapse">
                                     <input type="checkbox" />
                                                     <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
@@ -822,16 +835,16 @@
                                         </span>
                                         <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
                                     </div>
-                                    <div class="collapse-content px-4 pb-2 pt-2">
+                                    <div class="collapse-content px-4 pb-0 pt-2">
                                         <div class="space-y-2 exclusions-checklist-items">
                             {% for item in match.match_reasons.exclusions_checklist %}
                             <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
                                         {% if item.status == "yes" %}
-                                                <span class="text-error text-lg checklist-status-icon">✗</span>
+                                                <span class="text-error text-lg checklist-status-icon w-6 flex-shrink-0">✗</span>
                                         {% elif item.status == "no" %}
-                                                <span class="text-success text-lg checklist-status-icon">✓</span>
+                                                <span class="text-success text-lg checklist-status-icon w-6 flex-shrink-0">✓</span>
                                         {% else %}
-                                <span class="text-warning text-lg checklist-status-icon">?</span>
+                                <span class="text-warning text-lg checklist-status-icon w-6 flex-shrink-0">?</span>
                                         {% endif %}
                                 <div class="flex-1">
                                     <div class="flex items-center gap-2">
@@ -864,12 +877,9 @@
                                                     </div>
                                                 </div>
                                                 {% endif %}
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                             {% endif %}
-                            
                             {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
                             <div class="mt-4">
                                 <div class="alert alert-info">
@@ -877,6 +887,15 @@
                                 </div>
                             </div>
                             {% endif %}
+                                            <div class="mt-4 pt-3 border-t border-base-300">
+                                                <button type="button" class="btn btn-ghost btn-sm w-full" onclick="document.getElementById('more-details-{{ match.id }}').checked = false; document.getElementById('more-details-{{ match.id }}').dispatchEvent(new Event('change'));">
+                                                    Hide
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="lg:text-right lg:ml-4 min-w-[200px]">
                             <div class="flex items-center justify-end gap-3 mb-3">
@@ -898,7 +917,8 @@
                                 </div>
                             </div>
                             {% if match.eligibility_score is not None or match.competitiveness_score is not None or match.match_reasons.exclusions_checklist %}
-                            <div class="border-t border-base-300 pt-3 mt-3">
+                            <div class="border-t border-base-300 pt-3 mt-3 score-breakdown-{{ match.id }}" style="display: none;">
+                                <div class="text-sm font-bold mb-2 text-left">Score Breakdown:</div>
                                 <div class="space-y-2">
                                     {% if match.eligibility_score is not None %}
                                     <div>
@@ -937,7 +957,7 @@
                                 </div>
                             </div>
                             {% else %}
-                            <div class="text-xs text-base-content/50 mt-2">Score breakdown not available</div>
+                            <div class="text-xs text-base-content/50 mt-2 score-breakdown-{{ match.id }}" style="display: none;">Score breakdown not available</div>
                             {% endif %}
                         </div>
                     </div>
@@ -969,7 +989,7 @@
                         {% for match_data in match_results_with_json|slice:"5:" %}
                         {% with match=match_data.match %}
                         <div class="card bg-base-100 border border-base-300">
-                            <div class="card-body">
+                            <div class="card-body pb-0">
                                 <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
                                     <div class="flex-1">
                                         <h3 class="card-title text-lg">
@@ -986,72 +1006,66 @@
                                             <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
                                             {% endif %}
                                         </div>
-                                {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
                                         <div class="text-base-content mt-3">
                                     <div class="mt-4 -mx-4 -mb-2">
                                         <div class="collapse">
-                                            <input type="checkbox" />
-                                            <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
+                                            <input type="checkbox" id="more-details-{{ match.id }}" />
+                                            <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2 cursor-pointer">
                                                 <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                                                 </svg>
-                                                Summary
+                                                <span>Details</span>
                                             </div>
-                                            <div class="collapse-content px-4 pb-2 pt-2">
+                                            <div class="collapse-content px-4 pb-2 pt-0">
+                                                {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
+                                                <div class="mt-2">
+                                                    <div class="font-semibold text-sm mb-2">Summary</div>
                                                 <div class="space-y-2">
                                                     {% if match.match_reasons.project_type_and_trl_focus %}
                                                     <div class="mt-2">
-                                                                <div class="font-semibold text-sm px-4 mb-1">
+                                                            <div class="font-semibold text-sm mb-1">
                                                                 Project type and TRL focus
                                                             </div>
-                                                                <div class="px-4 pb-2">
-                                                                    <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                                            <div class="pb-2">
+                                                                <p class="mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
                                                         </div>
                                                     </div>
                                                     {% endif %}
                                                     {% if match.match_reasons.why_it_matches %}
                                                     <div class="mt-2">
-                                                                <div class="font-semibold text-sm px-4 mb-1">
+                                                            <div class="font-semibold text-sm mb-1">
                                                                 Why it matches
                                                             </div>
-                                                                <div class="px-4 pb-2">
-                                                                    <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
+                                                            <div class="pb-2">
+                                                                <p class="mt-1">{{ match.match_reasons.why_it_matches }}</p>
                                                         </div>
                                                     </div>
                                                     {% endif %}
                                                     {% if match.match_reasons.key_risks_and_uncertainties %}
                                                     <div class="mt-2">
-                                                                <div class="font-semibold text-sm px-4 mb-1">
+                                                            <div class="font-semibold text-sm mb-1">
                                                                 Key risks and uncertainties
                                                             </div>
-                                                                <div class="px-4 pb-2">
-                                                                    <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
+                                                            <div class="pb-2">
+                                                                <p class="mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
                                                         </div>
                                                     </div>
                                                     {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                                 {% elif match.match_reasons.explanation %}
-                                        <p class="text-base-content mt-3 text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
+                                                <div class="mt-2">
+                                                    <div class="font-semibold text-sm mb-2">Summary</div>
+                                                    <p class="text-sm"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
+                                </div>
                                 {% endif %}
                                 
                                 {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
-                                <div class="mt-4 -mx-4 -mb-2">
-                                    <div class="collapse">
-                                        <input type="checkbox" />
-                                        <div class="collapse-title font-semibold text-base px-4 min-h-0 flex items-center gap-2">
-                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                            </svg>
-                                            Checklists
-                                        </div>
-                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                                <div class="mt-4">
+                                                    <div class="font-semibold text-sm mb-2">Checklists</div>
                                             <div class="space-y-2">
                                 {% if match.match_reasons.eligibility_checklist %}
-                                                <div class="mt-2">
+                                                <div>
                                                     <div class="collapse">
                                         <input type="checkbox" />
                                                         <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
@@ -1063,16 +1077,16 @@
                                                 (calculating...)
                                             </span>
                                         </div>
-                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="collapse-content px-4 pb-0 pt-2">
                                             <div class="space-y-2 eligibility-checklist-items">
                                         {% for item in match.match_reasons.eligibility_checklist %}
                                         <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
                                             {% if item.status == "yes" %}
-                                            <span class="text-success text-lg checklist-status-icon">✓</span>
+                                            <span class="text-success text-lg checklist-status-icon w-6 flex-shrink-0">✓</span>
                                             {% elif item.status == "no" %}
-                                            <span class="text-error text-lg checklist-status-icon">✗</span>
+                                            <span class="text-error text-lg checklist-status-icon w-6 flex-shrink-0">✗</span>
                                             {% else %}
-                                            <span class="text-warning text-lg checklist-status-icon">?</span>
+                                            <span class="text-warning text-lg checklist-status-icon w-6 flex-shrink-0">?</span>
                                             {% endif %}
                                             <div class="flex-1">
                                                 <div class="flex items-center gap-2">
@@ -1107,7 +1121,7 @@
                                 {% endif %}
                                 
                                 {% if match.match_reasons.competitiveness_checklist %}
-                                                <div class="mt-2">
+                                                <div>
                                     <div class="collapse">
                                         <input type="checkbox" />
                                                         <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
@@ -1119,16 +1133,16 @@
                                                 (calculating...)
                                             </span>
                                         </div>
-                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="collapse-content px-4 pb-0 pt-2">
                                             <div class="space-y-2 competitiveness-checklist-items">
                                         {% for item in match.match_reasons.competitiveness_checklist %}
                                         <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
                                             {% if item.status == "yes" %}
-                                            <span class="text-success text-lg checklist-status-icon">✓</span>
+                                            <span class="text-success text-lg checklist-status-icon w-6 flex-shrink-0">✓</span>
                                             {% elif item.status == "no" %}
-                                            <span class="text-error text-lg checklist-status-icon">✗</span>
+                                            <span class="text-error text-lg checklist-status-icon w-6 flex-shrink-0">✗</span>
                                             {% else %}
-                                            <span class="text-warning text-lg checklist-status-icon">?</span>
+                                            <span class="text-warning text-lg checklist-status-icon w-6 flex-shrink-0">?</span>
                                             {% endif %}
                                             <div class="flex-1">
                                                 <div class="flex items-center gap-2">
@@ -1163,7 +1177,7 @@
                                 {% endif %}
                                 
                                 {% if match.match_reasons.exclusions_checklist %}
-                                                <div class="mt-2">
+                                                <div>
                                     <div class="collapse">
                                         <input type="checkbox" />
                                                         <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2">
@@ -1176,16 +1190,16 @@
                                             </span>
                                             <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
                                         </div>
-                                        <div class="collapse-content px-4 pb-2 pt-2">
+                                        <div class="collapse-content px-4 pb-0 pt-2">
                                             <div class="space-y-2 exclusions-checklist-items">
                                                 {% for item in match.match_reasons.exclusions_checklist %}
                                                 <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
                                                     {% if item.status == "yes" %}
-                                                                    <span class="text-error text-lg checklist-status-icon">✗</span>
+                                                                    <span class="text-error text-lg checklist-status-icon w-6 flex-shrink-0">✗</span>
                                                     {% elif item.status == "no" %}
-                                                                    <span class="text-success text-lg checklist-status-icon">✓</span>
+                                                                    <span class="text-success text-lg checklist-status-icon w-6 flex-shrink-0">✓</span>
                                                     {% else %}
-                                                    <span class="text-warning text-lg checklist-status-icon">?</span>
+                                                    <span class="text-warning text-lg checklist-status-icon w-6 flex-shrink-0">?</span>
                                                     {% endif %}
                                                     <div class="flex-1">
                                                         <div class="flex items-center gap-2">
@@ -1218,12 +1232,9 @@
                                                     </div>
                                                 </div>
                                                 {% endif %}
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                                 {% endif %}
-                                
                                 {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
                                 <div class="mt-4">
                                     <div class="alert alert-info">
@@ -1231,6 +1242,15 @@
                                     </div>
                                 </div>
                                 {% endif %}
+                                            <div class="mt-4 pt-3 border-t border-base-300">
+                                                <button type="button" class="btn btn-ghost btn-sm w-full" onclick="document.getElementById('more-details-{{ match.id }}').checked = false; document.getElementById('more-details-{{ match.id }}').dispatchEvent(new Event('change'));">
+                                                    Hide
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                                     </div>
                                     <div class="lg:text-right lg:ml-4 min-w-[200px]">
                                         <div class="flex items-center justify-end gap-3 mb-3">
@@ -1252,8 +1272,8 @@
                                             </div>
                                         </div>
                                         {% if match.eligibility_score is not None or match.competitiveness_score is not None or match.match_reasons.exclusions_checklist %}
-                                        <div class="border-t border-base-300 pt-3 mt-3">
-                                            <div class="text-sm font-semibold text-base-content/80 mb-2">Score Breakdown</div>
+                                        <div class="border-t border-base-300 pt-3 mt-3 score-breakdown-{{ match.id }}" style="display: none;">
+                                            <div class="text-sm font-bold mb-2 text-left">Score Breakdown:</div>
                                             <div class="space-y-2">
                                                 {% if match.eligibility_score is not None %}
                                                 <div>
@@ -1292,7 +1312,7 @@
                                             </div>
                                         </div>
                                         {% else %}
-                                        <div class="text-xs text-base-content/50 mt-2">Score breakdown not available</div>
+                                        <div class="text-xs text-base-content/50 mt-2 score-breakdown-{{ match.id }}" style="display: none;">Score breakdown not available</div>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -1308,6 +1328,34 @@
         {% endwith %}
         {% endif %}
         {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if can_edit and current_tab == 'settings' %}
+<div id="tab-settings" class="card bg-base-200 border border-base-300">
+    <div class="card-body py-4 px-4 space-y-4">
+        <h2 class="card-title text-xl">Settings</h2>
+        <div class="space-y-2">
+            <div>
+                <label class="text-sm font-semibold text-base-content/70">Owner</label>
+                <p class="text-base">
+                    {% if funding_search.user.get_full_name %}
+                        {{ funding_search.user.get_full_name }}
+                    {% else %}
+                        {{ funding_search.user.email }}
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <form method="post"
+              action="{% url 'companies:funding_search_delete' funding_search.id %}"
+              onsubmit="return confirm('Delete this funding search? This cannot be undone.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-error btn-sm">
+                Delete Funding Search
+            </button>
+        </form>
     </div>
 </div>
 {% endif %}
@@ -2584,6 +2632,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 certaintyElement.textContent = '';
             }
         }
+    });
+});
+
+// Handle arrow rotation and score breakdown visibility for collapsible sections
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('input[type="checkbox"][id^="more-details-"]').forEach(function(checkbox) {
+        const arrowIcon = checkbox.closest('.collapse').querySelector('.collapse-arrow-icon');
+        const matchId = checkbox.id.replace('more-details-', '');
+        const scoreBreakdown = document.querySelector('.score-breakdown-' + matchId);
+        
+        // Function to update visibility
+        function updateVisibility() {
+            if (arrowIcon) {
+                if (checkbox.checked) {
+                    arrowIcon.style.transform = 'rotate(90deg)';
+                } else {
+                    arrowIcon.style.transform = 'rotate(0deg)';
+                }
+            }
+            if (scoreBreakdown) {
+                scoreBreakdown.style.display = checkbox.checked ? 'block' : 'none';
+            }
+        }
+        
+        // Set initial state
+        updateVisibility();
+        
+        // Update on change
+        checkbox.addEventListener('change', updateVisibility);
     });
 });
 </script>
