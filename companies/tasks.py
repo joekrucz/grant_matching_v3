@@ -50,7 +50,20 @@ if CELERY_TASKS_AVAILABLE:
         }
         funding_search.save()
         
+        # Helper function to check if matching was cancelled
+        def is_cancelled():
+            try:
+                funding_search.refresh_from_db()
+                return funding_search.matching_status == 'cancelled'
+            except Exception:
+                return False
+        
         try:
+            # Check for cancellation before starting
+            if is_cancelled():
+                logger.info(f"Matching cancelled before starting for funding search {funding_search_id}")
+                return {'status': 'cancelled', 'matches_created': 0, 'grants_processed': 0}
+            
             # Compile text from all selected input sources (this includes scraping website if selected)
             logger.info("Compiling input sources (this may include website scraping)...")
             project_text = funding_search.compile_input_sources_text()
@@ -59,6 +72,11 @@ if CELERY_TASKS_AVAILABLE:
                 raise ValueError("No input sources available. Please select company files, notes, website, or add a project description.")
             
             logger.info(f"Input sources compiled. Total text length: {len(project_text)} characters")
+            
+            # Check for cancellation after compiling sources
+            if is_cancelled():
+                logger.info(f"Matching cancelled after compiling sources for funding search {funding_search_id}")
+                return {'status': 'cancelled', 'matches_created': 0, 'grants_processed': 0}
             
             # Update progress to show we're ready to match
             total_grants = len(grants_list) if 'grants_list' in locals() else 0
@@ -70,6 +88,11 @@ if CELERY_TASKS_AVAILABLE:
                 'stage_message': f'Input sources processed. Starting grant matching for {total_grants} grants...'
             }
             funding_search.save()
+            
+            # Check for cancellation before fetching grants
+            if is_cancelled():
+                logger.info(f"Matching cancelled before fetching grants for funding search {funding_search_id}")
+                return {'status': 'cancelled', 'matches_created': 0, 'grants_processed': 0}
             
             # Get grants (with optional limit for testing and source filtering)
             grants = Grant.objects.all().order_by('-created_at')
@@ -87,6 +110,10 @@ if CELERY_TASKS_AVAILABLE:
             # Get grants with their checklists
             grants_list = []
             for grant in grants:
+                # Check for cancellation during grant list building
+                if is_cancelled():
+                    logger.info(f"Matching cancelled while building grant list for funding search {funding_search_id}")
+                    return {'status': 'cancelled', 'matches_created': 0, 'grants_processed': 0}
                 grant_data = {
                     'id': grant.id,
                     'title': grant.title,
@@ -124,14 +151,10 @@ if CELERY_TASKS_AVAILABLE:
                 raise Exception(f"Failed to initialize matching service: {str(e)}")
             
             # Progress tracking function - updates database for real-time progress
-            def progress_callback(current, total):
+            # Split into sync and async parts to handle Celery task context properly
+            def update_database_progress(current, total):
+                """Update database progress (can be called from async context)."""
                 percentage = (current / total) * 100 if total > 0 else 0
-                # Update Celery task state
-                self.update_state(
-                    state='PROGRESS',
-                    meta={'current': current, 'total': total, 'progress': f'{percentage:.1f}%'}
-                )
-                # Update database for real-time frontend polling
                 FundingSearch.objects.filter(id=funding_search_id).update(
                     matching_progress={
                         'current': current,
@@ -143,6 +166,21 @@ if CELERY_TASKS_AVAILABLE:
                 )
                 logger.info(f"Progress update: {current}/{total} ({percentage:.1f}%)")
             
+            def progress_callback(current, total):
+                percentage = (current / total) * 100 if total > 0 else 0
+                # Update Celery task state (must run in original context, not thread pool)
+                self.update_state(
+                    state='PROGRESS',
+                    meta={'current': current, 'total': total, 'progress': f'{percentage:.1f}%'}
+                )
+                # Update database for real-time frontend polling
+                update_database_progress(current, total)
+            
+            # Check for cancellation before starting matching
+            if is_cancelled():
+                logger.info(f"Matching cancelled before starting grant matching for funding search {funding_search_id}")
+                return {'status': 'cancelled', 'matches_created': 0, 'grants_processed': 0}
+            
             # Clear old matches
             GrantMatchResult.objects.filter(funding_search=funding_search).delete()
             
@@ -152,14 +190,25 @@ if CELERY_TASKS_AVAILABLE:
                 project_text,
                 grants_list,
                 progress_callback=progress_callback,
-                let_system_decide_trl=funding_search.let_system_decide_trl
+                let_system_decide_trl=funding_search.let_system_decide_trl,
+                funding_search_id=funding_search_id
             )
+            
+            # Check for cancellation after matching completes
+            if is_cancelled():
+                logger.info(f"Matching cancelled after completion for funding search {funding_search_id}")
+                return {'status': 'cancelled', 'matches_created': 0, 'grants_processed': len(match_results)}
+            
             logger.info(f"Matching completed. Got {len(match_results)} results")
             
             # Save results to database
             matches_created = 0
             matches_updated = 0
             for result in match_results:
+                # Check for cancellation while saving results
+                if is_cancelled():
+                    logger.info(f"Matching cancelled while saving results for funding search {funding_search_id}")
+                    break
                 grant_idx = result['grant_index']
                 if grant_idx < len(grants_list):
                     grant_data = grants_list[grant_idx]

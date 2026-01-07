@@ -19,7 +19,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-from .models import Company, FundingSearch, GrantMatchResult, CompanyFile, CompanyNote
+from .models import Company, FundingSearch, GrantMatchResult, CompanyFile, CompanyNote, FundingSearchFile
 from .services import (
     CompaniesHouseService,
     CompaniesHouseError,
@@ -600,10 +600,18 @@ def funding_search_detail(request, id):
     selected_files = funding_search.selected_company_files.all().order_by('-created_at')
     selected_notes = funding_search.selected_company_notes.all().order_by('-created_at')
     
-    # Extract just the filename from the uploaded file path
+    # Get all uploaded files for this funding search
+    uploaded_files = funding_search.uploaded_files.all().order_by('-created_at')
+    uploaded_files_count = uploaded_files.count()
+    
+    # Legacy: Extract just the filename from the old uploaded_file field (for backward compatibility)
     uploaded_file_name = None
+    has_legacy_file = False
     if funding_search.uploaded_file:
         uploaded_file_name = os.path.basename(funding_search.uploaded_file.name)
+        has_legacy_file = True
+    
+    total_attachments_count = uploaded_files_count + (1 if has_legacy_file else 0)
     
     # Tab selection
     allowed_tabs = ['setup', 'results', 'settings']
@@ -626,7 +634,9 @@ def funding_search_detail(request, id):
         'match_results_with_json': match_results_with_json,
         'selected_files': selected_files,
         'selected_notes': selected_notes,
+        'uploaded_files': uploaded_files,
         'uploaded_file_name': uploaded_file_name,
+        'total_attachments_count': total_attachments_count,
         'current_tab': current_tab,
         'current_view': current_view,
     }
@@ -1291,9 +1301,15 @@ def funding_search_upload(request, id):
             # SECURITY: Save file with sanitized filename
             # Update the file's name attribute before saving
             uploaded_file.name = safe_filename
-            funding_search.uploaded_file = uploaded_file
-            funding_search.file_type = file_type
-            funding_search.save(update_fields=['uploaded_file', 'file_type'])
+            
+            # Create FundingSearchFile instance for multiple file support
+            funding_search_file = FundingSearchFile.objects.create(
+                funding_search=funding_search,
+                uploaded_by=request.user,
+                file=uploaded_file,
+                original_name=original_filename,
+                file_type=file_type
+            )
             
             messages.success(request, f'File uploaded successfully.')
         except Exception as e:
@@ -1315,18 +1331,31 @@ def funding_search_delete_file(request, id):
         messages.error(request, 'You do not have permission to delete files for this funding search.')
         return redirect('companies:funding_search_detail', id=id)
     
-    if not funding_search.uploaded_file:
-        messages.error(request, 'No file to delete.')
-        return redirect('companies:funding_search_detail', id=id)
+    # Get file_id from POST data (for new multiple file system)
+    file_id = request.POST.get('file_id')
     
-    # Delete the file
-    file_name = funding_search.uploaded_file.name
-    funding_search.uploaded_file.delete(save=False)
-    funding_search.uploaded_file = None
-    funding_search.file_type = None
-    funding_search.save()
+    if file_id:
+        # Delete specific FundingSearchFile
+        try:
+            file_obj = get_object_or_404(FundingSearchFile, id=file_id, funding_search=funding_search)
+            file_name = file_obj.original_name or file_obj.file.name
+            file_obj.file.delete(save=False)
+            file_obj.delete()
+            messages.success(request, f'File "{file_name}" deleted successfully.')
+        except Exception as e:
+            messages.error(request, f'Error deleting file: {str(e)}')
+    else:
+        # Legacy: Delete old uploaded_file field if it exists
+        if funding_search.uploaded_file:
+            file_name = funding_search.uploaded_file.name
+            funding_search.uploaded_file.delete(save=False)
+            funding_search.uploaded_file = None
+            funding_search.file_type = None
+            funding_search.save()
+            messages.success(request, f'File "{file_name}" deleted successfully.')
+        else:
+            messages.error(request, 'No file to delete.')
     
-    messages.success(request, f'File "{file_name}" deleted successfully.')
     return redirect('companies:funding_search_detail', id=id)
 
 
