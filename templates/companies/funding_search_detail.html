@@ -135,10 +135,11 @@
         width: 100%;
     }
 </style>
-        <div class="flex justify-between items-start mb-6">
-            <div class="flex-1">
+<div class="grid md:grid-cols-[220px,1fr] gap-4">
+    <div class="space-y-4 sticky top-20 self-start max-h-[calc(100vh-5rem)] overflow-y-auto">
+        <div class="flex flex-col gap-2 mb-4">
                 <div class="flex items-center gap-2 group" id="name-editor-container">
-                    <h1 class="card-title text-3xl" id="funding-search-name">{{ funding_search.name }}</h1>
+                <h1 class="text-2xl font-bold" id="funding-search-name">{{ funding_search.name }}</h1>
                     {% if can_edit %}
                     <button 
                         type="button" 
@@ -152,12 +153,11 @@
                     </button>
                     {% endif %}
                 </div>
-                <a href="{% url 'companies:detail' funding_search.company.id %}" class="link link-hover text-base-content/70 hover:text-primary mt-1 block">
+            <a href="{% url 'companies:detail' funding_search.company.id %}" class="link link-hover text-base-content/70 hover:text-primary text-sm">
                     {{ funding_search.company.name }}
                 </a>
-            </div>
             {% if can_edit %}
-            <div class="dropdown dropdown-end">
+            <div class="dropdown dropdown-start">
                 <div tabindex="0" role="button" class="btn btn-sm btn-ghost">
                     Actions
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -181,22 +181,21 @@
             </div>
             {% endif %}
         </div>
-        
-<div class="grid md:grid-cols-[220px,1fr] gap-4">
-    <div class="md:hidden mb-2">
-        <div class="tabs tabs-boxed w-full overflow-x-auto">
-            <a href="?tab=setup" class="tab {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}">Setup</a>
-            <a href="?tab=results" class="tab {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grant Matching Results</a>
+        <div class="md:hidden mb-2">
+            <div class="tabs tabs-boxed w-full overflow-x-auto">
+                <a href="?tab=setup" class="tab {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}">Setup</a>
+                <a href="?tab=results" class="tab {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grant Matching Results</a>
+            </div>
         </div>
-    </div>
-    <div class="hidden md:block">
-        <div class="tabs tabs-vertical tabs-l flex flex-col gap-1 bg-base-200 border border-base-300 rounded-xl p-2 w-full">
-            <a href="?tab=setup" class="tab w-full justify-start {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="setup">
-                Setup
-            </a>
-            <a href="?tab=results" class="tab w-full justify-start {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="results">
-                Grant Matching Results
-            </a>
+        <div class="hidden md:block">
+            <div class="tabs tabs-vertical tabs-l flex flex-col gap-1 bg-base-200 border border-base-300 rounded-xl p-2 w-full">
+                <a href="?tab=setup" class="tab w-full justify-start {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="setup">
+                    Setup
+                </a>
+                <a href="?tab=results" class="tab w-full justify-start {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="results">
+                    Grant Matching Results
+                </a>
+            </div>
         </div>
     </div>
     <div class="space-y-4" id="funding-tab-panels">

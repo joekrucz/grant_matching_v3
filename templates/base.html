@@ -25,7 +25,7 @@
     </style>
 </head>
 <body class="min-h-screen bg-base-100 text-base-content">
-    <div class="navbar bg-base-200 border-b border-base-300">
+    <div class="navbar bg-base-200 border-b border-base-300 fixed top-0 left-0 right-0 z-50">
         <div class="navbar-start">
             <a href="/" class="btn btn-ghost text-xl font-bold">
                 Trellis
@@ -65,7 +65,7 @@
     </div>
 
     {% if messages %}
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 mt-4">
         {% for message in messages %}
         <div role="alert" class="alert mb-2 {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">
             <span>{{ message }}</span>
@@ -74,7 +74,7 @@
     </div>
     {% endif %}
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 {% if not messages %}pt-20{% endif %}">
         {% block content %}{% endblock %}
     </main>
 
