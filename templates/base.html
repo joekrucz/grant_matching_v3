@@ -1184,6 +1184,34 @@
             </div>
         </div>
     </footer>
+    <script>
+        // Enable toggle behavior for all dropdowns - clicking the button again closes the dropdown
+        document.addEventListener('DOMContentLoaded', function() {
+            // Find all dropdown containers
+            document.querySelectorAll('.dropdown').forEach(function(dropdown) {
+                const button = dropdown.querySelector('[role="button"], button[tabindex="0"]');
+                const menu = dropdown.querySelector('.dropdown-content');
+                
+                if (button && menu) {
+                    // Check on mousedown if menu is already focused (open)
+                    button.addEventListener('mousedown', function(e) {
+                        const isMenuFocused = menu === document.activeElement || menu.contains(document.activeElement);
+                        
+                        if (isMenuFocused) {
+                            // Menu is open, prevent the click and close it
+                            e.preventDefault();
+                            menu.blur();
+                            button.blur();
+                            // Blur any focused element
+                            if (document.activeElement && document.activeElement !== document.body) {
+                                document.activeElement.blur();
+                            }
+                        }
+                    });
+                }
+            });
+        });
+    </script>
 </body>
 </html>
 

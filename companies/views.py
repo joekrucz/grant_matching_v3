@@ -611,6 +611,12 @@ def funding_search_detail(request, id):
     if current_tab not in allowed_tabs:
         current_tab = 'setup'
     
+    # View selection (list or grid) - only for results tab
+    allowed_views = ['list', 'grid']
+    current_view = request.GET.get('view', 'list')
+    if current_view not in allowed_views:
+        current_view = 'list'
+    
     context = {
         'funding_search': funding_search,
         'can_edit': can_edit,
@@ -622,6 +628,7 @@ def funding_search_detail(request, id):
         'selected_notes': selected_notes,
         'uploaded_file_name': uploaded_file_name,
         'current_tab': current_tab,
+        'current_view': current_view,
     }
     return render(request, 'companies/funding_search_detail.html', context)
 

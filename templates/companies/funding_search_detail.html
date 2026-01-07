@@ -134,6 +134,20 @@
     .card.bg-base-200 {
         width: 100%;
     }
+    /* Prevent flash of wrong view on page load - set initial state */
+    {% if current_tab == 'results' %}
+    {% if current_view == 'grid' %}
+    #list-view { display: none; }
+    #grid-view { display: grid; }
+    #remaining-grants-list { display: none; }
+    #remaining-grants-grid { display: grid; }
+    {% else %}
+    #list-view { display: block; }
+    #grid-view { display: none; }
+    #remaining-grants-list { display: block; }
+    #remaining-grants-grid { display: none; }
+    {% endif %}
+    {% endif %}
 </style>
 <div class="grid md:grid-cols-[220px,1fr] gap-4">
     <div class="space-y-4 sticky top-20 self-start max-h-[calc(100vh-5rem)] overflow-y-auto z-10">
@@ -154,8 +168,8 @@
                     </button>
                     {% endif %}
             </div>
-                    {% if can_edit %}
-                    <div class="dropdown dropdown-end">
+            {% if can_edit %}
+            <div class="dropdown dropdown-end">
                 <div tabindex="0" role="button" class="btn btn-sm btn-ghost opacity-0 group-hover:opacity-100 transition-opacity">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
@@ -515,6 +529,10 @@
         <div class="flex justify-between items-center mb-4">
             <h2 class="card-title text-2xl">Grant Matching Results</h2>
             <div class="flex items-center gap-2">
+                <div class="btn-group">
+                    <a href="?tab=results&view=list" class="btn btn-sm {% if current_view == 'list' %}btn-active{% endif %} view-toggle-btn" data-view="list">List</a>
+                    <a href="?tab=results&view=grid" class="btn btn-sm {% if current_view == 'grid' %}btn-active{% endif %} view-toggle-btn" data-view="grid">Grid</a>
+                </div>
                 <div class="dropdown dropdown-end">
                     <button tabindex="0" class="btn btn-sm btn-ghost">
                         Actions
@@ -619,11 +637,11 @@
             {% endif %}
         </p>
         
-        <!-- Top 5 Results -->
-        <div class="space-y-4">
-            {% for match_data in match_results_with_json|slice:":5" %}
+        <!-- Top 9 Results - List View -->
+        <div id="list-view" class="space-y-4 view-container" {% if current_view != 'list' %}style="display: none;"{% endif %}>
+            {% for match_data in match_results_with_json|slice:":9" %}
             {% with match=match_data.match %}
-            <div class="card bg-base-100 border border-base-300 {% if forloop.first %}border-2 border-primary{% endif %}">
+            <div class="card bg-base-100 border border-base-300 {% if forloop.first %}border-2 border-primary{% endif %}" data-match-id="{{ match.id }}">
                 {% if forloop.first %}
                 <div class="bg-primary text-primary-content px-4 py-2 rounded-t-lg">
                     <div class="flex items-center gap-2">
@@ -967,9 +985,55 @@
             {% endfor %}
         </div>
         
+        <!-- Top 9 Results - Grid View -->
+        <div id="grid-view" class="grid grid-cols-1 md:grid-cols-3 gap-4 view-container" {% if current_view != 'grid' %}style="display: none;"{% endif %}>
+            {% for match_data in match_results_with_json|slice:":9" %}
+            {% with match=match_data.match %}
+            <div class="card bg-base-100 border border-base-300 cursor-pointer" onclick="openGrantModal({{ match.id }})" data-match-id="{{ match.id }}">
+                <div class="card-body pb-4">
+                    <h3 class="card-title text-base">
+                        <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary line-clamp-2" onclick="event.stopPropagation();">
+                            {{ match.grant.title }}
+                        </a>
+                    </h3>
+                    <div class="flex gap-2 mt-2 flex-wrap">
+                        <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-sm">
+                            {{ match.grant.get_status_display }}
+                        </div>
+                        <span class="badge badge-primary badge-outline badge-sm">
+                            {% if match.grant.get_source_display == "Innovate UK" %}IUK{% else %}{{ match.grant.get_source_display }}{% endif %}
+                        </span>
+                        {% if match.grant.deadline %}
+                        <span class="badge badge-primary badge-outline badge-sm">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                        {% endif %}
+                    </div>
+                                <div class="mt-4 flex items-center justify-center gap-3">
+                                    {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                    <div>
+                                        <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                             data-match-id="{{ match.id }}"
+                                             data-eligibility='{{ match_data.eligibility_json }}'
+                                             data-competitiveness='{{ match_data.competitiveness_json }}'
+                                             data-exclusions='{{ match_data.exclusions_json }}'>
+                                            <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                        </svg>
+                                    </div>
+                                    {% endif %}
+                                    <div class="text-center">
+                                        <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-desc text-xs">Overall Match</div>
+                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}">Calculating...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        </div>
+        
         <!-- Remaining Results (Expandable) -->
-        {% if match_results|length > 5 %}
-        {% with remaining_count=match_results|length|add:"-5" %}
+        {% if match_results|length > 9 %}
+        {% with remaining_count=match_results|length|add:"-9" %}
         <div class="mt-6">
             <button 
                 id="toggle-remaining-grants" 
@@ -985,8 +1049,9 @@
             
             <div id="remaining-grants-section" class="hidden mt-4">
                 <div class="border border-base-300 rounded-lg p-4 bg-base-100" style="max-height: 600px; overflow-y: auto;">
-                    <div class="space-y-4">
-                        {% for match_data in match_results_with_json|slice:"5:" %}
+                    <!-- Remaining Grants - List View -->
+                    <div id="remaining-grants-list" class="space-y-4 remaining-grants-view" {% if current_view != 'list' %}style="display: none;"{% endif %}>
+                        {% for match_data in match_results_with_json|slice:"9:" %}
                         {% with match=match_data.match %}
                         <div class="card bg-base-100 border border-base-300">
                             <div class="card-body pb-0">
@@ -1322,6 +1387,52 @@
                         {% endwith %}
                         {% endfor %}
                     </div>
+                    
+                    <!-- Remaining Grants - Grid View -->
+                    <div id="remaining-grants-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4 remaining-grants-view" {% if current_view != 'grid' %}style="display: none;"{% endif %}>
+                        {% for match_data in match_results_with_json|slice:"9:" %}
+                        {% with match=match_data.match %}
+                        <div class="card bg-base-100 border border-base-300 cursor-pointer" onclick="openGrantModal({{ match.id }})" data-match-id="{{ match.id }}">
+                            <div class="card-body pb-4">
+                                <h3 class="card-title text-base">
+                                    <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary line-clamp-2" onclick="event.stopPropagation();">
+                                        {{ match.grant.title }}
+                                    </a>
+                                </h3>
+                                <div class="flex gap-2 mt-2 flex-wrap">
+                                    <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-sm">
+                                        {{ match.grant.get_status_display }}
+                </div>
+                                    <span class="badge badge-primary badge-outline badge-sm">
+                                        {% if match.grant.get_source_display == "Innovate UK" %}IUK{% else %}{{ match.grant.get_source_display }}{% endif %}
+                                    </span>
+                                    {% if match.grant.deadline %}
+                                    <span class="badge badge-primary badge-outline badge-sm">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="mt-4 flex items-center justify-center gap-3">
+                                    {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                    <div>
+                                        <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                             data-match-id="{{ match.id }}"
+                                             data-eligibility='{{ match_data.eligibility_json }}'
+                                             data-competitiveness='{{ match_data.competitiveness_json }}'
+                                             data-exclusions='{{ match_data.exclusions_json }}'>
+                                            <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                        </svg>
+                                    </div>
+                                    {% endif %}
+                                    <div class="text-center">
+                                        <div class="stat-value text-primary text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-desc text-xs">Overall Match</div>
+                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}">Calculating...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -1331,6 +1442,21 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Grant Detail Modal -->
+<dialog id="grant-modal" class="modal">
+    <div class="modal-box max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+        </form>
+        <div id="grant-modal-content">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
 
 {% if can_edit and current_tab == 'settings' %}
 <div id="tab-settings" class="card bg-base-200 border border-base-300">
@@ -1346,6 +1472,10 @@
                         {{ funding_search.user.email }}
                     {% endif %}
                 </p>
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-base-content/70">Date Created</label>
+                <p class="text-base">{{ funding_search.created_at|date:"F d, Y g:i A" }}</p>
             </div>
         </div>
         <form method="post"
@@ -2316,12 +2446,106 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 });
 
+// Function to calculate certainty for all elements
+function calculateAllCertainty() {
+    document.querySelectorAll('.certainty-percentage').forEach(function(certaintyElement) {
+        if (certaintyElement.textContent === 'Calculating...' || certaintyElement.textContent.trim() === '') {
+            try {
+                const matchId = certaintyElement.getAttribute('data-match-id');
+                // Search in the entire document for the pie chart
+                const svgElement = document.querySelector(`svg.checklist-pie-chart[data-match-id="${matchId}"]`);
+                
+                if (svgElement) {
+                    const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
+                    const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
+                    const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
+                    
+                    const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
+                    const totalItems = allItems.length;
+                    
+                    if (totalItems > 0) {
+                        const yesNoCount = allItems.filter(item => item.status === 'yes' || item.status === 'no').length;
+                        const certaintyPercentage = Math.round((yesNoCount / totalItems) * 100);
+                        certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
+                    } else {
+                        certaintyElement.textContent = '';
+                    }
+                }
+            } catch (e) {
+                console.error('Error calculating certainty:', e);
+            }
+        }
+    });
+}
+
+// Set initial view based on URL parameter and handle view switching
+document.addEventListener('DOMContentLoaded', function() {
+    const listView = document.getElementById('list-view');
+    const gridView = document.getElementById('grid-view');
+    const remainingGrantsList = document.getElementById('remaining-grants-list');
+    const remainingGrantsGrid = document.getElementById('remaining-grants-grid');
+    
+    // Get current view from URL or default to list
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentView = urlParams.get('view') || 'list';
+    
+    // Set initial view
+    function setView(view) {
+        if (view === 'list') {
+            if (listView) listView.style.display = 'block';
+            if (gridView) gridView.style.display = 'none';
+            if (remainingGrantsList) remainingGrantsList.style.display = 'block';
+            if (remainingGrantsGrid) remainingGrantsGrid.style.display = 'none';
+        } else if (view === 'grid') {
+            if (listView) listView.style.display = 'none';
+            if (gridView) gridView.style.display = 'grid';
+            if (remainingGrantsList) remainingGrantsList.style.display = 'none';
+            if (remainingGrantsGrid) remainingGrantsGrid.style.display = 'grid';
+            // Recalculate certainty when switching to grid view
+            setTimeout(calculateAllCertainty, 100);
+        }
+    }
+    
+    // Set initial view on page load
+    setView(currentView);
+    
+    // Handle view toggle button clicks (update URL)
+    const viewToggleButtons = document.querySelectorAll('.view-toggle-btn');
+    viewToggleButtons.forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.preventDefault(); // Prevent default link behavior
+            const view = this.getAttribute('data-view');
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('view', view);
+            // Preserve the tab parameter
+            if (!urlParams.has('tab')) {
+                urlParams.set('tab', 'results');
+            }
+            // Update URL without page reload
+            window.history.pushState({}, '', '?' + urlParams.toString());
+            // Update button states
+            viewToggleButtons.forEach(function(btn) {
+                btn.classList.remove('btn-active');
+            });
+            this.classList.add('btn-active');
+            // Update view
+            setView(view);
+        });
+    });
+});
+
 // Toggle remaining grants section
 function toggleRemainingGrants() {
     const section = document.getElementById('remaining-grants-section');
     const button = document.getElementById('toggle-remaining-grants');
     const text = document.getElementById('toggle-text');
     const icon = document.getElementById('toggle-icon');
+    const remainingGrantsList = document.getElementById('remaining-grants-list');
+    const remainingGrantsGrid = document.getElementById('remaining-grants-grid');
+    
+    // Determine current view mode from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentView = urlParams.get('view') || 'list';
     
     if (section && button && text && icon) {
         const isHidden = section.classList.contains('hidden');
@@ -2331,6 +2555,16 @@ function toggleRemainingGrants() {
             section.classList.remove('hidden');
             text.textContent = 'Hide Remaining Grants';
             icon.style.transform = 'rotate(180deg)';
+            
+            // Show the appropriate view based on current mode
+            if (currentView === 'grid') {
+                if (remainingGrantsList) remainingGrantsList.style.display = 'none';
+                if (remainingGrantsGrid) remainingGrantsGrid.style.display = 'grid';
+                setTimeout(calculateAllCertainty, 100);
+            } else {
+                if (remainingGrantsList) remainingGrantsList.style.display = 'block';
+                if (remainingGrantsGrid) remainingGrantsGrid.style.display = 'none';
+            }
         } else {
             section.classList.add('hidden');
             text.textContent = `View All ${remainingCount} Remaining Grant${remainingCount !== 1 ? 's' : ''}`;
@@ -2633,6 +2867,36 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    
+    // Calculate certainty for all cards (including grid view cards that might not have checklist scores)
+    document.querySelectorAll('.certainty-percentage').forEach(function(certaintyElement) {
+        if (certaintyElement.textContent === 'Calculating...') {
+            try {
+                const matchId = certaintyElement.getAttribute('data-match-id');
+                // Search in the entire document, not just within a card
+                const svgElement = document.querySelector(`svg.checklist-pie-chart[data-match-id="${matchId}"]`);
+                
+                if (svgElement) {
+                    const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
+                    const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
+                    const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
+                    
+                    const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
+                    const totalItems = allItems.length;
+                    
+                    if (totalItems > 0) {
+                        const yesNoCount = allItems.filter(item => item.status === 'yes' || item.status === 'no').length;
+                        const certaintyPercentage = Math.round((yesNoCount / totalItems) * 100);
+                        certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
+                    } else {
+                        certaintyElement.textContent = '';
+                    }
+                }
+            } catch (e) {
+                console.error('Error calculating certainty:', e);
+            }
+        }
+    });
 });
 
 // Handle arrow rotation and score breakdown visibility for collapsible sections
@@ -2663,5 +2927,136 @@ document.addEventListener('DOMContentLoaded', function() {
         checkbox.addEventListener('change', updateVisibility);
     });
 });
+
+// Open grant modal with full list view content
+function openGrantModal(matchId) {
+    const modal = document.getElementById('grant-modal');
+    const modalContent = document.getElementById('grant-modal-content');
+    
+    if (!modal || !modalContent) return;
+    
+    // Find the list view card for this match
+    let foundCard = document.querySelector(`#list-view .card[data-match-id="${matchId}"]`);
+    
+    if (!foundCard) {
+        // Fallback: try to find by checking for elements with the match ID inside
+        const listViewCards = document.querySelectorAll('#list-view .card');
+        listViewCards.forEach(function(card) {
+            const certaintyEl = card.querySelector(`.certainty-percentage[data-match-id="${matchId}"]`);
+            if (certaintyEl && !foundCard) {
+                foundCard = card;
+            }
+        });
+        
+        if (!foundCard) {
+            console.error('Could not find list view card for match ID:', matchId);
+            return;
+        }
+    }
+    
+    // Clone the card
+    const clonedCard = foundCard.cloneNode(true);
+    
+    // Remove collapse functionality - convert all collapses to always-visible sections
+    clonedCard.querySelectorAll('.collapse').forEach(function(collapse) {
+        const checkbox = collapse.querySelector('input[type="checkbox"]');
+        const title = collapse.querySelector('.collapse-title');
+        const content = collapse.querySelector('.collapse-content');
+        
+        if (title && content) {
+            // Get title text without icons and clean it up
+            const titleClone = title.cloneNode(true);
+            titleClone.querySelectorAll('svg, .collapse-arrow-icon').forEach(function(el) {
+                el.remove();
+            });
+            let titleText = titleClone.textContent.trim();
+            titleText = titleText.replace(/\(calculating\.\.\.\)/g, '').trim();
+            
+            // Determine heading class based on content
+            const isDetails = titleText.includes('Details') || collapse.id && collapse.id.includes('more-details');
+            const isChecklist = titleText.includes('Checklist');
+            
+            // Create a simple heading
+            const titleDiv = document.createElement('div');
+            if (isDetails) {
+                titleDiv.className = 'font-semibold text-base px-4 mb-2 mt-4';
+                titleDiv.textContent = 'Details';
+            } else if (isChecklist) {
+                titleDiv.className = 'font-semibold text-sm px-4 mb-2 mt-4';
+                titleDiv.textContent = titleText;
+            } else {
+                titleDiv.className = 'font-semibold text-sm px-4 mb-2 mt-4';
+                titleDiv.textContent = titleText;
+            }
+            
+            // Make content always visible
+            content.classList.remove('collapse-content');
+            content.style.display = 'block';
+            content.style.paddingTop = '0.5rem';
+            content.style.paddingBottom = '1rem';
+            
+            // Replace collapse with title and content
+            const parent = collapse.parentElement;
+            if (parent) {
+                collapse.replaceWith(titleDiv);
+                titleDiv.parentElement.insertBefore(content, titleDiv.nextSibling);
+            }
+        }
+    });
+    
+    // Remove "Hide" button and its container
+    clonedCard.querySelectorAll('button').forEach(function(btn) {
+        if (btn.textContent && btn.textContent.includes('Hide')) {
+            const hideSection = btn.closest('.border-t');
+            if (hideSection) {
+                hideSection.remove();
+            }
+        }
+    });
+    
+    // Show score breakdown (remove display:none)
+    clonedCard.querySelectorAll('[class*="score-breakdown-"]').forEach(function(el) {
+        if (el.classList.toString().includes('score-breakdown-')) {
+            el.style.display = 'block';
+        }
+    });
+    
+    // Expand all checklist items by removing collapse structure
+    clonedCard.querySelectorAll('.collapse').forEach(function(collapse) {
+        const content = collapse.querySelector('.collapse-content');
+        if (content) {
+            content.style.display = 'block';
+            content.classList.remove('collapse-content');
+        }
+    });
+    
+    // Clear modal and add cloned content
+    modalContent.innerHTML = '';
+    modalContent.appendChild(clonedCard);
+    
+    // Show modal
+    modal.showModal();
+    
+    // Recalculate scores and certainty for the cloned content
+    setTimeout(function() {
+        calculateAllCertainty();
+    }, 100);
+}
 </script>
+
+<!-- Grant Detail Modal -->
+<dialog id="grant-modal" class="modal">
+    <div class="modal-box max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+        </form>
+        <div id="grant-modal-content">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
 {% endblock %}
