@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}Scraper Reports - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+    <h1 class="text-3xl font-bold">Scraper Reports</h1>
+    <a href="{% url 'admin_panel:dashboard' %}" class="btn btn-ghost">Back to Dashboard</a>
+</div>
+
+<!-- Filters -->
+<div class="card bg-base-200 mb-6">
+    <div class="card-body">
+        <form method="get" class="flex gap-4 items-end">
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Source</span>
+                </label>
+                <select name="source" class="select select-bordered">
+                    <option value="">All Sources</option>
+                    {% for source_code, source_name in sources %}
+                    <option value="{{ source_code }}" {% if source_filter == source_code %}selected{% endif %}>
+                        {{ source_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label">
+                    <span class="label-text">Status</span>
+                </label>
+                <select name="status" class="select select-bordered">
+                    <option value="">All Statuses</option>
+                    {% for status_code, status_name in statuses %}
+                    <option value="{{ status_code }}" {% if status_filter == status_code %}selected{% endif %}>
+                        {{ status_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-control">
+                <button type="submit" class="btn btn-primary">Filter</button>
+            </div>
+            {% if source_filter or status_filter %}
+            <div class="form-control">
+                <a href="{% url 'admin_panel:scraper_reports' %}" class="btn btn-ghost">Clear</a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- Reports List -->
+<div class="overflow-x-auto">
+    <table class="table table-zebra">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Started At</th>
+                <th>Duration</th>
+                <th>Total Findings</th>
+                <th>New</th>
+                <th>Updated</th>
+                <th>Deleted</th>
+                <th>Errors</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in page_obj %}
+            <tr>
+                <td>{{ run.scrape_log.get_source_display }}</td>
+                <td>
+                    <div class="badge {% if run.scrape_log.status == 'success' %}badge-success{% elif run.scrape_log.status == 'error' %}badge-error{% elif run.scrape_log.status == 'cancelled' %}badge-neutral{% else %}badge-warning{% endif %}">
+                        {{ run.scrape_log.get_status_display }}
+                    </div>
+                </td>
+                <td>{{ run.scrape_log.started_at|date:"M d, Y H:i" }}</td>
+                <td>
+                    {% if run.scrape_log.duration_seconds %}
+                        {{ run.scrape_log.duration_seconds|floatformat:0 }}s
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="font-semibold">{{ run.total_findings }}</span>
+                </td>
+                <td>
+                    {% if run.new_count > 0 %}
+                        <span class="badge badge-success">{{ run.new_count }}</span>
+                    {% else %}
+                        <span class="text-base-content/40">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if run.updated_count > 0 %}
+                        <span class="badge badge-warning">{{ run.updated_count }}</span>
+                    {% else %}
+                        <span class="text-base-content/40">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if run.deleted_count > 0 %}
+                        <span class="badge badge-neutral">{{ run.deleted_count }}</span>
+                    {% else %}
+                        <span class="text-base-content/40">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if run.error_count > 0 %}
+                        <span class="badge badge-error">{{ run.error_count }}</span>
+                    {% else %}
+                        <span class="text-base-content/40">0</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'admin_panel:scraper_report_detail' run.id %}" class="btn btn-primary btn-xs">
+                        View Details
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="10" class="text-center">No scraper reports found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="join flex justify-center mt-6">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="join-item btn">Previous</a>
+    {% endif %}
+    <button class="join-item btn btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}{% if source_filter %}&source={{ source_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="join-item btn">Next</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+

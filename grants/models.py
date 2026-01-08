@@ -140,6 +140,86 @@ class Grant(models.Model):
         return hashlib.sha256(hash_string.encode()).hexdigest()
     
     @classmethod
+    def _create_snapshot(cls, grant):
+        """Create a JSON snapshot of grant data for change tracking."""
+        # Helper to safely convert datetime to string
+        def to_iso(dt):
+            if dt is None:
+                return None
+            if isinstance(dt, str):
+                return dt  # Already a string
+            if hasattr(dt, 'isoformat'):
+                return dt.isoformat()
+            return str(dt)
+        
+        return {
+            'title': grant.title,
+            'summary': grant.summary,
+            'description': grant.description[:1000] if grant.description else None,  # Truncate long descriptions
+            'url': grant.url,
+            'funding_amount': grant.funding_amount,
+            'deadline': to_iso(grant.deadline),
+            'opening_date': to_iso(grant.opening_date),
+            'status': grant.status,
+            'hash_checksum': grant.hash_checksum,
+        }
+    
+    @classmethod
+    def _detect_field_changes(cls, before_snapshot, after_snapshot):
+        """Detect which fields changed between two snapshots."""
+        changes = {}
+        all_fields = set(before_snapshot.keys()) | set(after_snapshot.keys())
+        
+        for field in all_fields:
+            before_val = before_snapshot.get(field)
+            after_val = after_snapshot.get(field)
+            
+            if before_val != after_val:
+                changes[field] = {
+                    'before': before_val,
+                    'after': after_val,
+                }
+        
+        return changes
+    
+    @classmethod
+    def _create_change_summary(cls, field_changes):
+        """Create a human-readable summary of changes."""
+        if not field_changes:
+            return "No changes detected"
+        
+        def format_field_name(field):
+            """Format field name for display (replace underscores with spaces)."""
+            return field.replace('_', ' ').title()
+        
+        changed_fields = list(field_changes.keys())
+        if len(changed_fields) == 1:
+            field = changed_fields[0]
+            return f"Updated {format_field_name(field)}"
+        elif len(changed_fields) <= 3:
+            return f"Updated {', '.join(format_field_name(f) for f in changed_fields)}"
+        else:
+            return f"Updated {len(changed_fields)} fields"
+    
+    @classmethod
+    def _get_scrape_finding_model(cls):
+        """Safely get ScrapeFinding model, returning None if it doesn't exist."""
+        try:
+            from grants.models import ScrapeFinding
+            return ScrapeFinding
+        except (ImportError, AttributeError):
+            return None
+    
+    @classmethod
+    def _get_scrape_run_model(cls):
+        """Safely get ScrapeRun model, returning None if it doesn't exist."""
+        try:
+            from grants.models import ScrapeRun
+            return ScrapeRun
+        except (ImportError, AttributeError):
+            return None
+    
+    @classmethod
     def upsert_from_payload(cls, grants_data, log_id=None, grants_found=None):
         """
         Upsert grants from a list of grant dictionaries.
@@ -154,6 +234,27 @@ class Grant(models.Model):
         created = 0
         updated = 0
         skipped = 0
+        
+        # Get or create ScrapeRun for detailed reporting
+        scrape_run = None
+        if log_id:
+            try:
+                from grants.models import ScrapeLog
+                from django.db import OperationalError
+                ScrapeRun = cls._get_scrape_run_model()
+                if ScrapeRun:
+                    scrape_log = ScrapeLog.objects.get(id=log_id)
+                    try:
+                        scrape_run, _ = ScrapeRun.objects.get_or_create(scrape_log=scrape_log)
+                    except OperationalError:
+                        # Table doesn't exist yet (migrations not run) - skip detailed reporting
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.debug(f"ScrapeRun table doesn't exist yet for log_id {log_id}, skipping detailed reporting")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Could not create ScrapeRun for log_id {log_id}: {e}", exc_info=True)
         
         for grant_data in grants_data:
             source = grant_data.get('source')
@@ -191,6 +292,9 @@ class Grant(models.Model):
             if grant:
                 # Grant exists - check if hash changed
                 if grant.hash_checksum != hash_checksum:
+                    # Create before snapshot
+                    before_snapshot = cls._create_snapshot(grant)
+                    
                     # Update grant
                     grant.title = title
                     grant.summary = grant_data.get('summary', grant.summary)
@@ -205,6 +309,35 @@ class Grant(models.Model):
                     grant.hash_checksum = hash_checksum
                     grant.last_changed_at = timezone.now()
                     grant.save()
+                    
+                    # Create after snapshot and detect changes
+                    after_snapshot = cls._create_snapshot(grant)
+                    field_changes = cls._detect_field_changes(before_snapshot, after_snapshot)
+                    change_summary = cls._create_change_summary(field_changes)
+                    
+                    # Create finding for updated grant
+                    if scrape_run:
+                        try:
+                            # Import here to avoid issues if model doesn't exist yet
+                            ScrapeFinding = cls._get_scrape_finding_model()
+                            if ScrapeFinding:
+                                ScrapeFinding.objects.create(
+                                    scrape_run=scrape_run,
+                                    finding_type='updated',
+                                    grant=grant,
+                                    grant_slug=grant.slug,
+                                    grant_source=grant.source,
+                                    grant_title=grant.title,
+                                    before_snapshot=before_snapshot,
+                                    after_snapshot=after_snapshot,
+                                    field_changes=field_changes,
+                                    change_summary=change_summary,
+                                )
+                        except Exception as e:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.warning(f"Could not create ScrapeFinding for updated grant: {e}", exc_info=True)
+                    
                     updated += 1
                 else:
                     # No changes, skip
@@ -227,9 +360,34 @@ class Grant(models.Model):
                     hash_checksum=hash_checksum,
                     first_seen_at=timezone.now(),
                 )
+                
+                # Create snapshot for new grant
+                after_snapshot = cls._create_snapshot(grant)
+                
+                # Create finding for new grant
+                if scrape_run:
+                    try:
+                        # Import here to avoid issues if model doesn't exist yet
+                        ScrapeFinding = cls._get_scrape_finding_model()
+                        if ScrapeFinding:
+                            ScrapeFinding.objects.create(
+                                scrape_run=scrape_run,
+                                finding_type='new',
+                                grant=grant,
+                                grant_slug=grant.slug,
+                                grant_source=grant.source,
+                                grant_title=grant.title,
+                                after_snapshot=after_snapshot,
+                                change_summary="New grant discovered",
+                            )
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Could not create ScrapeFinding for new grant: {e}", exc_info=True)
+                
                 created += 1
         
-        # Update ScrapeLog if log_id provided
+        # Update ScrapeLog and ScrapeRun if log_id provided
         # Note: Using string reference to avoid circular dependency
         if log_id:
             try:
@@ -250,6 +408,20 @@ class Grant(models.Model):
                 scrape_log.grants_skipped = skipped
                 scrape_log.save(update_fields=['grants_found', 'grants_created', 'grants_updated', 'grants_skipped'])
                 logger.info(f"Successfully updated ScrapeLog {log_id}: grants_found={scrape_log.grants_found}")
+                
+                # Update ScrapeRun with finding counts (if it exists)
+                if scrape_run:
+                    try:
+                        scrape_run.new_count = scrape_run.findings.filter(finding_type='new').count()
+                        scrape_run.updated_count = scrape_run.findings.filter(finding_type='updated').count()
+                        scrape_run.deleted_count = scrape_run.findings.filter(finding_type='deleted').count()
+                        scrape_run.error_count = scrape_run.findings.filter(finding_type='error').count()
+                        scrape_run.total_findings = scrape_run.findings.count()
+                        scrape_run.save()
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Could not update ScrapeRun counts: {e}", exc_info=True)
             except ScrapeLog.DoesNotExist:
                 # Log if log doesn't exist
                 import logging
@@ -305,6 +477,90 @@ class ScrapeLog(models.Model):
     def total_grants_processed(self):
         """Return total grants processed."""
         return self.grants_created + self.grants_updated + self.grants_skipped
+
+
+FINDING_TYPES = [
+    ('new', 'New Grant'),
+    ('updated', 'Updated Grant'),
+    ('deleted', 'Deleted/Unavailable Grant'),
+    ('error', 'Error Processing Grant'),
+]
+
+
+class ScrapeRun(models.Model):
+    """Detailed report for a scraper run, linked to ScrapeLog."""
+    
+    scrape_log = models.OneToOneField(
+        'ScrapeLog',
+        on_delete=models.CASCADE,
+        related_name='detailed_report',
+        db_index=True
+    )
+    total_findings = models.IntegerField(default=0)
+    new_count = models.IntegerField(default=0)
+    updated_count = models.IntegerField(default=0)
+    deleted_count = models.IntegerField(default=0)
+    error_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'scrape_runs'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"ScrapeRun for {self.scrape_log.source} - {self.created_at}"
+
+
+class ScrapeFinding(models.Model):
+    """Individual finding from a scraper run (new, updated, deleted, or error)."""
+    
+    scrape_run = models.ForeignKey(
+        'ScrapeRun',
+        on_delete=models.CASCADE,
+        related_name='findings',
+        db_index=True
+    )
+    finding_type = models.CharField(max_length=20, choices=FINDING_TYPES, db_index=True)
+    grant = models.ForeignKey(
+        'Grant',
+        on_delete=models.CASCADE,
+        related_name='scrape_findings',
+        null=True,
+        blank=True,
+        db_index=True
+    )
+    grant_slug = models.SlugField(max_length=500, db_index=True)  # Store slug even if grant deleted
+    grant_source = models.CharField(max_length=50, choices=GRANT_SOURCES, db_index=True)
+    grant_title = models.CharField(max_length=500)  # Store title for reference
+    
+    # Snapshot data (before/after for updates, current for new, last known for deleted)
+    before_snapshot = models.JSONField(default=dict, blank=True, null=True)  # Previous state
+    after_snapshot = models.JSONField(default=dict, blank=True, null=True)  # Current/new state
+    
+    # Change summary - human-readable description of what changed
+    change_summary = models.TextField(blank=True, null=True)
+    
+    # Field-level changes (for updated grants)
+    field_changes = models.JSONField(default=dict, blank=True, null=True)  # {'field_name': {'before': 'old', 'after': 'new'}}
+    
+    # Error details (for error findings)
+    error_message = models.TextField(blank=True, null=True)
+    error_url = models.URLField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    class Meta:
+        db_table = 'scrape_findings'
+        indexes = [
+            models.Index(fields=['scrape_run', 'finding_type']),
+            models.Index(fields=['grant_source', 'finding_type']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at', 'finding_type', 'grant_title']
+    
+    def __str__(self):
+        return f"{self.get_finding_type_display()} - {self.grant_title} ({self.grant_source})"
 
 
 class EligibilityQuestionnaire(models.Model):

@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 
-from grants.models import Grant, ScrapeLog, GRANT_SOURCES
+from grants.models import Grant, ScrapeLog, ScrapeRun, ScrapeFinding, GRANT_SOURCES
 from users.models import User
 from companies.models import Company
 from grants_aggregator import CELERY_AVAILABLE
@@ -1940,4 +1940,115 @@ def system_settings(request):
             messages.error(request, f'Error updating settings: {str(e)}')
     
     return redirect('admin_panel:dashboard')
+
+
+@login_required
+@admin_required
+def scraper_reports(request):
+    """List all scraper runs with detailed reports."""
+    from grants.models import ScrapeRun
+    
+    # Get filter parameters
+    source_filter = request.GET.get('source', '')
+    status_filter = request.GET.get('status', '')
+    
+    # Get all scrape runs with their logs
+    scrape_runs = ScrapeRun.objects.select_related('scrape_log').all()
+    
+    # Apply filters
+    if source_filter:
+        scrape_runs = scrape_runs.filter(scrape_log__source=source_filter)
+    if status_filter:
+        scrape_runs = scrape_runs.filter(scrape_log__status=status_filter)
+    
+    # Order by most recent first
+    scrape_runs = scrape_runs.order_by('-created_at')
+    
+    # Paginate
+    paginator = Paginator(scrape_runs, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'sources': GRANT_SOURCES,
+        'statuses': ScrapeLog._meta.get_field('status').choices,
+        'source_filter': source_filter,
+        'status_filter': status_filter,
+    }
+    
+    return render(request, 'admin_panel/scraper_reports.html', context)
+
+
+@login_required
+@admin_required
+def scraper_report_detail(request, run_id):
+    """Detailed view of a single scraper run with all findings."""
+    from grants.models import ScrapeRun, ScrapeFinding
+    from django.db.models import Q
+    
+    scrape_run = get_object_or_404(ScrapeRun.objects.select_related('scrape_log'), id=run_id)
+    
+    # Get filter parameters
+    finding_type_filter = request.GET.get('type', '')
+    search_query = request.GET.get('search', '')
+    
+    # Get all findings for this run
+    findings = scrape_run.findings.select_related('grant').all()
+    
+    # Apply filters
+    if finding_type_filter:
+        findings = findings.filter(finding_type=finding_type_filter)
+    if search_query:
+        findings = findings.filter(
+            Q(grant_title__icontains=search_query) |
+            Q(grant_slug__icontains=search_query) |
+            Q(change_summary__icontains=search_query)
+        )
+    
+    # Order by most recent first, then by type
+    findings = findings.order_by('-created_at', 'finding_type', 'grant_title')
+    
+    # Paginate
+    paginator = Paginator(findings, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Get summary statistics
+    stats = {
+        'total': scrape_run.total_findings,
+        'new': scrape_run.new_count,
+        'updated': scrape_run.updated_count,
+        'deleted': scrape_run.deleted_count,
+        'error': scrape_run.error_count,
+    }
+    
+    # Format field names for display (replace underscores with spaces)
+    def format_field_name(field):
+        return field.replace('_', ' ').title()
+    
+    # Process findings to add formatted field names
+    processed_findings = []
+    for finding in page_obj:
+        finding_dict = {
+            'finding': finding,
+            'formatted_field_changes': {}
+        }
+        if finding.field_changes:
+            for field, change in finding.field_changes.items():
+                finding_dict['formatted_field_changes'][format_field_name(field)] = change
+        processed_findings.append(finding_dict)
+    
+    context = {
+        'scrape_run': scrape_run,
+        'scrape_log': scrape_run.scrape_log,
+        'page_obj': page_obj,
+        'processed_findings': processed_findings,
+        'stats': stats,
+        'finding_types': ScrapeFinding._meta.get_field('finding_type').choices,
+        'finding_type_filter': finding_type_filter,
+        'search_query': search_query,
+    }
+    
+    return render(request, 'admin_panel/scraper_report_detail.html', context)
 
