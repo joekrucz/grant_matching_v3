@@ -9,7 +9,7 @@ from django.contrib import messages
 from django_ratelimit.decorators import ratelimit
 from django.core.paginator import Paginator
 from django.db.models.functions import Lower
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.conf import settings
 from django.urls import reverse
 from django.http import HttpResponse
@@ -19,7 +19,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-from .models import Company, FundingSearch, GrantMatchResult, CompanyFile, CompanyNote, FundingSearchFile
+from .models import Company, FundingSearch, GrantMatchResult, CompanyFile, CompanyNote, FundingSearchFile, FundingQuestionnaire
 from .services import (
     CompaniesHouseService,
     CompaniesHouseError,
@@ -72,6 +72,280 @@ def funding_searches_list(request):
     page_obj = paginator.get_page(page_number)
     
     return render(request, 'companies/funding_searches_list.html', {'page_obj': page_obj})
+
+
+@login_required
+def questionnaires_list(request):
+    """List all questionnaires for the current user."""
+    # SECURITY: Only show questionnaires owned by the current user (unless admin)
+    if request.user.admin:
+        questionnaires = FundingQuestionnaire.objects.all().select_related('user').annotate(
+            usage_count=Count('funding_searches')
+        ).order_by('-updated_at')
+    else:
+        questionnaires = FundingQuestionnaire.objects.filter(
+            user=request.user
+        ).annotate(
+            usage_count=Count('funding_searches')
+        ).order_by('-updated_at')
+    
+    # Pagination
+    paginator = Paginator(questionnaires, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'companies/questionnaires_list.html', {'page_obj': page_obj})
+
+
+@login_required
+def questionnaire_create(request):
+    """Create a new questionnaire."""
+    from .models import TRL_LEVELS
+    from django.utils import timezone
+    
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        if not name:
+            messages.error(request, 'Name is required.')
+            return render(request, 'companies/questionnaire_form.html', {
+                'trl_levels': TRL_LEVELS,
+                'grant_sources': GRANT_SOURCES,
+                'mode': 'create',
+            })
+        
+        # SECURITY: Validate name length
+        if len(name) > 255:
+            messages.error(request, 'Name must be 255 characters or less.')
+            return render(request, 'companies/questionnaire_form.html', {
+                'trl_levels': TRL_LEVELS,
+                'grant_sources': GRANT_SOURCES,
+                'mode': 'create',
+            })
+        
+        # Collect questionnaire data
+        questionnaire_data = {
+            'company_stage': request.POST.get('company_stage', ''),
+            'company_size': request.POST.get('company_size', ''),
+            'primary_sector': request.POST.get('primary_sector', ''),
+            'company_location': {
+                'country': request.POST.get('country', ''),
+                'region': request.POST.get('region', ''),
+                'city': request.POST.get('city', ''),
+            },
+            'project_name': request.POST.get('project_name', ''),
+            'project_description': request.POST.get('project_description', ''),
+            'problem_statement': request.POST.get('problem_statement', ''),
+            'trl_levels': request.POST.getlist('trl_levels'),
+            'let_system_decide_trl': request.POST.get('let_system_decide_trl') == 'on',
+            'project_types': request.POST.getlist('project_types'),
+            'funding_amount_needed': request.POST.get('funding_amount_needed', ''),
+            'funding_timeline': request.POST.get('funding_timeline', ''),
+            'funding_purposes': request.POST.getlist('funding_purposes'),
+            'organization_type': request.POST.get('organization_type', ''),
+            'geographic_eligibility': request.POST.get('geographic_eligibility', ''),
+            'collaboration_requirements': request.POST.get('collaboration_requirements', ''),
+            'previous_grant_experience': request.POST.get('previous_grant_experience', ''),
+            'key_strengths': request.POST.getlist('key_strengths'),
+            'project_impact': request.POST.get('project_impact', ''),
+            'target_market': request.POST.get('target_market', ''),
+            'grant_sources_preference': request.POST.getlist('grant_sources_preference'),
+            'exclusions': request.POST.getlist('exclusions'),
+            'additional_information': request.POST.get('additional_information', ''),
+        }
+        
+        # Validate TRL levels
+        valid_trl_values = [choice[0] for choice in TRL_LEVELS]
+        validated_trl_levels = [
+            level for level in questionnaire_data['trl_levels']
+            if level in valid_trl_values
+        ]
+        questionnaire_data['trl_levels'] = validated_trl_levels
+        
+        # Handle let_system_decide_trl flag
+        if questionnaire_data.get('let_system_decide_trl'):
+            questionnaire_data['let_system_decide_trl'] = True
+        else:
+            questionnaire_data['let_system_decide_trl'] = False
+        
+        # Validate grant sources
+        valid_source_codes = [source[0] for source in GRANT_SOURCES]
+        validated_sources = [
+            source for source in questionnaire_data['grant_sources_preference']
+            if source in valid_source_codes
+        ]
+        questionnaire_data['grant_sources_preference'] = validated_sources
+        
+        # Check if this should be default
+        is_default = request.POST.get('is_default') == 'on'
+        
+        # If setting as default, unset other defaults
+        if is_default:
+            FundingQuestionnaire.objects.filter(
+                user=request.user,
+                is_default=True
+            ).update(is_default=False)
+        
+        questionnaire = FundingQuestionnaire.objects.create(
+            user=request.user,
+            name=name,
+            questionnaire_data=questionnaire_data,
+            is_default=is_default,
+        )
+        
+        messages.success(request, 'Questionnaire created successfully.')
+        return redirect('companies:questionnaire_detail', id=questionnaire.id)
+    
+    # GET request
+    context = {
+        'trl_levels': TRL_LEVELS,
+        'grant_sources': GRANT_SOURCES,
+        'mode': 'create',
+    }
+    return render(request, 'companies/questionnaire_form.html', context)
+
+
+@login_required
+def questionnaire_detail(request, id):
+    """View and edit a questionnaire."""
+    from .models import TRL_LEVELS
+    
+    questionnaire = get_object_or_404(FundingQuestionnaire, id=id)
+    
+    # Check permissions
+    if request.user != questionnaire.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to view this questionnaire.')
+        return redirect('companies:questionnaires_list')
+    
+    if request.method == 'POST':
+        # Handle updates
+        name = request.POST.get('name', '').strip()
+        if not name:
+            messages.error(request, 'Name is required.')
+            return redirect('companies:questionnaire_detail', id=id)
+        
+        # SECURITY: Validate name length
+        if len(name) > 255:
+            messages.error(request, 'Name must be 255 characters or less.')
+            return redirect('companies:questionnaire_detail', id=id)
+        
+        # Update questionnaire data
+        questionnaire_data = {
+            'company_stage': request.POST.get('company_stage', ''),
+            'company_size': request.POST.get('company_size', ''),
+            'primary_sector': request.POST.get('primary_sector', ''),
+            'company_location': {
+                'country': request.POST.get('country', ''),
+                'region': request.POST.get('region', ''),
+                'city': request.POST.get('city', ''),
+            },
+            'project_name': request.POST.get('project_name', ''),
+            'project_description': request.POST.get('project_description', ''),
+            'problem_statement': request.POST.get('problem_statement', ''),
+            'trl_levels': request.POST.getlist('trl_levels'),
+            'let_system_decide_trl': request.POST.get('let_system_decide_trl') == 'on',
+            'project_types': request.POST.getlist('project_types'),
+            'funding_amount_needed': request.POST.get('funding_amount_needed', ''),
+            'funding_timeline': request.POST.get('funding_timeline', ''),
+            'funding_purposes': request.POST.getlist('funding_purposes'),
+            'organization_type': request.POST.get('organization_type', ''),
+            'geographic_eligibility': request.POST.get('geographic_eligibility', ''),
+            'collaboration_requirements': request.POST.get('collaboration_requirements', ''),
+            'previous_grant_experience': request.POST.get('previous_grant_experience', ''),
+            'key_strengths': request.POST.getlist('key_strengths'),
+            'project_impact': request.POST.get('project_impact', ''),
+            'target_market': request.POST.get('target_market', ''),
+            'grant_sources_preference': request.POST.getlist('grant_sources_preference'),
+            'exclusions': request.POST.getlist('exclusions'),
+            'additional_information': request.POST.get('additional_information', ''),
+        }
+        
+        # Validate TRL levels
+        valid_trl_values = [choice[0] for choice in TRL_LEVELS]
+        validated_trl_levels = [
+            level for level in questionnaire_data['trl_levels']
+            if level in valid_trl_values
+        ]
+        questionnaire_data['trl_levels'] = validated_trl_levels
+        
+        # Handle let_system_decide_trl flag
+        if questionnaire_data.get('let_system_decide_trl'):
+            questionnaire_data['let_system_decide_trl'] = True
+        else:
+            questionnaire_data['let_system_decide_trl'] = False
+        
+        # Validate grant sources
+        valid_source_codes = [source[0] for source in GRANT_SOURCES]
+        validated_sources = [
+            source for source in questionnaire_data['grant_sources_preference']
+            if source in valid_source_codes
+        ]
+        questionnaire_data['grant_sources_preference'] = validated_sources
+        
+        is_default = request.POST.get('is_default') == 'on'
+        if is_default:
+            FundingQuestionnaire.objects.filter(
+                user=request.user,
+                is_default=True
+            ).exclude(id=questionnaire.id).update(is_default=False)
+        
+        questionnaire.name = name
+        questionnaire.questionnaire_data = questionnaire_data
+        questionnaire.is_default = is_default
+        questionnaire.save()
+        
+        messages.success(request, 'Questionnaire updated successfully.')
+        return redirect('companies:questionnaire_detail', id=id)
+    
+    # GET request
+    context = {
+        'questionnaire': questionnaire,
+        'trl_levels': TRL_LEVELS,
+        'grant_sources': GRANT_SOURCES,
+        'existing_data': questionnaire.questionnaire_data or {},
+        'mode': 'edit',
+    }
+    return render(request, 'companies/questionnaire_form.html', context)
+
+
+@login_required
+@require_POST
+def questionnaire_delete(request, id):
+    """Delete a questionnaire."""
+    questionnaire = get_object_or_404(FundingQuestionnaire, id=id)
+    
+    if request.user != questionnaire.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to delete this questionnaire.')
+        return redirect('companies:questionnaires_list')
+    
+    questionnaire.delete()
+    messages.success(request, 'Questionnaire deleted successfully.')
+    return redirect('companies:questionnaires_list')
+
+
+@login_required
+def questionnaire_apply(request, id, funding_search_id):
+    """Apply a questionnaire to a funding search."""
+    questionnaire = get_object_or_404(FundingQuestionnaire, id=id)
+    funding_search = get_object_or_404(FundingSearch, id=funding_search_id)
+    
+    # Check permissions
+    if request.user != questionnaire.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to use this questionnaire.')
+        return redirect('companies:funding_search_detail', id=funding_search_id)
+    
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to edit this funding search.')
+        return redirect('companies:funding_search_detail', id=funding_search_id)
+    
+    # Apply questionnaire to funding search
+    questionnaire.apply_to_funding_search(funding_search)
+    
+    # Link questionnaire to funding search
+    funding_search.questionnaire = questionnaire
+    funding_search.save()
+    
+    messages.success(request, f'Questionnaire "{questionnaire.name}" applied successfully.')
+    return redirect('companies:funding_search_detail', id=funding_search_id)
 
 
 @login_required
@@ -460,6 +734,18 @@ def funding_search_create(request, company_id):
                     'trl_levels': TRL_LEVELS,
                 })
         
+        # Get questionnaire if selected
+        questionnaire_id = request.POST.get('questionnaire_id')
+        questionnaire = None
+        if questionnaire_id:
+            try:
+                questionnaire = FundingQuestionnaire.objects.get(
+                    id=questionnaire_id,
+                    user=request.user
+                )
+            except FundingQuestionnaire.DoesNotExist:
+                pass
+        
         funding_search = FundingSearch.objects.create(
             company=company,
             user=request.user,
@@ -467,15 +753,30 @@ def funding_search_create(request, company_id):
             notes=notes,
             trl_level=request.POST.get('trl_level', '') or None,  # Keep for backwards compatibility
             trl_levels=validated_trl_levels,
+            questionnaire=questionnaire,
         )
+        
+        # Apply questionnaire if selected
+        if questionnaire:
+            questionnaire.apply_to_funding_search(funding_search)
         
         messages.success(request, 'Funding search created successfully.')
         return redirect('companies:funding_search_select_data', id=funding_search.id)
     
     # GET request - show the form
+    # Get user's questionnaires
+    questionnaires = FundingQuestionnaire.objects.filter(
+        user=request.user
+    ).order_by('-is_default', '-updated_at')
+    
+    # Get default questionnaire
+    default_questionnaire = questionnaires.filter(is_default=True).first()
+    
     context = {
         'company': company,
         'trl_levels': TRL_LEVELS,
+        'questionnaires': questionnaires,
+        'default_questionnaire': default_questionnaire,
     }
     return render(request, 'companies/funding_search_create.html', context)
 
@@ -629,6 +930,13 @@ def funding_search_detail(request, id):
     if current_view not in allowed_views:
         current_view = 'list'
     
+    # Get user's questionnaires for applying to funding search
+    questionnaires = []
+    if can_edit:
+        questionnaires = FundingQuestionnaire.objects.filter(
+            user=request.user
+        ).order_by('-is_default', '-updated_at')
+    
     context = {
         'funding_search': funding_search,
         'can_edit': can_edit,
@@ -643,6 +951,7 @@ def funding_search_detail(request, id):
         'total_attachments_count': total_attachments_count,
         'current_tab': current_tab,
         'current_view': current_view,
+        'questionnaires': questionnaires,
     }
     return render(request, 'companies/funding_search_detail.html', context)
 

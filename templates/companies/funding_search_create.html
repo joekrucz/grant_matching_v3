@@ -27,6 +27,28 @@
                     </div>
                     
                     <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Use Questionnaire (Optional)</span>
+                        </label>
+                        <select name="questionnaire_id" class="select select-bordered">
+                            <option value="">-- No questionnaire --</option>
+                            {% for questionnaire in questionnaires %}
+                            <option value="{{ questionnaire.id }}" 
+                                    {% if default_questionnaire and questionnaire.id == default_questionnaire.id %}selected{% endif %}>
+                                {{ questionnaire.name }}{% if questionnaire.is_default %} (Default){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="label">
+                            <span class="label-text-alt">
+                                <a href="{% url 'companies:questionnaires_list' %}" class="link link-primary">
+                                    Manage questionnaires
+                                </a>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-control mb-4">
                         <label class="label" for="trl-levels-dropdown">
                             <span class="label-text">TRL Levels</span>
                         </label>

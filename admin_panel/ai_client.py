@@ -471,6 +471,42 @@ class AiAssistantClient:
         }
         return self._call_json_model(system_prompt, payload, max_tokens=800)
 
+    def generate_sales_qualification_questionnaire(self, eligibility_items: List[str]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Generate a sales qualification-friendly questionnaire from eligibility items."""
+        system_prompt = (
+            "You are a sales qualification expert helping to create effective qualification questionnaires for grant eligibility.\n"
+            "Your task is to transform technical eligibility requirements into conversational, sales-friendly questions that can be used during sales calls.\n"
+            "\n"
+            "Guidelines:\n"
+            "- Convert each eligibility requirement into a natural, conversational question\n"
+            "- Questions should be easy to ask during a sales call and easy for prospects to answer\n"
+            "- Use open-ended questions when possible, but include yes/no questions for quick qualification\n"
+            "- Group related requirements into logical sections\n"
+            "- Make questions sound professional but approachable - avoid jargon\n"
+            "- Include follow-up questions or probing questions where helpful\n"
+            "- Order questions logically (e.g., company basics first, then specific requirements)\n"
+            "- Add context or explanation where needed to help the salesperson understand why the question matters\n"
+            "- Ensure the questionnaire covers the majority of eligibility criteria comprehensively\n"
+            "\n"
+            "Output format:\n"
+            "Return a JSON object with:\n"
+            "- \"sections\": Array of section objects, each with:\n"
+            "  - \"title\": Section heading (e.g., \"Company Information\", \"Project Requirements\")\n"
+            "  - \"questions\": Array of question objects, each with:\n"
+            "    - \"question\": The sales-friendly question text\n"
+            "    - \"type\": \"yes_no\", \"open_ended\", or \"multiple_choice\"\n"
+            "    - \"options\": Array of options (only for multiple_choice type)\n"
+            "    - \"follow_up\": Optional follow-up question or probing question\n"
+            "    - \"context\": Optional brief explanation of why this question matters\n"
+            "- \"introduction\": A brief introduction text for the salesperson to use when starting the qualification\n"
+            "- \"summary\": A brief summary of what the questionnaire covers\n"
+        )
+        payload = {
+            "task": "generate_sales_qualification_questionnaire",
+            "eligibility_items": eligibility_items,
+        }
+        return self._call_json_model(system_prompt, payload, max_tokens=2000)
+
     def exclusions_checklist(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
         """Generate an exclusions checklist - what the grant will NOT fund."""
         system_prompt = (

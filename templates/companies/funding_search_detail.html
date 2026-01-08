@@ -231,6 +231,53 @@
             <div class="card-body">
         <h2 class="card-title text-lg mb-4">Grant Matching Setup</h2>
         
+        {% if can_edit %}
+        <!-- Questionnaire Management Section -->
+        <div class="mb-6 p-4 bg-base-100 rounded-lg border border-base-300">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-semibold">Questionnaire</h3>
+                <a href="{% url 'companies:questionnaires_list' %}" class="btn btn-sm btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Manage Questionnaires
+                </a>
+            </div>
+            
+            {% if funding_search.questionnaire %}
+            <div class="mb-3">
+                <div class="badge badge-primary">
+                    Using: {{ funding_search.questionnaire.name }}
+                </div>
+                {% if funding_search.questionnaire.last_used_at %}
+                <span class="text-xs text-base-content/60 ml-2">
+                    Applied: {{ funding_search.questionnaire.last_used_at|date:"M d, Y" }}
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if questionnaires %}
+            <div class="dropdown dropdown-end">
+                <label tabindex="0" class="btn btn-sm btn-primary">
+                    Apply Questionnaire
+                </label>
+                <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52 z-[1]">
+                    {% for questionnaire in questionnaires %}
+                    <li>
+                        <a href="{% url 'companies:questionnaire_apply' questionnaire.id funding_search.id %}">
+                            {{ questionnaire.name }}{% if questionnaire.is_default %} (Default){% endif %}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% else %}
+            <p class="text-xs text-base-content/60">No questionnaires available. <a href="{% url 'companies:questionnaires_list' %}" class="link link-primary">Create one</a></p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
                                 {% if funding_search.matching_status == 'running' %}
         <div class="mb-4">
                                 <div class="badge badge-warning">Locked - Matching in progress</div>

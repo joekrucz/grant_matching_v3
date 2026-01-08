@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Funding Questionnaires - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Funding Questionnaires</h1>
+        <a href="{% url 'companies:questionnaire_create' %}" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            New Questionnaire
+        </a>
+    </div>
+    
+    {% if page_obj %}
+    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {% for questionnaire in page_obj %}
+        <div class="card bg-base-200 border border-base-300">
+            <div class="card-body">
+                <div class="flex justify-between items-start mb-2">
+                    <h2 class="card-title text-lg">
+                        {{ questionnaire.name }}
+                        {% if questionnaire.is_default %}
+                        <span class="badge badge-primary badge-sm">Default</span>
+                        {% endif %}
+                    </h2>
+                </div>
+                
+                <div class="text-xs text-base-content/60 space-y-1 mb-4">
+                    <div>Created: {{ questionnaire.created_at|date:"M d, Y" }}</div>
+                    {% if questionnaire.last_used_at %}
+                    <div>Last used: {{ questionnaire.last_used_at|date:"M d, Y" }}</div>
+                    {% else %}
+                    <div>Never used</div>
+                    {% endif %}
+                    <div>Used in {{ questionnaire.usage_count }} search{{ questionnaire.usage_count|pluralize }}</div>
+                </div>
+                
+                <div class="card-actions justify-end">
+                    <a href="{% url 'companies:questionnaire_detail' questionnaire.id %}" 
+                       class="btn btn-sm btn-primary">
+                        Edit
+                    </a>
+                    <form method="post" 
+                          action="{% url 'companies:questionnaire_delete' questionnaire.id %}"
+                          onsubmit="return confirm('Delete this questionnaire?');"
+                          class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-error">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="flex justify-center mt-6">
+        <div class="join">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" class="join-item btn">«</a>
+            {% endif %}
+            <span class="join-item btn btn-active">{{ page_obj.number }}</span>
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" class="join-item btn">»</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div class="card bg-base-200 border border-base-300">
+        <div class="card-body text-center py-12">
+            <p class="text-base-content/70 mb-4">No questionnaires yet.</p>
+            <a href="{% url 'companies:questionnaire_create' %}" class="btn btn-primary">
+                Create Your First Questionnaire
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

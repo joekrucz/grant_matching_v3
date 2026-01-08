@@ -1,0 +1,515 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if mode == 'edit' %}Edit{% else %}Create{% endif %} Questionnaire - Grants Aggregator{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="card bg-base-200 border border-base-300">
+        <div class="card-body">
+            <h1 class="card-title text-2xl mb-2">
+                {% if mode == 'edit' %}Edit Questionnaire{% else %}Create New Questionnaire{% endif %}
+            </h1>
+            <p class="text-base-content/70 mb-6">
+                Help us understand your project better to improve grant matching accuracy.
+                This will auto-populate your funding search settings.
+            </p>
+            
+            <form method="post" id="questionnaire-form">
+                {% csrf_token %}
+                
+                <!-- Questionnaire Name -->
+                <div class="form-control mb-6">
+                    <label class="label" for="id_name">
+                        <span class="label-text">Questionnaire Name <span class="text-error">*</span></span>
+                    </label>
+                    <input 
+                        type="text" 
+                        name="name" 
+                        id="id_name" 
+                        required 
+                        value="{% if mode == 'edit' %}{{ questionnaire.name }}{% endif %}"
+                        placeholder="e.g., AI Startup Q1 2025"
+                        class="input input-bordered"
+                    >
+                </div>
+                
+                <!-- Progress indicator -->
+                <div class="mb-6">
+                    <div class="flex justify-between text-xs text-base-content/60 mb-2">
+                        <span>Step <span id="current-step">1</span> of 6</span>
+                        <span id="progress-percent">17%</span>
+                    </div>
+                    <progress class="progress progress-primary w-full" 
+                              id="progress-bar" 
+                              value="17" 
+                              max="100"></progress>
+                </div>
+                
+                <!-- Step 1: Company Overview -->
+                <div class="questionnaire-step" data-step="1">
+                    <h2 class="text-xl font-bold mb-4">Company Overview</h2>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Company Stage <span class="text-error">*</span></span>
+                        </label>
+                        <select name="company_stage" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="pre_seed" {% if existing_data.company_stage == 'pre_seed' %}selected{% endif %}>Pre-seed / Idea stage</option>
+                            <option value="seed" {% if existing_data.company_stage == 'seed' %}selected{% endif %}>Seed / Early stage</option>
+                            <option value="series_a" {% if existing_data.company_stage == 'series_a' %}selected{% endif %}>Series A / Growth stage</option>
+                            <option value="series_b_plus" {% if existing_data.company_stage == 'series_b_plus' %}selected{% endif %}>Series B+ / Established</option>
+                            <option value="not_registered" {% if existing_data.company_stage == 'not_registered' %}selected{% endif %}>Not yet registered</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Company Size <span class="text-error">*</span></span>
+                        </label>
+                        <select name="company_size" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="solo" {% if existing_data.company_size == 'solo' %}selected{% endif %}>Solo founder</option>
+                            <option value="2_5" {% if existing_data.company_size == '2_5' %}selected{% endif %}>2-5 employees</option>
+                            <option value="6_20" {% if existing_data.company_size == '6_20' %}selected{% endif %}>6-20 employees</option>
+                            <option value="21_50" {% if existing_data.company_size == '21_50' %}selected{% endif %}>21-50 employees</option>
+                            <option value="51_200" {% if existing_data.company_size == '51_200' %}selected{% endif %}>51-200 employees</option>
+                            <option value="200_plus" {% if existing_data.company_size == '200_plus' %}selected{% endif %}>200+ employees</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Primary Sector/Industry <span class="text-error">*</span></span>
+                        </label>
+                        <select name="primary_sector" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="healthcare" {% if existing_data.primary_sector == 'healthcare' %}selected{% endif %}>Healthcare/MedTech</option>
+                            <option value="ai_ml" {% if existing_data.primary_sector == 'ai_ml' %}selected{% endif %}>AI/Machine Learning</option>
+                            <option value="cleantech" {% if existing_data.primary_sector == 'cleantech' %}selected{% endif %}>CleanTech/Energy</option>
+                            <option value="fintech" {% if existing_data.primary_sector == 'fintech' %}selected{% endif %}>FinTech</option>
+                            <option value="edtech" {% if existing_data.primary_sector == 'edtech' %}selected{% endif %}>EdTech</option>
+                            <option value="manufacturing" {% if existing_data.primary_sector == 'manufacturing' %}selected{% endif %}>Manufacturing/Industrial</option>
+                            <option value="software" {% if existing_data.primary_sector == 'software' %}selected{% endif %}>Software/SaaS</option>
+                            <option value="hardware" {% if existing_data.primary_sector == 'hardware' %}selected{% endif %}>Hardware/IoT</option>
+                            <option value="biotech" {% if existing_data.primary_sector == 'biotech' %}selected{% endif %}>Biotech/Pharma</option>
+                            <option value="other" {% if existing_data.primary_sector == 'other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text">Country</span>
+                            </label>
+                            <input type="text" name="country" class="input input-bordered" 
+                                   value="{% if existing_data.company_location.country %}{{ existing_data.company_location.country }}{% endif %}"
+                                   placeholder="e.g., United Kingdom">
+                        </div>
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text">Region/County</span>
+                            </label>
+                            <input type="text" name="region" class="input input-bordered"
+                                   value="{% if existing_data.company_location.region %}{{ existing_data.company_location.region }}{% endif %}"
+                                   placeholder="e.g., London">
+                        </div>
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text">City</span>
+                            </label>
+                            <input type="text" name="city" class="input input-bordered"
+                                   value="{% if existing_data.company_location.city %}{{ existing_data.company_location.city }}{% endif %}"
+                                   placeholder="e.g., London">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 2: Project Information -->
+                <div class="questionnaire-step hidden" data-step="2">
+                    <h2 class="text-xl font-bold mb-4">Project Information</h2>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label" for="project_name">
+                            <span class="label-text">Project Name/Title <span class="text-error">*</span></span>
+                        </label>
+                        <input type="text" name="project_name" id="project_name" required
+                               value="{% if existing_data.project_name %}{{ existing_data.project_name }}{% endif %}"
+                               class="input input-bordered" placeholder="e.g., AI-Powered Medical Diagnosis Platform">
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label" for="project_description">
+                            <span class="label-text">Project Description <span class="text-error">*</span></span>
+                            <span class="label-text-alt">What does your project do? (2-3 sentences)</span>
+                        </label>
+                        <textarea name="project_description" id="project_description" required rows="4"
+                                  class="textarea textarea-bordered" placeholder="Describe your project...">{% if existing_data.project_description %}{{ existing_data.project_description }}{% endif %}</textarea>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label" for="problem_statement">
+                            <span class="label-text">Problem Statement <span class="text-error">*</span></span>
+                            <span class="label-text-alt">What problem does this solve?</span>
+                        </label>
+                        <textarea name="problem_statement" id="problem_statement" required rows="3"
+                                  class="textarea textarea-bordered" placeholder="Describe the problem...">{% if existing_data.problem_statement %}{{ existing_data.problem_statement }}{% endif %}</textarea>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Technology Readiness Level (TRL) <span class="text-error">*</span></span>
+                        </label>
+                        <div class="space-y-2">
+                            {% for value, label in trl_levels %}
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="trl_levels" value="{{ value }}" class="checkbox checkbox-sm"
+                                       {% if value in existing_data.trl_levels %}checked{% endif %}>
+                                <span class="label-text">{{ label }}</span>
+                            </label>
+                            {% endfor %}
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="let_system_decide_trl" class="checkbox checkbox-sm"
+                                       {% if existing_data.let_system_decide_trl %}checked{% endif %}>
+                                <span class="label-text">Not sure - let the system assess</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Project Type <span class="text-error">*</span></span>
+                            <span class="label-text-alt">Select all that apply</span>
+                        </label>
+                        <div class="space-y-2">
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="project_types" value="rnd" class="checkbox checkbox-sm"
+                                       {% if 'rnd' in existing_data.project_types %}checked{% endif %}>
+                                <span class="label-text">Research & Development</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="project_types" value="product" class="checkbox checkbox-sm"
+                                       {% if 'product' in existing_data.project_types %}checked{% endif %}>
+                                <span class="label-text">Product Development</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="project_types" value="commercialization" class="checkbox checkbox-sm"
+                                       {% if 'commercialization' in existing_data.project_types %}checked{% endif %}>
+                                <span class="label-text">Commercialization</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="project_types" value="market_entry" class="checkbox checkbox-sm"
+                                       {% if 'market_entry' in existing_data.project_types %}checked{% endif %}>
+                                <span class="label-text">Market Entry/Expansion</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="project_types" value="innovation" class="checkbox checkbox-sm"
+                                       {% if 'innovation' in existing_data.project_types %}checked{% endif %}>
+                                <span class="label-text">Innovation/New Technology</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 3: Funding Requirements -->
+                <div class="questionnaire-step hidden" data-step="3">
+                    <h2 class="text-xl font-bold mb-4">Funding Requirements</h2>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Funding Amount Needed <span class="text-error">*</span></span>
+                        </label>
+                        <select name="funding_amount_needed" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="under_50k" {% if existing_data.funding_amount_needed == 'under_50k' %}selected{% endif %}>Under £50,000</option>
+                            <option value="50k_100k" {% if existing_data.funding_amount_needed == '50k_100k' %}selected{% endif %}>£50,000 - £100,000</option>
+                            <option value="100k_250k" {% if existing_data.funding_amount_needed == '100k_250k' %}selected{% endif %}>£100,000 - £250,000</option>
+                            <option value="250k_500k" {% if existing_data.funding_amount_needed == '250k_500k' %}selected{% endif %}>£250,000 - £500,000</option>
+                            <option value="500k_1m" {% if existing_data.funding_amount_needed == '500k_1m' %}selected{% endif %}>£500,000 - £1,000,000</option>
+                            <option value="1m_2.5m" {% if existing_data.funding_amount_needed == '1m_2.5m' %}selected{% endif %}>£1,000,000 - £2,500,000</option>
+                            <option value="2.5m_plus" {% if existing_data.funding_amount_needed == '2.5m_plus' %}selected{% endif %}>£2,500,000+</option>
+                            <option value="flexible" {% if existing_data.funding_amount_needed == 'flexible' %}selected{% endif %}>Flexible / Open to any amount</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Funding Timeline <span class="text-error">*</span></span>
+                        </label>
+                        <select name="funding_timeline" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="within_3_months" {% if existing_data.funding_timeline == 'within_3_months' %}selected{% endif %}>Within 3 months</option>
+                            <option value="3_6_months" {% if existing_data.funding_timeline == '3_6_months' %}selected{% endif %}>3-6 months</option>
+                            <option value="6_12_months" {% if existing_data.funding_timeline == '6_12_months' %}selected{% endif %}>6-12 months</option>
+                            <option value="12_plus_months" {% if existing_data.funding_timeline == '12_plus_months' %}selected{% endif %}>12+ months</option>
+                            <option value="flexible" {% if existing_data.funding_timeline == 'flexible' %}selected{% endif %}>Flexible</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Funding Purpose <span class="text-error">*</span></span>
+                            <span class="label-text-alt">Select all that apply</span>
+                        </label>
+                        <div class="space-y-2">
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="funding_purposes" value="rnd" class="checkbox checkbox-sm"
+                                       {% if 'rnd' in existing_data.funding_purposes %}checked{% endif %}>
+                                <span class="label-text">R&D costs</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="funding_purposes" value="equipment" class="checkbox checkbox-sm"
+                                       {% if 'equipment' in existing_data.funding_purposes %}checked{% endif %}>
+                                <span class="label-text">Equipment/Machinery</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="funding_purposes" value="staff" class="checkbox checkbox-sm"
+                                       {% if 'staff' in existing_data.funding_purposes %}checked{% endif %}>
+                                <span class="label-text">Staff/Salaries</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="funding_purposes" value="marketing" class="checkbox checkbox-sm"
+                                       {% if 'marketing' in existing_data.funding_purposes %}checked{% endif %}>
+                                <span class="label-text">Marketing/Business Development</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Step 4: Eligibility & Constraints -->
+                <div class="questionnaire-step hidden" data-step="4">
+                    <h2 class="text-xl font-bold mb-4">Eligibility & Constraints</h2>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Organization Type <span class="text-error">*</span></span>
+                        </label>
+                        <select name="organization_type" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="ltd" {% if existing_data.organization_type == 'ltd' %}selected{% endif %}>Limited Company (Ltd)</option>
+                            <option value="plc" {% if existing_data.organization_type == 'plc' %}selected{% endif %}>Public Limited Company (PLC)</option>
+                            <option value="cic" {% if existing_data.organization_type == 'cic' %}selected{% endif %}>Community Interest Company (CIC)</option>
+                            <option value="charity" {% if existing_data.organization_type == 'charity' %}selected{% endif %}>Charity/Non-profit</option>
+                            <option value="university" {% if existing_data.organization_type == 'university' %}selected{% endif %}>University/Research Institution</option>
+                            <option value="partnership" {% if existing_data.organization_type == 'partnership' %}selected{% endif %}>Partnership</option>
+                            <option value="sole_trader" {% if existing_data.organization_type == 'sole_trader' %}selected{% endif %}>Sole Trader</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Geographic Eligibility <span class="text-error">*</span></span>
+                        </label>
+                        <select name="geographic_eligibility" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="uk_based" {% if existing_data.geographic_eligibility == 'uk_based' %}selected{% endif %}>Yes, UK-based company</option>
+                            <option value="eu_based" {% if existing_data.geographic_eligibility == 'eu_based' %}selected{% endif %}>Yes, EU-based (may be eligible for some UK grants)</option>
+                            <option value="international" {% if existing_data.geographic_eligibility == 'international' %}selected{% endif %}>International (looking for UK grants that accept international applicants)</option>
+                            <option value="not_sure" {% if existing_data.geographic_eligibility == 'not_sure' %}selected{% endif %}>Not sure</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Collaboration Requirements <span class="text-error">*</span></span>
+                        </label>
+                        <select name="collaboration_requirements" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="prefer_collaborative" {% if existing_data.collaboration_requirements == 'prefer_collaborative' %}selected{% endif %}>Yes, prefer collaborative projects</option>
+                            <option value="open_to_collaboration" {% if existing_data.collaboration_requirements == 'open_to_collaboration' %}selected{% endif %}>Yes, open to collaboration</option>
+                            <option value="single_org_only" {% if existing_data.collaboration_requirements == 'single_org_only' %}selected{% endif %}>No, single organization only</option>
+                            <option value="not_sure" {% if existing_data.collaboration_requirements == 'not_sure' %}selected{% endif %}>Not sure</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Step 5: Competitive Factors -->
+                <div class="questionnaire-step hidden" data-step="5">
+                    <h2 class="text-xl font-bold mb-4">Competitive Factors</h2>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Key Strengths <span class="text-error">*</span></span>
+                            <span class="label-text-alt">Select top 3</span>
+                        </label>
+                        <div class="space-y-2">
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="key_strengths" value="strong_ip" class="checkbox checkbox-sm"
+                                       {% if 'strong_ip' in existing_data.key_strengths %}checked{% endif %}>
+                                <span class="label-text">Strong IP/Patents</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="key_strengths" value="experienced_team" class="checkbox checkbox-sm"
+                                       {% if 'experienced_team' in existing_data.key_strengths %}checked{% endif %}>
+                                <span class="label-text">Experienced team</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="key_strengths" value="proven_technology" class="checkbox checkbox-sm"
+                                       {% if 'proven_technology' in existing_data.key_strengths %}checked{% endif %}>
+                                <span class="label-text">Proven technology</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="key_strengths" value="market_traction" class="checkbox checkbox-sm"
+                                       {% if 'market_traction' in existing_data.key_strengths %}checked{% endif %}>
+                                <span class="label-text">Market traction/customers</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="key_strengths" value="strategic_partnerships" class="checkbox checkbox-sm"
+                                       {% if 'strategic_partnerships' in existing_data.key_strengths %}checked{% endif %}>
+                                <span class="label-text">Strategic partnerships</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Project Impact <span class="text-error">*</span></span>
+                        </label>
+                        <select name="project_impact" class="select select-bordered" required>
+                            <option value="">-- Select --</option>
+                            <option value="economic" {% if existing_data.project_impact == 'economic' %}selected{% endif %}>Economic/Commercial impact</option>
+                            <option value="social" {% if existing_data.project_impact == 'social' %}selected{% endif %}>Social impact</option>
+                            <option value="environmental" {% if existing_data.project_impact == 'environmental' %}selected{% endif %}>Environmental impact</option>
+                            <option value="health" {% if existing_data.project_impact == 'health' %}selected{% endif %}>Health/Medical impact</option>
+                            <option value="scientific" {% if existing_data.project_impact == 'scientific' %}selected{% endif %}>Scientific/Research impact</option>
+                            <option value="multiple" {% if existing_data.project_impact == 'multiple' %}selected{% endif %}>Multiple impacts</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label" for="target_market">
+                            <span class="label-text">Target Market</span>
+                            <span class="label-text-alt">Optional but recommended</span>
+                        </label>
+                        <textarea name="target_market" id="target_market" rows="3"
+                                  class="textarea textarea-bordered" placeholder="Who are your target customers/users?">{% if existing_data.target_market %}{{ existing_data.target_market }}{% endif %}</textarea>
+                    </div>
+                </div>
+                
+                <!-- Step 6: Additional Context -->
+                <div class="questionnaire-step hidden" data-step="6">
+                    <h2 class="text-xl font-bold mb-4">Additional Context</h2>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label">
+                            <span class="label-text">Grant Sources Preference</span>
+                            <span class="label-text-alt">Optional</span>
+                        </label>
+                        <div class="space-y-2">
+                            {% for source_code, source_name in grant_sources %}
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="grant_sources_preference" value="{{ source_code }}" class="checkbox checkbox-sm"
+                                       {% if source_code in existing_data.grant_sources_preference %}checked{% endif %}>
+                                <span class="label-text">{{ source_name }}</span>
+                            </label>
+                            {% endfor %}
+                            <label class="label cursor-pointer justify-start gap-3">
+                                <input type="checkbox" name="grant_sources_preference" value="all" class="checkbox checkbox-sm"
+                                       {% if 'all' in existing_data.grant_sources_preference %}checked{% endif %}>
+                                <span class="label-text">All sources</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label" for="additional_information">
+                            <span class="label-text">Additional Information</span>
+                            <span class="label-text-alt">Optional</span>
+                        </label>
+                        <textarea name="additional_information" id="additional_information" rows="4"
+                                  class="textarea textarea-bordered" placeholder="Any other information that would help match you with the right grants...">{% if existing_data.additional_information %}{{ existing_data.additional_information }}{% endif %}</textarea>
+                    </div>
+                    
+                    <div class="form-control mb-4">
+                        <label class="label cursor-pointer justify-start gap-3">
+                            <input type="checkbox" name="is_default" class="checkbox checkbox-sm"
+                                   {% if mode == 'edit' and questionnaire.is_default %}checked{% endif %}>
+                            <span class="label-text">Set as default questionnaire</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Navigation buttons -->
+                <div class="flex justify-between mt-8">
+                    <button type="button" 
+                            id="prev-btn" 
+                            class="btn btn-ghost hidden">
+                        Previous
+                    </button>
+                    <div class="ml-auto">
+                        <a href="{% if mode == 'edit' %}{% url 'companies:questionnaire_detail' questionnaire.id %}{% else %}{% url 'companies:questionnaires_list' %}{% endif %}" 
+                           class="btn btn-ghost mr-2">
+                            Cancel
+                        </a>
+                        <button type="button" 
+                                id="next-btn" 
+                                class="btn btn-primary">
+                            Next
+                        </button>
+                        <button type="submit" 
+                                id="submit-btn" 
+                                class="btn btn-primary hidden">
+                            {% if mode == 'edit' %}Update{% else %}Create{% endif %} Questionnaire
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentStep = 1;
+    const totalSteps = 6;
+    const steps = document.querySelectorAll('.questionnaire-step');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const submitBtn = document.getElementById('submit-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const currentStepSpan = document.getElementById('current-step');
+    const progressPercentSpan = document.getElementById('progress-percent');
+    
+    function updateProgress() {
+        const percent = Math.round((currentStep / totalSteps) * 100);
+        progressBar.value = percent;
+        progressPercentSpan.textContent = percent + '%';
+        currentStepSpan.textContent = currentStep;
+    }
+    
+    function showStep(step) {
+        steps.forEach((s, index) => {
+            if (index + 1 === step) {
+                s.classList.remove('hidden');
+            } else {
+                s.classList.add('hidden');
+            }
+        });
+        
+        // Show/hide navigation buttons
+        prevBtn.classList.toggle('hidden', step === 1);
+        nextBtn.classList.toggle('hidden', step === totalSteps);
+        submitBtn.classList.toggle('hidden', step !== totalSteps);
+        
+        updateProgress();
+    }
+    
+    nextBtn.addEventListener('click', function() {
+        if (currentStep < totalSteps) {
+            currentStep++;
+            showStep(currentStep);
+        }
+    });
+    
+    prevBtn.addEventListener('click', function() {
+        if (currentStep > 1) {
+            currentStep--;
+            showStep(currentStep);
+        }
+    });
+    
+    // Initialize
+    showStep(1);
+});
+</script>
+{% endblock %}

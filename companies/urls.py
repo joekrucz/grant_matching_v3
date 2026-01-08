@@ -34,5 +34,11 @@ urlpatterns = [
     path('grant_match_results/<int:match_id>/undo_checklist/', views.undo_checklist_item, name='undo_checklist_item'),
     path('search', views.company_search, name='search'),
     path('<int:id>/onboarding', views.company_onboarding, name='onboarding'),
+    # Questionnaire management
+    path('questionnaires', views.questionnaires_list, name='questionnaires_list'),
+    path('questionnaires/new', views.questionnaire_create, name='questionnaire_create'),
+    path('questionnaires/<int:id>', views.questionnaire_detail, name='questionnaire_detail'),
+    path('questionnaires/<int:id>/delete', views.questionnaire_delete, name='questionnaire_delete'),
+    path('questionnaires/<int:id>/apply/<int:funding_search_id>', views.questionnaire_apply, name='questionnaire_apply'),
 ]
 

@@ -363,6 +363,16 @@ class FundingSearch(models.Model):
     selected_grant_sources = models.JSONField(default=list, blank=True)  # List of grant source codes to match against (e.g., ['ukri', 'nihr'])
     exclude_closed_competitions = models.BooleanField(default=True)  # If True, exclude closed competitions from matching
     
+    # Link to questionnaire used
+    questionnaire = models.ForeignKey(
+        'FundingQuestionnaire',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='funding_searches',
+        help_text="Questionnaire used to populate this funding search"
+    )
+    
     last_matched_at = models.DateTimeField(blank=True, null=True)
     matching_status = models.CharField(max_length=50, default='pending', choices=MATCHING_STATUS_CHOICES, db_index=True)
     matching_error = models.TextField(blank=True, null=True)  # Store error message if matching fails
@@ -633,4 +643,98 @@ class GrantMatchResult(models.Model):
     
     def __str__(self):
         return f"{self.funding_search.name} - {self.grant.title} ({self.match_score:.2f})"
+
+
+class FundingQuestionnaire(models.Model):
+    """Reusable questionnaire template for funding searches."""
+    
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='funding_questionnaires'
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Name for this questionnaire (e.g., 'AI Startup Q1 2025')"
+    )
+    
+    # Questionnaire answers stored as JSON
+    questionnaire_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Stores all questionnaire answers"
+    )
+    
+    # Metadata
+    is_default = models.BooleanField(
+        default=False,
+        help_text="If True, this is the default questionnaire for new funding searches"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_used_at = models.DateTimeField(blank=True, null=True)
+    
+    class Meta:
+        db_table = 'funding_questionnaires'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['user', '-updated_at']),
+            models.Index(fields=['user', 'is_default']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.user.email})"
+    
+    def apply_to_funding_search(self, funding_search):
+        """
+        Apply questionnaire data to a funding search.
+        Auto-populates relevant fields.
+        """
+        from django.utils import timezone
+        from grants.models import GRANT_SOURCES
+        
+        data = self.questionnaire_data
+        
+        # Update project description
+        if data.get('project_description'):
+            funding_search.project_description = data['project_description']
+        
+        # Update TRL levels (validate against TRL_LEVELS)
+        if data.get('trl_levels'):
+            valid_trl_values = [choice[0] for choice in TRL_LEVELS]
+            validated_trl_levels = [
+                level for level in data['trl_levels']
+                if level in valid_trl_values
+            ]
+            funding_search.trl_levels = validated_trl_levels
+        
+        # Handle let_system_decide_trl flag
+        if data.get('let_system_decide_trl'):
+            funding_search.let_system_decide_trl = True
+        
+        # Update grant sources preference (validate against GRANT_SOURCES)
+        if data.get('grant_sources_preference'):
+            valid_source_codes = [source[0] for source in GRANT_SOURCES]
+            validated_sources = [
+                source for source in data['grant_sources_preference']
+                if source in valid_source_codes and source != 'all'
+            ]
+            # If 'all' was selected, leave empty list to match all sources
+            if 'all' in data['grant_sources_preference']:
+                funding_search.selected_grant_sources = []
+            else:
+                funding_search.selected_grant_sources = validated_sources
+        
+        # Update notes with additional context
+        if data.get('additional_information'):
+            if funding_search.notes:
+                funding_search.notes += f"\n\nQuestionnaire Context: {data['additional_information']}"
+            else:
+                funding_search.notes = f"Questionnaire Context: {data['additional_information']}"
+        
+        funding_search.save()
+        
+        # Update last used timestamp
+        self.last_used_at = timezone.now()
+        self.save(update_fields=['last_used_at'])
 
