@@ -567,6 +567,10 @@ def funding_search_detail(request, id):
         funding_search.selected_grant_sources = validated_grant_sources if validated_grant_sources else []
         allowed_fields.append('selected_grant_sources')
         
+        # Get "Exclude closed competitions" checkbox
+        funding_search.exclude_closed_competitions = request.POST.get('exclude_closed_competitions') == 'on'
+        allowed_fields.append('exclude_closed_competitions')
+        
         # SECURITY: Only save explicitly allowed fields
         funding_search.save(update_fields=allowed_fields)
         

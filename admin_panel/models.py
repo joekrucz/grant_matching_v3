@@ -177,4 +177,3 @@ class SystemSettings(models.Model):
         settings_obj, created = cls.objects.get_or_create(id=1, defaults={'grant_matching_batch_size': 1})
         return settings_obj
 
-

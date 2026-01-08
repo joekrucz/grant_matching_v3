@@ -361,6 +361,7 @@ class FundingSearch(models.Model):
     
     # Grant source selection for matching
     selected_grant_sources = models.JSONField(default=list, blank=True)  # List of grant source codes to match against (e.g., ['ukri', 'nihr'])
+    exclude_closed_competitions = models.BooleanField(default=True)  # If True, exclude closed competitions from matching
     
     last_matched_at = models.DateTimeField(blank=True, null=True)
     matching_status = models.CharField(max_length=50, default='pending', choices=MATCHING_STATUS_CHOICES, db_index=True)

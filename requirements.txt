@@ -29,4 +29,3 @@ pytest-mock==3.12.0
 factory-boy==3.3.0
 responses==0.24.1
 freezegun==1.2.2
-

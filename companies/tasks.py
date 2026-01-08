@@ -105,6 +105,15 @@ if CELERY_TASKS_AVAILABLE:
             else:
                 logger.info("No source filter applied - matching against all grant sources")
             
+            # Filter out closed competitions if option is enabled
+            if funding_search.exclude_closed_competitions:
+                now = timezone.now()
+                # Exclude grants where deadline is in the past
+                grants = grants.exclude(deadline__lt=now)
+                logger.info("Excluding closed competitions from matching")
+            else:
+                logger.info("Including all competitions (including closed) in matching")
+            
             if limit:
                 grants = grants[:limit]
             # Get grants with their checklists
