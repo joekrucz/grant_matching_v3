@@ -30,6 +30,7 @@ urlpatterns = [
     path('ai/summarise_grant', views.ai_summarise_grant, name='ai_summarise_grant'),
     path('ai/summarise_company', views.ai_summarise_company, name='ai_summarise_company'),
     path('ai/contextual_qa', views.ai_contextual_qa, name='ai_contextual_qa'),
+    path('system_settings', views.system_settings, name='system_settings'),
     path('ai/grant_company_fit', views.ai_grant_company_fit, name='ai_grant_company_fit'),
     path('ai/search_grants_for_company', views.ai_search_grants_for_company, name='ai_search_grants_for_company'),
     path('ai/search_companies', views.ai_search_companies, name='ai_search_companies'),

@@ -220,6 +220,10 @@ def dashboard(request):
             logger.warning(f"Slack bot logs not available (likely not configured for local dev): {e}")
             # Use default values already set above
     
+    # Get system settings
+    from .models import SystemSettings
+    system_settings = SystemSettings.get_settings()
+    
     context = {
         'total_grants': total_grants,
         'grants_by_source': grants_by_source,
@@ -245,6 +249,7 @@ def dashboard(request):
         'companies_with_360_grants': companies_with_360_grants,
         'companies_updated_recently': companies_updated_recently,
         'companies_needing_refresh': companies_needing_refresh,
+        'system_settings': system_settings,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
@@ -1896,6 +1901,43 @@ def cancel_checklist_generation(request):
         except Exception as e:
             logger.warning(f"Could not cancel checklist generation task {task_id}: {e}")
             messages.error(request, f'Failed to cancel checklist generation job: {str(e)}')
+    
+    return redirect('admin_panel:dashboard')
+
+
+@login_required
+@admin_required
+def system_settings(request):
+    """Get or update system settings."""
+    from .models import SystemSettings
+    from django.http import JsonResponse
+    
+    if request.method == 'GET':
+        settings_obj = SystemSettings.get_settings()
+        return JsonResponse({
+            'grant_matching_batch_size': settings_obj.grant_matching_batch_size,
+        })
+    
+    elif request.method == 'POST':
+        try:
+            settings_obj = SystemSettings.get_settings()
+            batch_size = request.POST.get('grant_matching_batch_size')
+            
+            if batch_size:
+                batch_size = int(batch_size)
+                # Clamp between 1 and 10
+                batch_size = max(1, min(10, batch_size))
+                settings_obj.grant_matching_batch_size = batch_size
+                settings_obj.updated_by = request.user
+                settings_obj.save()
+                messages.success(request, f'Grant matching batch size updated to {batch_size}.')
+            else:
+                messages.error(request, 'Batch size value is required.')
+        except ValueError:
+            messages.error(request, 'Invalid batch size value. Must be a number between 1 and 10.')
+        except Exception as e:
+            logger.error(f"Error updating system settings: {e}", exc_info=True)
+            messages.error(request, f'Error updating settings: {str(e)}')
     
     return redirect('admin_panel:dashboard')
 

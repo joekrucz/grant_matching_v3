@@ -589,6 +589,39 @@
         </div>
     </div>
     
+    <!-- System Settings -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title">System Settings</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="label">
+                        <span class="label-text font-semibold">Grant Matching Batch Size</span>
+                    </label>
+                    <p class="text-sm text-base-content/70 mb-2">
+                        Number of parallel ChatGPT API requests to make simultaneously (1-10). Higher values speed up matching but may hit rate limits.
+                    </p>
+                    <form method="post" action="{% url 'admin_panel:system_settings' %}" class="flex items-center gap-4">
+                        {% csrf_token %}
+                        <input 
+                            type="number" 
+                            name="grant_matching_batch_size" 
+                            value="{{ system_settings.grant_matching_batch_size }}"
+                            min="1" 
+                            max="10" 
+                            class="input input-bordered w-24"
+                            required
+                        >
+                        <button type="submit" class="btn btn-primary">Update</button>
+                    </form>
+                    <p class="text-xs text-base-content/60 mt-2">
+                        Current: {{ system_settings.grant_matching_batch_size }} parallel request{{ system_settings.grant_matching_batch_size|pluralize }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div class="card bg-base-200">
         <div class="card-body">
                 <div class="flex justify-between items-center mb-4">

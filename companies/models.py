@@ -28,7 +28,7 @@ class Company(models.Model):
         ('unregistered', 'Not Yet Registered'),
     ]
     
-    company_number = models.CharField(max_length=20, unique=True, db_index=True, blank=True, null=True)
+    company_number = models.CharField(max_length=50, unique=True, db_index=True, blank=True, null=True)
     name = models.CharField(max_length=500)
     is_registered = models.BooleanField(default=True, db_index=True)  # True if registered with Companies House
     registration_status = models.CharField(
@@ -312,6 +312,24 @@ class CompanyFile(models.Model):
         return self.original_name or self.file.name
 
 
+class FundingSearchFile(models.Model):
+    """Files uploaded for a funding search (e.g., project descriptions, proposals)."""
+
+    funding_search = models.ForeignKey('FundingSearch', on_delete=models.CASCADE, related_name='uploaded_files')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='funding_search_files')
+    file = models.FileField(upload_to='funding_searches/%Y/%m/')
+    original_name = models.CharField(max_length=255, blank=True, null=True)
+    file_type = models.CharField(max_length=50, blank=True, null=True)  # 'pdf', 'docx', 'txt', 'text'
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'funding_search_files'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.original_name or self.file.name
+
+
 class FundingSearch(models.Model):
     """Funding search criteria for a company."""
     
@@ -464,7 +482,22 @@ class FundingSearch(models.Model):
                 file_name = company_file.original_name or (company_file.file.name if company_file.file else 'Unknown')
                 text_parts.append(f"Company File: {file_name} (text extraction failed: {str(e)})\n")
         
-        # Add uploaded file if exists (extract text)
+        # Add uploaded files if exists (extract text from all files)
+        for uploaded_file in self.uploaded_files.all():
+            if uploaded_file.file_type:
+                try:
+                    with uploaded_file.file.open('rb') as f:
+                        extracted_text = extract_text_from_file(f, uploaded_file.file_type)
+                    
+                    if extracted_text:
+                        file_name = uploaded_file.original_name or uploaded_file.file.name
+                        text_parts.append(f"Uploaded File: {file_name}\n{extracted_text}\n")
+                except Exception as e:
+                    # If extraction fails, just include the filename
+                    file_name = uploaded_file.original_name or uploaded_file.file.name
+                    text_parts.append(f"Uploaded File: {file_name} (text extraction failed: {str(e)})\n")
+        
+        # Legacy: Add old uploaded_file if exists (for backward compatibility)
         if self.uploaded_file and self.file_type:
             try:
                 with self.uploaded_file.open('rb') as f:

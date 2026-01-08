@@ -137,3 +137,44 @@ class ConversationMessage(models.Model):
         return f"{self.conversation_id} - {self.role} @ {self.created_at}"
 
 
+class SystemSettings(models.Model):
+    """System-wide settings that can be configured via admin panel."""
+    
+    # Singleton pattern - only one settings record
+    id = models.IntegerField(primary_key=True, default=1, editable=False)
+    
+    # Grant matching settings
+    grant_matching_batch_size = models.IntegerField(
+        default=1,
+        help_text="Number of parallel ChatGPT API requests to make simultaneously (1-10 recommended)"
+    )
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="system_settings_updates"
+    )
+    
+    class Meta:
+        db_table = "admin_system_settings"
+        verbose_name = "System Settings"
+        verbose_name_plural = "System Settings"
+    
+    def __str__(self) -> str:
+        return f"System Settings (Batch Size: {self.grant_matching_batch_size})"
+    
+    def save(self, *args, **kwargs):
+        # Enforce singleton pattern
+        self.id = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_settings(cls):
+        """Get or create the singleton settings instance."""
+        settings_obj, created = cls.objects.get_or_create(id=1, defaults={'grant_matching_batch_size': 1})
+        return settings_obj
+
+
