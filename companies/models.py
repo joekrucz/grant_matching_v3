@@ -405,11 +405,12 @@ class FundingSearch(models.Model):
         """
         Compile text from all selected input sources for matching.
         Returns combined text from:
+        - Questionnaire context (if questionnaire is linked - includes company info, project details, funding requirements, etc.)
+        - Project description (if exists - for backward compatibility)
         - Selected company files (extracted text)
         - Selected company notes (body text)
         - Company website (if selected - includes URL)
         - Uploaded file (if exists - extracted text)
-        - Project description (if exists - for backward compatibility)
         """
         def extract_text_from_file(file, file_type):
             """Extract text from uploaded file."""
@@ -450,6 +451,67 @@ class FundingSearch(models.Model):
                 raise Exception(f"Unsupported file type: {file_type}")
         
         text_parts = []
+        
+        # Add questionnaire context if available (add early for better matching context)
+        if self.questionnaire and self.questionnaire.questionnaire_data:
+            data = self.questionnaire.questionnaire_data
+            questionnaire_context = []
+            
+            # Company information
+            if data.get('company_stage'):
+                questionnaire_context.append(f"Company Stage: {data['company_stage']}")
+            if data.get('company_size'):
+                questionnaire_context.append(f"Company Size: {data['company_size']}")
+            if data.get('primary_sector'):
+                questionnaire_context.append(f"Primary Sector: {data['primary_sector']}")
+            if data.get('company_location'):
+                loc = data['company_location']
+                location_parts = []
+                if loc.get('city'):
+                    location_parts.append(loc['city'])
+                if loc.get('region'):
+                    location_parts.append(loc['region'])
+                if loc.get('country'):
+                    location_parts.append(loc['country'])
+                if location_parts:
+                    questionnaire_context.append(f"Company Location: {', '.join(location_parts)}")
+            
+            # Project information
+            if data.get('project_name'):
+                questionnaire_context.append(f"Project Name: {data['project_name']}")
+            if data.get('problem_statement'):
+                questionnaire_context.append(f"Problem Statement: {data['problem_statement']}")
+            if data.get('project_types'):
+                questionnaire_context.append(f"Project Types: {', '.join(data['project_types'])}")
+            if data.get('target_market'):
+                questionnaire_context.append(f"Target Market: {data['target_market']}")
+            if data.get('project_impact'):
+                questionnaire_context.append(f"Project Impact: {data['project_impact']}")
+            
+            # Funding requirements
+            if data.get('funding_amount_needed'):
+                questionnaire_context.append(f"Funding Amount Needed: {data['funding_amount_needed']}")
+            if data.get('funding_timeline'):
+                questionnaire_context.append(f"Funding Timeline: {data['funding_timeline']}")
+            if data.get('funding_purposes'):
+                questionnaire_context.append(f"Funding Purposes: {', '.join(data['funding_purposes'])}")
+            
+            # Eligibility and requirements
+            if data.get('organization_type'):
+                questionnaire_context.append(f"Organization Type: {data['organization_type']}")
+            if data.get('geographic_eligibility'):
+                questionnaire_context.append(f"Geographic Eligibility: {data['geographic_eligibility']}")
+            if data.get('collaboration_requirements'):
+                questionnaire_context.append(f"Collaboration Requirements: {data['collaboration_requirements']}")
+            if data.get('previous_grant_experience'):
+                questionnaire_context.append(f"Previous Grant Experience: {data['previous_grant_experience']}")
+            
+            # Strengths
+            if data.get('key_strengths'):
+                questionnaire_context.append(f"Key Strengths: {', '.join(data['key_strengths'])}")
+            
+            if questionnaire_context:
+                text_parts.append(f"Questionnaire Context:\n" + "\n".join(questionnaire_context) + "\n")
         
         # Add project description if it exists (for backward compatibility)
         if self.project_description:
