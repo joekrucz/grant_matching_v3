@@ -14,15 +14,11 @@
             <p class="text-lg mb-8 text-base-content/70">
                 We aggregate grants from UKRI, NIHR, Catapult, and Innovate UK, then use AI to help you find the funding that fits your company.
             </p>
+            {% if not user.is_authenticated %}
             <div class="flex justify-center gap-4 flex-wrap">
-                {% if user.is_authenticated %}
-                <a href="{% url 'grants:list' %}" class="btn btn-primary btn-lg">Browse Grants</a>
-                <a href="{% url 'companies:list' %}" class="btn btn-outline btn-lg">View Companies</a>
-                {% else %}
                 <a href="{% url 'users:sign_up' %}" class="btn btn-primary btn-lg">Get Started Free</a>
-                <a href="{% url 'grants:list' %}" class="btn btn-outline btn-lg">Browse Grants</a>
-                {% endif %}
             </div>
+            {% endif %}
         </div>
     </div>
 </div>

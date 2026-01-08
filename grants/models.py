@@ -563,38 +563,3 @@ class ScrapeFinding(models.Model):
         return f"{self.get_finding_type_display()} - {self.grant_title} ({self.grant_source})"
 
 
-class EligibilityQuestionnaire(models.Model):
-    """Store saved eligibility questionnaires with user selections."""
-    
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='eligibility_questionnaires'
-    )
-    name = models.CharField(max_length=255, blank=True, null=True)
-    selected_items = models.JSONField(default=list)  # List of selected item texts
-    all_items = models.JSONField(default=list)  # All items available at time of creation
-    total_grants = models.IntegerField(default=0)  # Total grants with checklists at time of creation
-    sales_questionnaire = models.JSONField(default=dict, blank=True, null=True)  # Generated sales qualification questionnaire from ChatGPT
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'eligibility_questionnaires'
-        indexes = [
-            models.Index(fields=['user', 'created_at']),
-        ]
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        name = self.name or f"Questionnaire {self.id}"
-        return f"{name} - {self.user.email} - {self.created_at.strftime('%Y-%m-%d')}"
-    
-    def selected_count(self):
-        """Return count of selected items."""
-        return len(self.selected_items) if self.selected_items else 0
-    
-    def total_items(self):
-        """Return total items available."""
-        return len(self.all_items) if self.all_items else 0
-
