@@ -245,15 +245,24 @@
             </div>
             
             {% if funding_search.questionnaire %}
-            <div class="mb-3">
+            <div class="mb-3 flex items-center gap-2 flex-wrap">
                 <div class="badge badge-primary">
                     Using: {{ funding_search.questionnaire.name }}
                 </div>
                 {% if funding_search.questionnaire.last_used_at %}
-                <span class="text-xs text-base-content/60 ml-2">
+                <span class="text-xs text-base-content/60">
                     Applied: {{ funding_search.questionnaire.last_used_at|date:"M d, Y" }}
                 </span>
                 {% endif %}
+                <form method="post" action="{% url 'companies:questionnaire_unlink' funding_search.id %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to unlink this questionnaire? The questionnaire data will remain, but it will no longer be associated with this funding search.');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-xs btn-ghost text-error">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Unlink
+                    </button>
+                </form>
             </div>
             {% endif %}
             

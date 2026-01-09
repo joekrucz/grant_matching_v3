@@ -120,9 +120,12 @@ details[open] summary .collapse-indicator::after {
         {% if company.sic_codes_array %}
         <div class="mb-4">
             <div class="text-sm font-semibold mb-1">SIC Codes</div>
-            <div class="flex flex-wrap gap-1">
-                {% for code in company.sic_codes_array %}
-                <span class="badge badge-outline">{{ code }}</span>
+            <div class="space-y-1">
+                {% for sic in company.sic_codes_with_descriptions %}
+                <div class="flex items-start gap-2">
+                    <span class="badge badge-outline">{{ sic.code }}</span>
+                    <span class="text-sm text-base-content/70">{{ sic.description }}</span>
+                </div>
                 {% endfor %}
             </div>
         </div>

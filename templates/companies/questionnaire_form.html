@@ -51,9 +51,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Company Stage <span class="text-error">*</span></span>
+                            <span class="label-text">Company Stage</span>
                         </label>
-                        <select name="company_stage" class="select select-bordered" required>
+                        <select name="company_stage" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="pre_seed" {% if existing_data.company_stage == 'pre_seed' %}selected{% endif %}>Pre-seed / Idea stage</option>
                             <option value="seed" {% if existing_data.company_stage == 'seed' %}selected{% endif %}>Seed / Early stage</option>
@@ -65,9 +65,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Company Size <span class="text-error">*</span></span>
+                            <span class="label-text">Company Size</span>
                         </label>
-                        <select name="company_size" class="select select-bordered" required>
+                        <select name="company_size" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="solo" {% if existing_data.company_size == 'solo' %}selected{% endif %}>Solo founder</option>
                             <option value="2_5" {% if existing_data.company_size == '2_5' %}selected{% endif %}>2-5 employees</option>
@@ -80,9 +80,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Primary Sector/Industry <span class="text-error">*</span></span>
+                            <span class="label-text">Primary Sector/Industry</span>
                         </label>
-                        <select name="primary_sector" class="select select-bordered" required>
+                        <select name="primary_sector" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="healthcare" {% if existing_data.primary_sector == 'healthcare' %}selected{% endif %}>Healthcare/MedTech</option>
                             <option value="ai_ml" {% if existing_data.primary_sector == 'ai_ml' %}selected{% endif %}>AI/Machine Learning</option>
@@ -131,34 +131,34 @@
                     
                     <div class="form-control mb-4">
                         <label class="label" for="project_name">
-                            <span class="label-text">Project Name/Title <span class="text-error">*</span></span>
+                            <span class="label-text">Project Name/Title</span>
                         </label>
-                        <input type="text" name="project_name" id="project_name" required
+                        <input type="text" name="project_name" id="project_name"
                                value="{% if existing_data.project_name %}{{ existing_data.project_name }}{% endif %}"
                                class="input input-bordered" placeholder="e.g., AI-Powered Medical Diagnosis Platform">
                     </div>
                     
                     <div class="form-control mb-4">
                         <label class="label" for="project_description">
-                            <span class="label-text">Project Description <span class="text-error">*</span></span>
+                            <span class="label-text">Project Description</span>
                             <span class="label-text-alt">What does your project do? (2-3 sentences)</span>
                         </label>
-                        <textarea name="project_description" id="project_description" required rows="4"
+                        <textarea name="project_description" id="project_description" rows="4"
                                   class="textarea textarea-bordered" placeholder="Describe your project...">{% if existing_data.project_description %}{{ existing_data.project_description }}{% endif %}</textarea>
                     </div>
                     
                     <div class="form-control mb-4">
                         <label class="label" for="problem_statement">
-                            <span class="label-text">Problem Statement <span class="text-error">*</span></span>
+                            <span class="label-text">Problem Statement</span>
                             <span class="label-text-alt">What problem does this solve?</span>
                         </label>
-                        <textarea name="problem_statement" id="problem_statement" required rows="3"
+                        <textarea name="problem_statement" id="problem_statement" rows="3"
                                   class="textarea textarea-bordered" placeholder="Describe the problem...">{% if existing_data.problem_statement %}{{ existing_data.problem_statement }}{% endif %}</textarea>
                     </div>
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Technology Readiness Level (TRL) <span class="text-error">*</span></span>
+                            <span class="label-text">Technology Readiness Level (TRL)</span>
                         </label>
                         <div class="space-y-2">
                             {% for value, label in trl_levels %}
@@ -178,7 +178,7 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Project Type <span class="text-error">*</span></span>
+                            <span class="label-text">Project Type</span>
                             <span class="label-text-alt">Select all that apply</span>
                         </label>
                         <div class="space-y-2">
@@ -217,9 +217,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Funding Amount Needed <span class="text-error">*</span></span>
+                            <span class="label-text">Funding Amount Needed</span>
                         </label>
-                        <select name="funding_amount_needed" class="select select-bordered" required>
+                        <select name="funding_amount_needed" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="under_50k" {% if existing_data.funding_amount_needed == 'under_50k' %}selected{% endif %}>Under £50,000</option>
                             <option value="50k_100k" {% if existing_data.funding_amount_needed == '50k_100k' %}selected{% endif %}>£50,000 - £100,000</option>
@@ -234,9 +234,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Funding Timeline <span class="text-error">*</span></span>
+                            <span class="label-text">Funding Timeline</span>
                         </label>
-                        <select name="funding_timeline" class="select select-bordered" required>
+                        <select name="funding_timeline" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="within_3_months" {% if existing_data.funding_timeline == 'within_3_months' %}selected{% endif %}>Within 3 months</option>
                             <option value="3_6_months" {% if existing_data.funding_timeline == '3_6_months' %}selected{% endif %}>3-6 months</option>
@@ -248,7 +248,7 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Funding Purpose <span class="text-error">*</span></span>
+                            <span class="label-text">Funding Purpose</span>
                             <span class="label-text-alt">Select all that apply</span>
                         </label>
                         <div class="space-y-2">
@@ -282,9 +282,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Organization Type <span class="text-error">*</span></span>
+                            <span class="label-text">Organization Type</span>
                         </label>
-                        <select name="organization_type" class="select select-bordered" required>
+                        <select name="organization_type" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="ltd" {% if existing_data.organization_type == 'ltd' %}selected{% endif %}>Limited Company (Ltd)</option>
                             <option value="plc" {% if existing_data.organization_type == 'plc' %}selected{% endif %}>Public Limited Company (PLC)</option>
@@ -298,9 +298,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Geographic Eligibility <span class="text-error">*</span></span>
+                            <span class="label-text">Geographic Eligibility</span>
                         </label>
-                        <select name="geographic_eligibility" class="select select-bordered" required>
+                        <select name="geographic_eligibility" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="uk_based" {% if existing_data.geographic_eligibility == 'uk_based' %}selected{% endif %}>Yes, UK-based company</option>
                             <option value="eu_based" {% if existing_data.geographic_eligibility == 'eu_based' %}selected{% endif %}>Yes, EU-based (may be eligible for some UK grants)</option>
@@ -311,9 +311,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Collaboration Requirements <span class="text-error">*</span></span>
+                            <span class="label-text">Collaboration Requirements</span>
                         </label>
-                        <select name="collaboration_requirements" class="select select-bordered" required>
+                        <select name="collaboration_requirements" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="prefer_collaborative" {% if existing_data.collaboration_requirements == 'prefer_collaborative' %}selected{% endif %}>Yes, prefer collaborative projects</option>
                             <option value="open_to_collaboration" {% if existing_data.collaboration_requirements == 'open_to_collaboration' %}selected{% endif %}>Yes, open to collaboration</option>
@@ -329,7 +329,7 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Key Strengths <span class="text-error">*</span></span>
+                            <span class="label-text">Key Strengths</span>
                             <span class="label-text-alt">Select top 3</span>
                         </label>
                         <div class="space-y-2">
@@ -363,9 +363,9 @@
                     
                     <div class="form-control mb-4">
                         <label class="label">
-                            <span class="label-text">Project Impact <span class="text-error">*</span></span>
+                            <span class="label-text">Project Impact</span>
                         </label>
-                        <select name="project_impact" class="select select-bordered" required>
+                        <select name="project_impact" class="select select-bordered">
                             <option value="">-- Select --</option>
                             <option value="economic" {% if existing_data.project_impact == 'economic' %}selected{% endif %}>Economic/Commercial impact</option>
                             <option value="social" {% if existing_data.project_impact == 'social' %}selected{% endif %}>Social impact</option>

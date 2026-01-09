@@ -3,6 +3,7 @@ Celery tasks for grant matching.
 """
 import logging
 from django.utils import timezone
+from django.db import transaction
 from .models import FundingSearch, GrantMatchResult
 from .services import ChatGPTMatchingService, GrantMatchingError
 from grants.models import Grant
@@ -190,10 +191,7 @@ if CELERY_TASKS_AVAILABLE:
                 logger.info(f"Matching cancelled before starting grant matching for funding search {funding_search_id}")
                 return {'status': 'cancelled', 'matches_created': 0, 'grants_processed': 0}
             
-            # Clear old matches
-            GrantMatchResult.objects.filter(funding_search=funding_search).delete()
-            
-            # Match all grants
+            # Match all grants (don't delete old results yet - we'll do that atomically after saving new ones)
             logger.info(f"Starting matching for {len(grants_list)} grants...")
             match_results = matcher.match_all_grants(
                 project_text,
@@ -210,18 +208,42 @@ if CELERY_TASKS_AVAILABLE:
             
             logger.info(f"Matching completed. Got {len(match_results)} results")
             
-            # Save results to database
+            # Save results to database and atomically replace old results
+            # Use a transaction to ensure we don't lose data if saving fails
             matches_created = 0
             matches_updated = 0
+            new_grant_ids = set()  # Track which grants have new results
+            
+            # OPTIMIZATION: Prefetch all grants to avoid N+1 queries
+            # Collect all grant IDs from match results
+            grant_ids = []
             for result in match_results:
-                # Check for cancellation while saving results
-                if is_cancelled():
-                    logger.info(f"Matching cancelled while saving results for funding search {funding_search_id}")
-                    break
                 grant_idx = result['grant_index']
                 if grant_idx < len(grants_list):
-                    grant_data = grants_list[grant_idx]
-                    grant = Grant.objects.get(id=grant_data['id'])
+                    grant_ids.append(grants_list[grant_idx]['id'])
+            
+            # Fetch all grants in a single query
+            grants_dict = {g.id: g for g in Grant.objects.filter(id__in=grant_ids)}
+            logger.info(f"Prefetched {len(grants_dict)} grants for matching results")
+            
+            with transaction.atomic():
+                # First, save all new results (this will update existing ones due to unique constraint)
+                for result in match_results:
+                    # Check for cancellation while saving results
+                    if is_cancelled():
+                        logger.info(f"Matching cancelled while saving results for funding search {funding_search_id}")
+                        break
+                    grant_idx = result['grant_index']
+                    if grant_idx < len(grants_list):
+                        grant_data = grants_list[grant_idx]
+                        grant_id = grant_data['id']
+                        
+                        # Use prefetched grant instead of querying database
+                        grant = grants_dict.get(grant_id)
+                        if not grant:
+                            # Grant was deleted between matching and saving - skip this result
+                            logger.warning(f"Grant {grant_id} not found in prefetched grants, skipping result")
+                            continue
                     
                     # Get original checklists from grant to preserve exact criterion text
                     grant_eligibility_checklist = grant_data.get('eligibility_checklist', {})
@@ -453,10 +475,22 @@ if CELERY_TASKS_AVAILABLE:
                             }
                         }
                     )
+                    new_grant_ids.add(grant.id)  # Track this grant as having a new result
                     if created:
                         matches_created += 1
                     else:
                         matches_updated += 1
+                
+                # Now safely delete any old results that weren't in the new matching run
+                # This handles the case where a grant was previously matched but is no longer in the results
+                deleted_count = GrantMatchResult.objects.filter(
+                    funding_search=funding_search
+                ).exclude(
+                    grant_id__in=new_grant_ids
+                ).delete()[0]
+                
+                if deleted_count > 0:
+                    logger.info(f"Deleted {deleted_count} old match results that are no longer in the new results")
             
             # Update funding search
             funding_search.matching_status = 'completed'

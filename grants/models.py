@@ -3,7 +3,7 @@ Grant and ScrapeLog models.
 """
 import hashlib
 import json
-from django.db import models
+from django.db import models, transaction, IntegrityError
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
@@ -220,6 +220,7 @@ class Grant(models.Model):
             return None
     
     @classmethod
+    @transaction.atomic
     def upsert_from_payload(cls, grants_data, log_id=None, grants_found=None):
         """
         Upsert grants from a list of grant dictionaries.
@@ -230,6 +231,9 @@ class Grant(models.Model):
             grants_found: Optional number of grants found (if not provided, uses len(grants_data))
         
         Returns dict with 'created', 'updated', 'skipped' counts.
+        
+        Note: This method is wrapped in a transaction to ensure atomicity.
+        If any grant fails, the entire operation is rolled back.
         """
         created = 0
         updated = 0
@@ -286,6 +290,7 @@ class Grant(models.Model):
                         # Update slug if it changed (e.g., title normalization)
                         if grant.slug != slug:
                             grant.slug = slug
+                            grant.save(update_fields=['slug'])
                     except cls.DoesNotExist:
                         pass
             
@@ -344,48 +349,164 @@ class Grant(models.Model):
                     skipped += 1
             else:
                 # Grant doesn't exist - create new grant
-                grant = cls.objects.create(
-                    title=title,
-                    slug=slug,
-                    source=source,
-                    summary=grant_data.get('summary', ''),
-                    description=grant_data.get('description', ''),
-                    url=grant_data.get('url', ''),
-                    funding_amount=grant_data.get('funding_amount', ''),
-                    deadline=grant_data.get('deadline'),
-                    opening_date=grant_data.get('opening_date'),
-                    status='unknown',  # Status is computed from dates, default to unknown
-                    raw_data=grant_data.get('raw_data', {}),
-                    scraped_at=grant_data.get('scraped_at') or timezone.now(),
-                    hash_checksum=hash_checksum,
-                    first_seen_at=timezone.now(),
-                )
-                
-                # Create snapshot for new grant
-                after_snapshot = cls._create_snapshot(grant)
-                
-                # Create finding for new grant
-                if scrape_run:
+                # Use get_or_create to handle race conditions where two scrapers
+                # might try to create the same grant simultaneously
+                try:
+                    grant, was_created = cls.objects.get_or_create(
+                        slug=slug,
+                        source=source,
+                        defaults={
+                            'title': title,
+                            'summary': grant_data.get('summary', ''),
+                            'description': grant_data.get('description', ''),
+                            'url': grant_data.get('url', ''),
+                            'funding_amount': grant_data.get('funding_amount', ''),
+                            'deadline': grant_data.get('deadline'),
+                            'opening_date': grant_data.get('opening_date'),
+                            'status': 'unknown',  # Status is computed from dates, default to unknown
+                            'raw_data': grant_data.get('raw_data', {}),
+                            'scraped_at': grant_data.get('scraped_at') or timezone.now(),
+                            'hash_checksum': hash_checksum,
+                            'first_seen_at': timezone.now(),
+                        }
+                    )
+                    
+                    if was_created:
+                        # New grant was created
+                        # Create snapshot for new grant
+                        after_snapshot = cls._create_snapshot(grant)
+                        
+                        # Create finding for new grant
+                        if scrape_run:
+                            try:
+                                # Import here to avoid issues if model doesn't exist yet
+                                ScrapeFinding = cls._get_scrape_finding_model()
+                                if ScrapeFinding:
+                                    ScrapeFinding.objects.create(
+                                        scrape_run=scrape_run,
+                                        finding_type='new',
+                                        grant=grant,
+                                        grant_slug=grant.slug,
+                                        grant_source=grant.source,
+                                        grant_title=grant.title,
+                                        after_snapshot=after_snapshot,
+                                        change_summary="New grant discovered",
+                                    )
+                            except Exception as e:
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                logger.warning(f"Could not create ScrapeFinding for new grant: {e}", exc_info=True)
+                        
+                        created += 1
+                    else:
+                        # Grant was created by another process between our check and create
+                        # This is a race condition - treat it as an update if hash changed
+                        if grant.hash_checksum != hash_checksum:
+                            # Create before snapshot
+                            before_snapshot = cls._create_snapshot(grant)
+                            
+                            # Update grant
+                            grant.title = title
+                            grant.summary = grant_data.get('summary', grant.summary)
+                            grant.description = grant_data.get('description', grant.description)
+                            grant.url = grant_data.get('url', grant.url)
+                            grant.funding_amount = grant_data.get('funding_amount', grant.funding_amount)
+                            grant.deadline = grant_data.get('deadline')
+                            grant.opening_date = grant_data.get('opening_date')
+                            grant.raw_data = grant_data.get('raw_data', grant.raw_data)
+                            grant.scraped_at = grant_data.get('scraped_at') or timezone.now()
+                            grant.hash_checksum = hash_checksum
+                            grant.last_changed_at = timezone.now()
+                            grant.save()
+                            
+                            # Create after snapshot and detect changes
+                            after_snapshot = cls._create_snapshot(grant)
+                            field_changes = cls._detect_field_changes(before_snapshot, after_snapshot)
+                            change_summary = cls._create_change_summary(field_changes)
+                            
+                            # Create finding for updated grant
+                            if scrape_run:
+                                try:
+                                    ScrapeFinding = cls._get_scrape_finding_model()
+                                    if ScrapeFinding:
+                                        ScrapeFinding.objects.create(
+                                            scrape_run=scrape_run,
+                                            finding_type='updated',
+                                            grant=grant,
+                                            grant_slug=grant.slug,
+                                            grant_source=grant.source,
+                                            grant_title=grant.title,
+                                            before_snapshot=before_snapshot,
+                                            after_snapshot=after_snapshot,
+                                            field_changes=field_changes,
+                                            change_summary=change_summary,
+                                        )
+                                except Exception as e:
+                                    import logging
+                                    logger = logging.getLogger(__name__)
+                                    logger.warning(f"Could not create ScrapeFinding for updated grant: {e}", exc_info=True)
+                            
+                            updated += 1
+                        else:
+                            # No changes, skip
+                            skipped += 1
+                            
+                except IntegrityError as e:
+                    # Handle case where unique constraint is violated despite get_or_create
+                    # This can happen if slug+source is not the only unique constraint
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"IntegrityError creating grant {slug} from {source}: {e}. Attempting to fetch existing grant.")
+                    
+                    # Try to fetch the grant that was created by another process
                     try:
-                        # Import here to avoid issues if model doesn't exist yet
-                        ScrapeFinding = cls._get_scrape_finding_model()
-                        if ScrapeFinding:
-                            ScrapeFinding.objects.create(
-                                scrape_run=scrape_run,
-                                finding_type='new',
-                                grant=grant,
-                                grant_slug=grant.slug,
-                                grant_source=grant.source,
-                                grant_title=grant.title,
-                                after_snapshot=after_snapshot,
-                                change_summary="New grant discovered",
-                            )
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.warning(f"Could not create ScrapeFinding for new grant: {e}", exc_info=True)
-                
-                created += 1
+                        grant = cls.objects.get(slug=slug, source=source)
+                        # Check if hash changed and update if needed
+                        if grant.hash_checksum != hash_checksum:
+                            before_snapshot = cls._create_snapshot(grant)
+                            grant.title = title
+                            grant.summary = grant_data.get('summary', grant.summary)
+                            grant.description = grant_data.get('description', grant.description)
+                            grant.url = grant_data.get('url', grant.url)
+                            grant.funding_amount = grant_data.get('funding_amount', grant.funding_amount)
+                            grant.deadline = grant_data.get('deadline')
+                            grant.opening_date = grant_data.get('opening_date')
+                            grant.raw_data = grant_data.get('raw_data', grant.raw_data)
+                            grant.scraped_at = grant_data.get('scraped_at') or timezone.now()
+                            grant.hash_checksum = hash_checksum
+                            grant.last_changed_at = timezone.now()
+                            grant.save()
+                            
+                            after_snapshot = cls._create_snapshot(grant)
+                            field_changes = cls._detect_field_changes(before_snapshot, after_snapshot)
+                            change_summary = cls._create_change_summary(field_changes)
+                            
+                            if scrape_run:
+                                try:
+                                    ScrapeFinding = cls._get_scrape_finding_model()
+                                    if ScrapeFinding:
+                                        ScrapeFinding.objects.create(
+                                            scrape_run=scrape_run,
+                                            finding_type='updated',
+                                            grant=grant,
+                                            grant_slug=grant.slug,
+                                            grant_source=grant.source,
+                                            grant_title=grant.title,
+                                            before_snapshot=before_snapshot,
+                                            after_snapshot=after_snapshot,
+                                            field_changes=field_changes,
+                                            change_summary=change_summary,
+                                        )
+                                except Exception as e:
+                                    logger.warning(f"Could not create ScrapeFinding for updated grant: {e}", exc_info=True)
+                            
+                            updated += 1
+                        else:
+                            skipped += 1
+                    except cls.DoesNotExist:
+                        # Grant doesn't exist and we can't create it - skip
+                        logger.error(f"Could not create or fetch grant {slug} from {source} after IntegrityError")
+                        skipped += 1
         
         # Update ScrapeLog and ScrapeRun if log_id provided
         # Note: Using string reference to avoid circular dependency

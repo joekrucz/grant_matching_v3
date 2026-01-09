@@ -234,10 +234,15 @@ class CompanyInfoService:
                 "text": f"*Created:* {company_data['date_of_creation']}"
             })
         if company_data.get('sic_codes'):
-            sic_codes = ', '.join(company_data['sic_codes'][:3])  # First 3 SIC codes
+            from companies.sic_codes import get_sic_description
+            sic_codes_list = company_data['sic_codes'][:3]  # First 3 SIC codes
+            sic_codes_formatted = ', '.join([
+                f"{code} ({get_sic_description(code)})" 
+                for code in sic_codes_list
+            ])
             fields.append({
                 "type": "mrkdwn",
-                "text": f"*SIC Codes:* {sic_codes}"
+                "text": f"*SIC Codes:* {sic_codes_formatted}"
             })
         
         if fields:

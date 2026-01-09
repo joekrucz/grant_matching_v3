@@ -40,5 +40,6 @@ urlpatterns = [
     path('questionnaires/<int:id>', views.questionnaire_detail, name='questionnaire_detail'),
     path('questionnaires/<int:id>/delete', views.questionnaire_delete, name='questionnaire_delete'),
     path('questionnaires/<int:id>/apply/<int:funding_search_id>', views.questionnaire_apply, name='questionnaire_apply'),
+    path('funding_searches/<int:funding_search_id>/questionnaire/unlink', views.questionnaire_unlink, name='questionnaire_unlink'),
 ]
 

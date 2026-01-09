@@ -85,6 +85,19 @@ class Company(models.Model):
         
         return []
     
+    def sic_codes_with_descriptions(self):
+        """Return list of dicts with SIC code and description."""
+        from companies.sic_codes import get_sic_description
+        
+        codes = self.sic_codes_array()
+        return [
+            {
+                'code': code,
+                'description': get_sic_description(code)
+            }
+            for code in codes
+        ]
+    
     def formatted_address(self):
         """Return formatted address string from JSONField."""
         if not self.address or not isinstance(self.address, dict):

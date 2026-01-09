@@ -22,49 +22,242 @@
             {% if user.custom_theme.base_content %}--bc: {{ user.custom_theme.base_content }};{% endif %}
         }
         {% endif %}
+        .sidebar {
+            transition: width 0.3s ease-in-out;
+            width: 4rem; /* 64px - default collapsed width */
+            overflow: hidden;
+        }
+        .sidebar:not(.collapsed) {
+            width: 16rem; /* 256px - expanded width */
+        }
+        .sidebar.collapsed {
+            width: 4rem; /* 64px - collapsed width */
+        }
+        .sidebar-content {
+            transition: opacity 0.2s ease-in-out;
+            white-space: nowrap;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .sidebar:not(.collapsed) .sidebar-content {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .sidebar.collapsed .sidebar-content {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .sidebar a,
+        .sidebar button,
+        .sidebar .menu a {
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .sidebar .sidebar-content * {
+            white-space: nowrap;
+        }
+        .sidebar .menu li,
+        .sidebar .menu span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sidebar-toggle-container {
+            transition: justify-content 0.3s ease-in-out;
+            justify-content: center;
+        }
+        .sidebar:not(.collapsed) .sidebar-toggle-container {
+            justify-content: space-between;
+        }
+        .main-content {
+            transition: margin-left 0.3s ease-in-out;
+            margin-left: 4rem; /* Default to collapsed margin - will be updated by JS if needed */
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                z-index: 40;
+                height: 100vh;
+                width: 16rem;
+            }
+            .sidebar.collapsed {
+                transform: translateX(-100%);
+                width: 16rem;
+            }
+            .sidebar.collapsed .sidebar-content {
+                opacity: 1;
+                pointer-events: auto;
+            }
+            .sidebar-overlay {
+                display: none;
+            }
+            .sidebar-overlay.active {
+                display: block;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0, 0, 0, 0.5);
+                z-index: 30;
+            }
+        }
     </style>
+    <script>
+        // Set initial sidebar state immediately to prevent flash
+        (function() {
+            const isMobile = window.innerWidth < 768;
+            if (isMobile) return; // Mobile handled separately
+            
+            const savedState = localStorage.getItem('sidebarCollapsed');
+            // Default to collapsed unless user explicitly expanded it
+            const shouldCollapse = savedState === null || savedState === 'true';
+            
+            if (!shouldCollapse) {
+                // User wants it expanded - remove collapsed class and set expanded styles
+                const style = document.createElement('style');
+                style.id = 'sidebar-initial-state';
+                style.textContent = `
+                    #sidebar { width: 16rem !important; }
+                    #sidebar.collapsed { width: 16rem !important; }
+                    #main-content { margin-left: 16rem !important; }
+                    #sidebar .sidebar-content { opacity: 1 !important; pointer-events: auto !important; }
+                    #sidebar .sidebar-toggle-container { justify-content: space-between !important; }
+                    #sidebar-toggle-open { display: none !important; }
+                    #sidebar-toggle-close { display: block !important; }
+                `;
+                document.head.appendChild(style);
+                // Remove collapsed class when DOM is ready
+                document.addEventListener('DOMContentLoaded', function() {
+                    const sidebar = document.getElementById('sidebar');
+                    if (sidebar) sidebar.classList.remove('collapsed');
+                    // Remove the initial style after a brief delay to allow transitions
+                    setTimeout(function() {
+                        const initStyle = document.getElementById('sidebar-initial-state');
+                        if (initStyle) initStyle.remove();
+                    }, 100);
+                });
+            }
+        })();
+    </script>
 </head>
 <body class="min-h-screen bg-base-100 text-base-content">
-    <div class="navbar bg-base-200 border-b border-base-300 fixed top-0 left-0 right-0 z-50">
-        <div class="navbar-start">
-            <a href="/" class="btn btn-ghost text-xl font-bold">
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+    
+    <!-- Left Sidebar -->
+    <aside id="sidebar" class="sidebar collapsed fixed left-0 top-0 h-screen bg-base-200 border-r border-base-300 z-50 flex flex-col overflow-hidden">
+        <!-- Sidebar Header - Always Visible -->
+        <div class="sidebar-toggle-container flex items-center justify-between p-4 border-b border-base-300 flex-shrink-0">
+            <a href="/" class="text-xl font-bold sidebar-content">
                 Trellis
             </a>
+            <button id="sidebar-toggle" class="btn btn-ghost btn-sm" onclick="toggleSidebar()" aria-label="Toggle sidebar">
+                <!-- Hamburger icon (shown when collapsed) -->
+                <svg id="sidebar-toggle-open" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+                <!-- Close icon (shown when expanded) -->
+                <svg id="sidebar-toggle-close" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 hidden">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
         </div>
-        <div class="navbar-center hidden lg:flex">
+        
+        <!-- Sidebar Navigation - Hidden when collapsed -->
+        <nav class="sidebar-content flex-1 overflow-y-auto p-4">
             {% if user.is_authenticated %}
-            <ul class="menu menu-horizontal px-1 gap-4">
-                <li><a href="{% url 'grants:list' %}" class="link link-hover">Grants</a></li>
-                <li><a href="{% url 'companies:list' %}" class="link link-hover">Companies</a></li>
+            <ul class="menu menu-vertical w-full gap-2">
+                <li>
+                    <a href="{% url 'grants:list' %}" class="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Grants</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'companies:list' %}" class="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+                        </svg>
+                        <span>Companies</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'companies:funding_searches_list' %}" class="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                        </svg>
+                        <span>My Funding Searches</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'companies:questionnaires_list' %}" class="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h11.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+                        </svg>
+                        <span>Questionnaires</span>
+                    </a>
+                </li>
+                {% if user.admin %}
+                <li>
+                    <a href="{% url 'admin_panel:conversations_page' %}" class="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+                        </svg>
+                        <span>My Conversations</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin_panel:dashboard' %}" class="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                        </svg>
+                        <span>Admin</span>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+            {% else %}
+            <ul class="menu menu-vertical w-full gap-2">
+                <li>
+                    <a href="{% url 'users:sign_in' %}" class="btn btn-ghost w-full justify-start">Sign In</a>
+                </li>
+                <li>
+                    <a href="{% url 'users:sign_up' %}" class="btn btn-primary w-full justify-start">Sign Up</a>
+                </li>
             </ul>
             {% endif %}
-        </div>
-        <div class="navbar-end">
+        </nav>
+        
+        <!-- Sidebar Footer - Hidden when collapsed -->
             {% if user.is_authenticated %}
-            <div class="dropdown dropdown-end">
-                <div tabindex="0" role="button" class="btn btn-ghost">
-                    {{ user.email }}
+        <div class="sidebar-content p-4 border-t border-base-300 flex-shrink-0">
+            <a href="{% url 'users:profile' %}" class="btn btn-ghost w-full justify-start h-auto py-3 whitespace-nowrap overflow-hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+                <div class="flex flex-col items-start flex-1 min-w-0 overflow-hidden">
+                    <span class="font-medium whitespace-nowrap truncate w-full">My Profile</span>
+                    <span class="text-xs text-base-content/60 truncate w-full">{{ user.email }}</span>
                 </div>
-                <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 bg-base-200 rounded-box w-52">
-                    <li><a href="{% url 'users:profile' %}">Profile</a></li>
-                    <li><a href="{% url 'companies:funding_searches_list' %}">My Funding Searches</a></li>
-                    <li><a href="{% url 'companies:questionnaires_list' %}">Questionnaires</a></li>
-                    {% if user.admin %}
-                    <li><a href="{% url 'admin_panel:conversations_page' %}">My Conversations</a></li>
-                    <li><a href="{% url 'admin_panel:dashboard' %}">Admin</a></li>
-                    {% endif %}
-                    <li><a href="{% url 'users:sign_out' %}">Sign Out</a></li>
-                </ul>
-            </div>
-            {% else %}
-            <a href="{% url 'users:sign_in' %}" class="btn btn-ghost">Sign In</a>
-            <a href="{% url 'users:sign_up' %}" class="btn btn-primary">Sign Up</a>
-            {% endif %}
+            </a>
         </div>
-    </div>
+        {% endif %}
+    </aside>
+    
+    <!-- Mobile Toggle Button (shown when sidebar is collapsed on mobile) -->
+    <button id="mobile-sidebar-toggle" class="fixed top-4 left-4 z-40 btn btn-circle btn-primary lg:hidden hidden" onclick="toggleSidebar()" aria-label="Toggle sidebar">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+    </button>
 
+    <main class="main-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-4" id="main-content">
     {% if messages %}
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 mt-4">
+        <div class="mb-4">
         {% for message in messages %}
         <div role="alert" class="alert mb-2 {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">
             <span>{{ message }}</span>
@@ -72,8 +265,6 @@
         {% endfor %}
     </div>
     {% endif %}
-
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 {% if not messages %}pt-20{% endif %}">
         {% block content %}{% endblock %}
     </main>
 
@@ -1184,9 +1375,123 @@
         </div>
     </footer>
     <script>
-        // Enable toggle behavior for all dropdowns - clicking the button again closes the dropdown
+        // Sidebar toggle functionality
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const mainContent = document.getElementById('main-content');
+            const mobileToggle = document.getElementById('mobile-sidebar-toggle');
+            const toggleOpenIcon = document.getElementById('sidebar-toggle-open');
+            const toggleCloseIcon = document.getElementById('sidebar-toggle-close');
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            const isMobile = window.innerWidth < 768;
+            
+            if (isCollapsed) {
+                sidebar.classList.remove('collapsed');
+                if (overlay) overlay.classList.add('active');
+                if (mainContent) {
+                    if (!isMobile) {
+                        mainContent.style.marginLeft = '16rem'; // 256px - expanded width
+                    }
+                }
+                if (mobileToggle && isMobile) {
+                    mobileToggle.classList.add('hidden');
+                }
+                // Update icons
+                if (toggleOpenIcon) toggleOpenIcon.classList.add('hidden');
+                if (toggleCloseIcon) toggleCloseIcon.classList.remove('hidden');
+                // Save state
+                localStorage.setItem('sidebarCollapsed', 'false');
+            } else {
+                sidebar.classList.add('collapsed');
+                if (overlay) overlay.classList.remove('active');
+                if (mainContent) {
+                    if (!isMobile) {
+                        mainContent.style.marginLeft = '4rem'; // 64px - collapsed width
+                    } else {
+                        mainContent.style.marginLeft = '0';
+                    }
+                }
+                if (mobileToggle && isMobile) {
+                    mobileToggle.classList.remove('hidden');
+                }
+                // Update icons
+                if (toggleOpenIcon) toggleOpenIcon.classList.remove('hidden');
+                if (toggleCloseIcon) toggleCloseIcon.classList.add('hidden');
+                // Save state
+                localStorage.setItem('sidebarCollapsed', 'true');
+            }
+        }
+        
+        // Initialize sidebar state on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Find all dropdown containers
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const mainContent = document.getElementById('main-content');
+            const mobileToggle = document.getElementById('mobile-sidebar-toggle');
+            const toggleOpenIcon = document.getElementById('sidebar-toggle-open');
+            const toggleCloseIcon = document.getElementById('sidebar-toggle-close');
+            
+            // Check saved state or default to expanded on desktop, collapsed on mobile
+            const savedState = localStorage.getItem('sidebarCollapsed');
+            const isMobile = window.innerWidth < 768;
+            
+            if (isMobile) {
+                // On mobile, start collapsed
+                sidebar.classList.add('collapsed');
+                if (overlay) overlay.classList.remove('active');
+                if (mainContent) mainContent.style.marginLeft = '0';
+                if (mobileToggle) mobileToggle.classList.remove('hidden');
+                // Set icons for collapsed state
+                if (toggleOpenIcon) toggleOpenIcon.classList.remove('hidden');
+                if (toggleCloseIcon) toggleCloseIcon.classList.add('hidden');
+            } else {
+                // On desktop, use saved state or default to collapsed
+                const shouldCollapse = savedState === null || savedState === 'true';
+                if (shouldCollapse) {
+                    sidebar.classList.add('collapsed');
+                    if (mainContent) mainContent.style.marginLeft = '4rem'; // 64px - collapsed width
+                    // Set icons for collapsed state
+                    if (toggleOpenIcon) toggleOpenIcon.classList.remove('hidden');
+                    if (toggleCloseIcon) toggleCloseIcon.classList.add('hidden');
+                } else {
+                    sidebar.classList.remove('collapsed');
+                    if (mainContent) mainContent.style.marginLeft = '16rem'; // 256px - expanded width
+                    // Set icons for expanded state
+                    if (toggleOpenIcon) toggleOpenIcon.classList.add('hidden');
+                    if (toggleCloseIcon) toggleCloseIcon.classList.remove('hidden');
+                }
+                if (mobileToggle) mobileToggle.classList.add('hidden');
+            }
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                const isMobileNow = window.innerWidth < 768;
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                
+                if (isMobileNow) {
+                    // On mobile, show toggle button when collapsed
+                    if (mobileToggle) {
+                        if (isCollapsed) {
+                            mobileToggle.classList.remove('hidden');
+                        } else {
+                            mobileToggle.classList.add('hidden');
+                        }
+                    }
+                    if (mainContent) mainContent.style.marginLeft = '0';
+                } else {
+                    // On desktop, hide mobile toggle
+                    if (mobileToggle) mobileToggle.classList.add('hidden');
+                    // Restore desktop state
+                    if (isCollapsed) {
+                        if (mainContent) mainContent.style.marginLeft = '4rem'; // 64px - collapsed width
+                    } else {
+                        if (mainContent) mainContent.style.marginLeft = '16rem'; // 256px - expanded width
+                    }
+                }
+            });
+            
+            // Enable toggle behavior for all dropdowns - clicking the button again closes the dropdown
             document.querySelectorAll('.dropdown').forEach(function(dropdown) {
                 const button = dropdown.querySelector('[role="button"], button[tabindex="0"]');
                 const menu = dropdown.querySelector('.dropdown-content');

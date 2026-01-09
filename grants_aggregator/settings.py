@@ -16,6 +16,13 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-change-me-in-production')
+# SECURITY: Fail fast if SECRET_KEY is not set in production
+if not SECRET_KEY or SECRET_KEY == 'django-insecure-change-me-in-production':
+    if not DEBUG:
+        raise ValueError(
+            "SECRET_KEY must be set in production. "
+            "Set the SECRET_KEY environment variable to a secure random value."
+        )
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG', default=False)
@@ -150,6 +157,14 @@ if database_url.startswith('sqlite'):
 else:
     DATABASES = {
         'default': env.db('DATABASE_URL', default='postgresql://postgres:postgres@db:5432/grants_aggregator')
+    }
+    # Production database connection settings
+    # CONN_MAX_AGE: Reuse database connections for up to 10 minutes (connection pooling)
+    DATABASES['default']['CONN_MAX_AGE'] = 600  # 10 minutes
+    # Connection timeout and query timeout settings
+    DATABASES['default']['OPTIONS'] = {
+        'connect_timeout': 10,  # 10 second connection timeout
+        'options': '-c statement_timeout=30000'  # 30 second query timeout (in milliseconds)
     }
 
 # Password validation

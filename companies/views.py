@@ -349,6 +349,29 @@ def questionnaire_apply(request, id, funding_search_id):
 
 
 @login_required
+@require_POST
+def questionnaire_unlink(request, funding_search_id):
+    """Unlink a questionnaire from a funding search."""
+    funding_search = get_object_or_404(FundingSearch, id=funding_search_id)
+    
+    # Check permissions
+    if request.user != funding_search.user and not request.user.admin:
+        messages.error(request, 'You do not have permission to edit this funding search.')
+        return redirect('companies:funding_search_detail', id=funding_search_id)
+    
+    # Unlink questionnaire from funding search
+    if funding_search.questionnaire:
+        questionnaire_name = funding_search.questionnaire.name
+        funding_search.questionnaire = None
+        funding_search.save()
+        messages.success(request, f'Questionnaire "{questionnaire_name}" unlinked successfully.')
+    else:
+        messages.info(request, 'No questionnaire was linked to this funding search.')
+    
+    return redirect('companies:funding_search_detail', id=funding_search_id)
+
+
+@login_required
 def company_detail(request, id):
     """Company detail page."""
     from .models import TRL_LEVELS
@@ -672,10 +695,10 @@ def company_delete(request, id):
         messages.error(request, 'You do not have permission to delete this company.')
         return redirect('companies:detail', id=id)
     
-        company_name = company.name
-        company.delete()
-        messages.success(request, f'Company {company_name} deleted successfully.')
-        return redirect('companies:list')
+    company_name = company.name
+    company.delete()
+    messages.success(request, f'Company {company_name} deleted successfully.')
+    return redirect('companies:list')
 
 
 @login_required
