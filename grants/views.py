@@ -16,6 +16,7 @@ from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from .models import Grant
 from admin_panel.ai_client import build_grant_context, AiAssistantClient, AiAssistantError
+from companies.models import Company, FundingSearch
 
 
 @login_required
@@ -467,4 +468,90 @@ def delete_grant(request, slug):
     grant.delete()
     messages.success(request, f'Grant "{grant_title}" has been deleted.')
     return redirect('grants:list')
+
+
+@login_required
+def global_search(request):
+    """Global search across Grants, Companies, and Funding Searches."""
+    query = request.GET.get('q', '').strip()
+    
+    grants = []
+    companies = []
+    funding_searches = []
+    
+    if query:
+        # Search Grants
+        grants = Grant.objects.filter(
+            Q(title__icontains=query) |
+            Q(summary__icontains=query) |
+            Q(description__icontains=query)
+        ).order_by('-created_at')[:10]
+        
+        # Search Companies (only user's companies)
+        companies = Company.objects.filter(
+            user=request.user
+        ).filter(
+            Q(name__icontains=query) |
+            Q(company_number__icontains=query) |
+            Q(notes__icontains=query)
+        ).order_by('-created_at')[:10]
+        
+        # Search Funding Searches (only user's funding searches)
+        funding_searches = FundingSearch.objects.filter(
+            user=request.user
+        ).filter(
+            Q(name__icontains=query) |
+            Q(notes__icontains=query) |
+            Q(project_description__icontains=query)
+        ).order_by('-created_at')[:10]
+    
+    # If AJAX request, return JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from django.http import JsonResponse
+        from django.urls import reverse
+        
+        results = {
+            'grants': [
+                {
+                    'id': g.id,
+                    'title': g.title,
+                    'slug': g.slug,
+                    'source': g.get_source_display(),
+                    'url': reverse('grants:detail', args=[g.slug]),
+                    'summary': g.summary[:100] + '...' if g.summary and len(g.summary) > 100 else (g.summary or '')
+                }
+                for g in grants
+            ],
+            'companies': [
+                {
+                    'id': c.id,
+                    'name': c.name,
+                    'company_number': c.company_number or '',
+                    'url': reverse('companies:detail', args=[c.id])
+                }
+                for c in companies
+            ],
+            'funding_searches': [
+                {
+                    'id': fs.id,
+                    'name': fs.name,
+                    'company_name': fs.company.name,
+                    'url': reverse('companies:funding_search_detail', args=[fs.id])
+                }
+                for fs in funding_searches
+            ]
+        }
+        return JsonResponse(results)
+    
+    context = {
+        'query': query,
+        'grants': grants,
+        'companies': companies,
+        'funding_searches': funding_searches,
+        'grants_count': len(grants),
+        'companies_count': len(companies),
+        'funding_searches_count': len(funding_searches),
+    }
+    
+    return render(request, 'grants/search_results.html', context)
 

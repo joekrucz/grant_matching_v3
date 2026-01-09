@@ -290,7 +290,22 @@ def profile(request):
         else:
             messages.info(request, 'No changes to save.')
         
-        return redirect('users:profile')
+        # Preserve tab after redirect
+        tab = request.GET.get('tab', 'info')
+        allowed_tabs = ['info', 'theme', 'password', 'account']
+        if tab not in allowed_tabs:
+            tab = 'info'
+        return redirect(f"{reverse('users:profile')}?tab={tab}")
     
-    return render(request, 'users/profile.html')
+    # Tab selection
+    allowed_tabs = ['info', 'theme', 'password', 'account']
+    current_tab = request.GET.get('tab', 'info')
+    if current_tab not in allowed_tabs:
+        current_tab = 'info'
+    
+    context = {
+        'user': request.user,
+        'current_tab': current_tab,
+    }
+    return render(request, 'users/profile.html', context)
 

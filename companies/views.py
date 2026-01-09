@@ -1905,6 +1905,126 @@ def funding_search_cancel(request, id):
 
 
 @login_required
+def funding_search_select_company(request):
+    """Select or create a company for a new funding search."""
+    if request.method == 'POST':
+        creation_mode = request.POST.get('creation_mode', 'registered')
+        
+        if creation_mode == 'manual':
+            # Manual entry for unregistered companies
+            name = request.POST.get('name', '').strip()
+            
+            if not name:
+                messages.error(request, 'Company name is required.')
+                return render(request, 'companies/funding_search_select_company.html', {'mode': 'manual'})
+            
+            # Check if company already exists for this user
+            existing_company = Company.objects.filter(name__iexact=name, user=request.user).first()
+            if existing_company:
+                messages.info(request, f'Using existing company "{existing_company.name}".')
+                return redirect('companies:funding_search_create', company_id=existing_company.id)
+            
+            # Generate unique company_number for unregistered companies
+            import uuid
+            from datetime import datetime
+            unique_id = f"UNREG-{request.user.id}-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+            
+            # Ensure uniqueness
+            while Company.objects.filter(company_number=unique_id).exists():
+                unique_id = f"UNREG-{request.user.id}-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+            
+            # Build address from form fields
+            address = {}
+            if request.POST.get('address_line_1'):
+                address = {
+                    'address_line_1': request.POST.get('address_line_1', ''),
+                    'address_line_2': request.POST.get('address_line_2', ''),
+                    'locality': request.POST.get('locality', ''),
+                    'postal_code': request.POST.get('postal_code', ''),
+                    'country': request.POST.get('country', ''),
+                }
+            
+            # Create unregistered company
+            company = Company.objects.create(
+                user=request.user,
+                company_number=unique_id,
+                name=name,
+                is_registered=False,
+                registration_status='unregistered',
+                company_type=request.POST.get('company_type', ''),
+                website=request.POST.get('website', '') or None,
+                address=address,
+                notes=request.POST.get('notes', ''),
+            )
+            
+            messages.success(request, f'Company "{company.name}" created successfully.')
+            return redirect('companies:funding_search_create', company_id=company.id)
+        
+        else:
+            # Companies House API lookup
+            company_number = request.POST.get('company_number', '').strip()
+        
+        if not company_number:
+            messages.error(request, 'Company number is required.')
+            return render(request, 'companies/funding_search_select_company.html')
+        
+        try:
+            # Check if company already exists for this user
+            existing_company = Company.objects.filter(company_number=company_number, user=request.user).first()
+            if existing_company:
+                messages.info(request, f'Using existing company "{existing_company.name}".')
+                return redirect('companies:funding_search_create', company_id=existing_company.id)
+            
+            # Check if company exists but belongs to another user
+            if Company.objects.filter(company_number=company_number).exists():
+                messages.error(request, f'Company {company_number} already exists for another user. Please use a different company.')
+                return render(request, 'companies/funding_search_select_company.html')
+            
+            # Fetch from Companies House API
+            api_data = CompaniesHouseService.fetch_company(company_number)
+            
+            # Fetch filing history
+            try:
+                filing_history = CompaniesHouseService.fetch_filing_history(company_number)
+            except CompaniesHouseError as e:
+                # Log but don't fail if filing history can't be fetched
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Could not fetch filing history for company {company_number}: {e}")
+                filing_history = None
+            
+            normalized_data = CompaniesHouseService.normalize_company_data(api_data, filing_history)
+            
+            # Create company with registered status
+            company = Company.objects.create(
+                user=request.user,
+                is_registered=True,
+                registration_status='registered',
+                **normalized_data
+            )
+
+            # Attempt to enrich with historical grants from 360Giving (non-blocking)
+            try:
+                grants_received = ThreeSixtyGivingService.fetch_grants_received(company.company_number)
+                company.grants_received_360 = grants_received
+                company.save(update_fields=['grants_received_360'])
+            except ThreeSixtyGivingError as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"360Giving lookup skipped for {company.company_number}: {e}")
+            
+            messages.success(request, f'Company {company.name} created successfully.')
+            return redirect('companies:funding_search_create', company_id=company.id)
+        
+        except CompaniesHouseError as e:
+            messages.error(request, str(e))
+        except Exception as e:
+            messages.error(request, f'Error creating company: {str(e)}')
+    
+    return render(request, 'companies/funding_search_select_company.html')
+
+
+@login_required
 @ratelimit(key='user_or_ip', rate='30/m', method='GET', block=True)
 def company_search(request):
     """API endpoint to search Companies House by company name."""

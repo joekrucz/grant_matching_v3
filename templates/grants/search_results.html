@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}Search Results - Trellis{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-6">Search Results</h1>
+    
+    {% if query %}
+        <p class="text-base-content/70 mb-6">Search results for "<strong>{{ query }}</strong>"</p>
+    {% else %}
+        <p class="text-base-content/70 mb-6">Enter a search query to find grants, companies, and funding searches.</p>
+    {% endif %}
+    
+    {% if query %}
+        <!-- Grants Section -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Grants
+                <span class="badge badge-primary badge-sm">{{ grants_count }}</span>
+            </h2>
+            
+            {% if grants %}
+                <div class="space-y-4">
+                    {% for grant in grants %}
+                        <div class="card bg-base-200 shadow-md">
+                            <div class="card-body">
+                                <h3 class="card-title">
+                                    <a href="{% url 'grants:detail' slug=grant.slug %}" class="link link-primary">
+                                        {{ grant.title }}
+                                    </a>
+                                </h3>
+                                <p class="text-sm text-base-content/70">
+                                    <span class="badge badge-outline">{{ grant.get_source_display }}</span>
+                                    {% if grant.deadline %}
+                                        <span class="ml-2">Deadline: {{ grant.deadline|date:"M d, Y" }}</span>
+                                    {% endif %}
+                                </p>
+                                {% if grant.summary %}
+                                    <p class="mt-2 text-base-content/80">{{ grant.summary|truncatewords:30 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-base-content/60">No grants found matching your search.</p>
+            {% endif %}
+        </div>
+        
+        <!-- Companies Section -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+                </svg>
+                Companies
+                <span class="badge badge-primary badge-sm">{{ companies_count }}</span>
+            </h2>
+            
+            {% if companies %}
+                <div class="space-y-4">
+                    {% for company in companies %}
+                        <div class="card bg-base-200 shadow-md">
+                            <div class="card-body">
+                                <h3 class="card-title">
+                                    <a href="{% url 'companies:detail' id=company.id %}" class="link link-primary">
+                                        {{ company.name }}
+                                    </a>
+                                </h3>
+                                <p class="text-sm text-base-content/70">
+                                    {% if company.company_number %}
+                                        <span class="badge badge-outline">Company No: {{ company.company_number }}</span>
+                                    {% endif %}
+                                    {% if company.registration_status %}
+                                        <span class="badge badge-outline ml-2">{{ company.get_registration_status_display }}</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-base-content/60">No companies found matching your search.</p>
+            {% endif %}
+        </div>
+        
+        <!-- Funding Searches Section -->
+        <div class="mb-8">
+            <h2 class="text-2xl font-semibold mb-4 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                My Funding Searches
+                <span class="badge badge-primary badge-sm">{{ funding_searches_count }}</span>
+            </h2>
+            
+            {% if funding_searches %}
+                <div class="space-y-4">
+                    {% for funding_search in funding_searches %}
+                        <div class="card bg-base-200 shadow-md">
+                            <div class="card-body">
+                                <h3 class="card-title">
+                                    <a href="{% url 'companies:funding_search_detail' id=funding_search.id %}" class="link link-primary">
+                                        {{ funding_search.name }}
+                                    </a>
+                                </h3>
+                                <p class="text-sm text-base-content/70">
+                                    <span class="badge badge-outline">{{ funding_search.company.name }}</span>
+                                    <span class="badge badge-outline ml-2">{{ funding_search.get_matching_status_display }}</span>
+                                </p>
+                                {% if funding_search.notes %}
+                                    <p class="mt-2 text-base-content/80">{{ funding_search.notes|truncatewords:30 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-base-content/60">No funding searches found matching your search.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

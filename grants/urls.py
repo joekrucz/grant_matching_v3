@@ -20,5 +20,6 @@ urlpatterns = [
     path('privacy', views.privacy_policy, name='privacy'),
     path('support', views.support, name='support'),
     path('about', views.about, name='about'),
+    path('search', views.global_search, name='search'),
 ]
 

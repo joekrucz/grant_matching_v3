@@ -3,314 +3,374 @@
 {% block title %}Profile - Grants Aggregator{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto">
-    <h1 class="text-3xl font-bold mb-6">Profile</h1>
-    
-    <div class="card bg-base-200">
-        <form method="post" action="{% url 'users:profile' %}" class="card-body">
-            {% csrf_token %}
-            
-            <div class="form-control">
-                <label class="label" for="id_email">
-                    <span class="label-text">Email</span>
-                </label>
-                <input 
-                    type="email" 
-                    value="{{ user.email }}" 
-                    disabled
-                    class="input input-bordered input-disabled"
-                >
-            </div>
-            
-            <div class="form-control">
-                <label class="label" for="id_name">
-                    <span class="label-text">Name</span>
-                </label>
-                <input 
-                    type="text" 
-                    name="name" 
-                    id="id_name" 
-                    value="{{ user.name|default:'' }}" 
-                    class="input input-bordered"
-                >
-            </div>
-            
-            <div class="form-control">
-                <label class="label" for="id_theme">
-                    <span class="label-text">Theme</span>
-                </label>
-                <select 
-                    name="theme" 
-                    id="id_theme" 
-                    class="select select-bordered"
-                    onchange="handleThemeChange()"
-                >
-                    <option value="">Default (Dark)</option>
-                    <option value="light" {% if user.theme == 'light' %}selected{% endif %}>Light</option>
-                    <option value="dark" {% if user.theme == 'dark' %}selected{% endif %}>Dark</option>
-                    <option value="cupcake" {% if user.theme == 'cupcake' %}selected{% endif %}>Cupcake</option>
-                    <option value="bumblebee" {% if user.theme == 'bumblebee' %}selected{% endif %}>Bumblebee</option>
-                    <option value="emerald" {% if user.theme == 'emerald' %}selected{% endif %}>Emerald</option>
-                    <option value="corporate" {% if user.theme == 'corporate' %}selected{% endif %}>Corporate</option>
-                    <option value="synthwave" {% if user.theme == 'synthwave' %}selected{% endif %}>Synthwave</option>
-                    <option value="retro" {% if user.theme == 'retro' %}selected{% endif %}>Retro</option>
-                    <option value="cyberpunk" {% if user.theme == 'cyberpunk' %}selected{% endif %}>Cyberpunk</option>
-                    <option value="valentine" {% if user.theme == 'valentine' %}selected{% endif %}>Valentine</option>
-                    <option value="halloween" {% if user.theme == 'halloween' %}selected{% endif %}>Halloween</option>
-                    <option value="garden" {% if user.theme == 'garden' %}selected{% endif %}>Garden</option>
-                    <option value="forest" {% if user.theme == 'forest' %}selected{% endif %}>Forest</option>
-                    <option value="aqua" {% if user.theme == 'aqua' %}selected{% endif %}>Aqua</option>
-                    <option value="lofi" {% if user.theme == 'lofi' %}selected{% endif %}>Lofi</option>
-                    <option value="pastel" {% if user.theme == 'pastel' %}selected{% endif %}>Pastel</option>
-                    <option value="fantasy" {% if user.theme == 'fantasy' %}selected{% endif %}>Fantasy</option>
-                    <option value="wireframe" {% if user.theme == 'wireframe' %}selected{% endif %}>Wireframe</option>
-                    <option value="black" {% if user.theme == 'black' %}selected{% endif %}>Black</option>
-                    <option value="luxury" {% if user.theme == 'luxury' %}selected{% endif %}>Luxury</option>
-                    <option value="dracula" {% if user.theme == 'dracula' %}selected{% endif %}>Dracula</option>
-                    <option value="cmyk" {% if user.theme == 'cmyk' %}selected{% endif %}>CMYK</option>
-                    <option value="autumn" {% if user.theme == 'autumn' %}selected{% endif %}>Autumn</option>
-                    <option value="business" {% if user.theme == 'business' %}selected{% endif %}>Business</option>
-                    <option value="acid" {% if user.theme == 'acid' %}selected{% endif %}>Acid</option>
-                    <option value="lemonade" {% if user.theme == 'lemonade' %}selected{% endif %}>Lemonade</option>
-                    <option value="night" {% if user.theme == 'night' %}selected{% endif %}>Night</option>
-                    <option value="coffee" {% if user.theme == 'coffee' %}selected{% endif %}>Coffee</option>
-                    <option value="winter" {% if user.theme == 'winter' %}selected{% endif %}>Winter</option>
-                    <option value="dim" {% if user.theme == 'dim' %}selected{% endif %}>Dim</option>
-                    <option value="nord" {% if user.theme == 'nord' %}selected{% endif %}>Nord</option>
-                    <option value="sunset" {% if user.theme == 'sunset' %}selected{% endif %}>Sunset</option>
-                    <option value="custom" {% if user.theme == 'custom' %}selected{% endif %}>Custom Theme</option>
-                </select>
-            </div>
-            
-            <!-- Custom Theme Builder -->
-            <div id="custom-theme-section" class="form-control {% if user.theme != 'custom' %}hidden{% endif %}" style="{% if user.theme == 'custom' %}display: block;{% endif %}">
-                <div class="divider">Custom Theme Colors</div>
-                <p class="text-sm text-base-content/60 mb-4">
-                    Pick your own colors to create a custom DaisyUI theme. Leave a color blank to use the default.
-                </p>
-                
-                <input type="hidden" name="use_custom_theme" id="use_custom_theme" value="{% if user.theme == 'custom' %}true{% else %}false{% endif %}">
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Primary Color</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input 
-                                type="color" 
-                                name="custom_theme_primary" 
-                                id="custom_theme_primary"
-                                value="{% if user.custom_theme.primary %}{{ user.custom_theme.primary }}{% else %}#3b82f6{% endif %}"
-                                class="w-20 h-10 rounded border border-base-300"
-                                onchange="updateCustomTheme()"
-                            >
-                            <input 
-                                type="text" 
-                                name="custom_theme_primary_text" 
-                                id="custom_theme_primary_text"
-                                value="{% if user.custom_theme.primary %}{{ user.custom_theme.primary }}{% else %}#3b82f6{% endif %}"
-                                class="input input-bordered flex-1"
-                                placeholder="#3b82f6"
-                                onchange="updateColorFromText('primary')"
-                            >
-                        </div>
-                    </div>
-                    
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Secondary Color</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input 
-                                type="color" 
-                                name="custom_theme_secondary" 
-                                id="custom_theme_secondary"
-                                value="{% if user.custom_theme.secondary %}{{ user.custom_theme.secondary }}{% else %}#8b5cf6{% endif %}"
-                                class="w-20 h-10 rounded border border-base-300"
-                                onchange="updateCustomTheme()"
-                            >
-                            <input 
-                                type="text" 
-                                name="custom_theme_secondary_text" 
-                                id="custom_theme_secondary_text"
-                                value="{% if user.custom_theme.secondary %}{{ user.custom_theme.secondary }}{% else %}#8b5cf6{% endif %}"
-                                class="input input-bordered flex-1"
-                                placeholder="#8b5cf6"
-                                onchange="updateColorFromText('secondary')"
-                            >
-                        </div>
-                    </div>
-                    
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Accent Color</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input 
-                                type="color" 
-                                name="custom_theme_accent" 
-                                id="custom_theme_accent"
-                                value="{% if user.custom_theme.accent %}{{ user.custom_theme.accent }}{% else %}#f59e0b{% endif %}"
-                                class="w-20 h-10 rounded border border-base-300"
-                                onchange="updateCustomTheme()"
-                            >
-                            <input 
-                                type="text" 
-                                name="custom_theme_accent_text" 
-                                id="custom_theme_accent_text"
-                                value="{% if user.custom_theme.accent %}{{ user.custom_theme.accent }}{% else %}#f59e0b{% endif %}"
-                                class="input input-bordered flex-1"
-                                placeholder="#f59e0b"
-                                onchange="updateColorFromText('accent')"
-                            >
-                        </div>
-                    </div>
-                    
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Neutral Color</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input 
-                                type="color" 
-                                name="custom_theme_neutral" 
-                                id="custom_theme_neutral"
-                                value="{% if user.custom_theme.neutral %}{{ user.custom_theme.neutral }}{% else %}#3d4451{% endif %}"
-                                class="w-20 h-10 rounded border border-base-300"
-                                onchange="updateCustomTheme()"
-                            >
-                            <input 
-                                type="text" 
-                                name="custom_theme_neutral_text" 
-                                id="custom_theme_neutral_text"
-                                value="{% if user.custom_theme.neutral %}{{ user.custom_theme.neutral }}{% else %}#3d4451{% endif %}"
-                                class="input input-bordered flex-1"
-                                placeholder="#3d4451"
-                                onchange="updateColorFromText('neutral')"
-                            >
-                        </div>
-                    </div>
-                    
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Base Background</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input 
-                                type="color" 
-                                name="custom_theme_base_100" 
-                                id="custom_theme_base_100"
-                                value="{% if user.custom_theme.base_100 %}{{ user.custom_theme.base_100 }}{% else %}#1d232a{% endif %}"
-                                class="w-20 h-10 rounded border border-base-300"
-                                onchange="updateCustomTheme()"
-                            >
-                            <input 
-                                type="text" 
-                                name="custom_theme_base_100_text" 
-                                id="custom_theme_base_100_text"
-                                value="{% if user.custom_theme.base_100 %}{{ user.custom_theme.base_100 }}{% else %}#1d232a{% endif %}"
-                                class="input input-bordered flex-1"
-                                placeholder="#1d232a"
-                                onchange="updateColorFromText('base_100')"
-                            >
-                        </div>
-                    </div>
-                    
-                    <div class="form-control">
-                        <label class="label">
-                            <span class="label-text">Base Content (Text)</span>
-                        </label>
-                        <div class="flex gap-2">
-                            <input 
-                                type="color" 
-                                name="custom_theme_base_content" 
-                                id="custom_theme_base_content"
-                                value="{% if user.custom_theme.base_content %}{{ user.custom_theme.base_content }}{% else %}#a6adbb{% endif %}"
-                                class="w-20 h-10 rounded border border-base-300"
-                                onchange="updateCustomTheme()"
-                            >
-                            <input 
-                                type="text" 
-                                name="custom_theme_base_content_text" 
-                                id="custom_theme_base_content_text"
-                                value="{% if user.custom_theme.base_content %}{{ user.custom_theme.base_content }}{% else %}#a6adbb{% endif %}"
-                                class="input input-bordered flex-1"
-                                placeholder="#a6adbb"
-                                onchange="updateColorFromText('base_content')"
-                            >
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="alert alert-info">
-                    <span>💡 Tip: Your custom theme will be applied immediately after saving.</span>
-                </div>
-            </div>
-            
-            <div class="divider">Change Password</div>
-            
-            <div class="form-control">
-                <label class="label" for="id_current_password">
-                    <span class="label-text">Current Password</span>
-                </label>
-                <input 
-                    type="password" 
-                    name="current_password" 
-                    id="id_current_password" 
-                    class="input input-bordered"
-                    placeholder="Enter current password to change it"
-                >
-                <label class="label">
-                    <span class="label-text-alt">Leave blank if you don't want to change your password</span>
-                </label>
-            </div>
-            
-            <div class="form-control">
-                <label class="label" for="id_new_password">
-                    <span class="label-text">New Password</span>
-                </label>
-                <input 
-                    type="password" 
-                    name="new_password" 
-                    id="id_new_password" 
-                    class="input input-bordered"
-                    placeholder="Enter new password"
-                    minlength="8"
-                >
-                <label class="label">
-                    <span class="label-text-alt">Must be at least 8 characters</span>
-                </label>
-            </div>
-            
-            <div class="form-control">
-                <label class="label" for="id_confirm_password">
-                    <span class="label-text">Confirm New Password</span>
-                </label>
-                <input 
-                    type="password" 
-                    name="confirm_password" 
-                    id="id_confirm_password" 
-                    class="input input-bordered"
-                    placeholder="Confirm new password"
-                    minlength="8"
-                >
-            </div>
-            
-            <div class="form-control mt-6">
-                <button type="submit" class="btn btn-primary">Update Profile</button>
-            </div>
-        </form>
+<div class="my-2">
+    <h1 class="text-2xl font-bold">Profile</h1>
+</div>
+
+<div class="grid md:grid-cols-[220px,1fr] gap-4">
+    <!-- Mobile tabs (horizontal) -->
+    <div class="md:hidden mb-2">
+        <div class="tabs tabs-boxed w-full overflow-x-auto">
+            <a href="?tab=info" class="tab {% if current_tab == 'info' %}tab-active font-bold{% else %}hover:underline{% endif %}">Profile Info</a>
+            <a href="?tab=theme" class="tab {% if current_tab == 'theme' %}tab-active font-bold{% else %}hover:underline{% endif %}">Theme</a>
+            <a href="?tab=password" class="tab {% if current_tab == 'password' %}tab-active font-bold{% else %}hover:underline{% endif %}">Password</a>
+            <a href="?tab=account" class="tab {% if current_tab == 'account' %}tab-active font-bold{% else %}hover:underline{% endif %}">Account</a>
+        </div>
     </div>
     
-    <div class="max-w-2xl mx-auto mt-6">
-        <div class="card bg-base-200">
-            <div class="card-body">
-                <h2 class="card-title text-xl mb-4">Account Actions</h2>
+    <!-- Desktop tabs (vertical, left side) -->
+    <div class="hidden md:block">
+        <div class="tabs tabs-vertical tabs-l flex flex-col gap-1 bg-base-200 border border-base-300 rounded-xl p-2 w-full">
+            <a href="?tab=info" class="tab w-full justify-start {% if current_tab == 'info' %}tab-active font-bold{% else %}hover:underline{% endif %}">
+                Profile Information
+            </a>
+            <a href="?tab=theme" class="tab w-full justify-start {% if current_tab == 'theme' %}tab-active font-bold{% else %}hover:underline{% endif %}">
+                Theme Settings
+            </a>
+            <a href="?tab=password" class="tab w-full justify-start {% if current_tab == 'password' %}tab-active font-bold{% else %}hover:underline{% endif %}">
+                Change Password
+            </a>
+            <a href="?tab=account" class="tab w-full justify-start {% if current_tab == 'account' %}tab-active font-bold{% else %}hover:underline{% endif %}">
+                Account Actions
+            </a>
+        </div>
+    </div>
+    
+    <!-- Content area (right side) -->
+    <div class="space-y-4" id="profile-tab-panels">
+        
+        {% if current_tab == 'info' %}
+        <div id="tab-info" class="card bg-base-200 border border-base-300">
+            <form method="post" action="{% url 'users:profile' %}?tab=info" class="card-body p-4">
+                {% csrf_token %}
+                <h2 class="card-title text-lg mb-4">Profile Information</h2>
+                
+                <div class="form-control">
+                    <label class="label py-1" for="id_email">
+                        <span class="label-text text-sm">Email</span>
+                    </label>
+                    <input 
+                        type="email" 
+                        value="{{ user.email }}" 
+                        disabled
+                        class="input input-bordered input-sm input-disabled"
+                    >
+                </div>
+                
+                <div class="form-control">
+                    <label class="label py-1" for="id_name">
+                        <span class="label-text text-sm">Name</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        name="name" 
+                        id="id_name" 
+                        value="{{ user.name|default:'' }}" 
+                        class="input input-bordered input-sm"
+                    >
+                </div>
+                
+                <div class="form-control mt-4">
+                    <button type="submit" class="btn btn-primary btn-sm">Update Profile</button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+        
+        {% if current_tab == 'theme' %}
+        <div id="tab-theme" class="card bg-base-200 border border-base-300">
+            <form method="post" action="{% url 'users:profile' %}?tab=theme" class="card-body p-4">
+                {% csrf_token %}
+                <h2 class="card-title text-lg mb-4">Theme Settings</h2>
+                
+                <div class="form-control">
+                    <label class="label py-1" for="id_theme">
+                        <span class="label-text text-sm">Theme</span>
+                    </label>
+                    <select 
+                        name="theme" 
+                        id="id_theme" 
+                        class="select select-bordered select-sm"
+                        onchange="handleThemeChange()"
+                    >
+                        <option value="">Default (Dark)</option>
+                        <option value="light" {% if user.theme == 'light' %}selected{% endif %}>Light</option>
+                        <option value="dark" {% if user.theme == 'dark' %}selected{% endif %}>Dark</option>
+                        <option value="cupcake" {% if user.theme == 'cupcake' %}selected{% endif %}>Cupcake</option>
+                        <option value="bumblebee" {% if user.theme == 'bumblebee' %}selected{% endif %}>Bumblebee</option>
+                        <option value="emerald" {% if user.theme == 'emerald' %}selected{% endif %}>Emerald</option>
+                        <option value="corporate" {% if user.theme == 'corporate' %}selected{% endif %}>Corporate</option>
+                        <option value="synthwave" {% if user.theme == 'synthwave' %}selected{% endif %}>Synthwave</option>
+                        <option value="retro" {% if user.theme == 'retro' %}selected{% endif %}>Retro</option>
+                        <option value="cyberpunk" {% if user.theme == 'cyberpunk' %}selected{% endif %}>Cyberpunk</option>
+                        <option value="valentine" {% if user.theme == 'valentine' %}selected{% endif %}>Valentine</option>
+                        <option value="halloween" {% if user.theme == 'halloween' %}selected{% endif %}>Halloween</option>
+                        <option value="garden" {% if user.theme == 'garden' %}selected{% endif %}>Garden</option>
+                        <option value="forest" {% if user.theme == 'forest' %}selected{% endif %}>Forest</option>
+                        <option value="aqua" {% if user.theme == 'aqua' %}selected{% endif %}>Aqua</option>
+                        <option value="lofi" {% if user.theme == 'lofi' %}selected{% endif %}>Lofi</option>
+                        <option value="pastel" {% if user.theme == 'pastel' %}selected{% endif %}>Pastel</option>
+                        <option value="fantasy" {% if user.theme == 'fantasy' %}selected{% endif %}>Fantasy</option>
+                        <option value="wireframe" {% if user.theme == 'wireframe' %}selected{% endif %}>Wireframe</option>
+                        <option value="black" {% if user.theme == 'black' %}selected{% endif %}>Black</option>
+                        <option value="luxury" {% if user.theme == 'luxury' %}selected{% endif %}>Luxury</option>
+                        <option value="dracula" {% if user.theme == 'dracula' %}selected{% endif %}>Dracula</option>
+                        <option value="cmyk" {% if user.theme == 'cmyk' %}selected{% endif %}>CMYK</option>
+                        <option value="autumn" {% if user.theme == 'autumn' %}selected{% endif %}>Autumn</option>
+                        <option value="business" {% if user.theme == 'business' %}selected{% endif %}>Business</option>
+                        <option value="acid" {% if user.theme == 'acid' %}selected{% endif %}>Acid</option>
+                        <option value="lemonade" {% if user.theme == 'lemonade' %}selected{% endif %}>Lemonade</option>
+                        <option value="night" {% if user.theme == 'night' %}selected{% endif %}>Night</option>
+                        <option value="coffee" {% if user.theme == 'coffee' %}selected{% endif %}>Coffee</option>
+                        <option value="winter" {% if user.theme == 'winter' %}selected{% endif %}>Winter</option>
+                        <option value="dim" {% if user.theme == 'dim' %}selected{% endif %}>Dim</option>
+                        <option value="nord" {% if user.theme == 'nord' %}selected{% endif %}>Nord</option>
+                        <option value="sunset" {% if user.theme == 'sunset' %}selected{% endif %}>Sunset</option>
+                        <option value="custom" {% if user.theme == 'custom' %}selected{% endif %}>Custom Theme</option>
+                    </select>
+                </div>
+                
+                <!-- Custom Theme Builder -->
+                <div id="custom-theme-section" class="form-control {% if user.theme != 'custom' %}hidden{% endif %}" style="{% if user.theme == 'custom' %}display: block;{% endif %}">
+                    <div class="divider my-2">Custom Theme Colors</div>
+                    <p class="text-xs text-base-content/60 mb-3">
+                        Pick your own colors to create a custom DaisyUI theme. Leave a color blank to use the default.
+                    </p>
+                    
+                    <input type="hidden" name="use_custom_theme" id="use_custom_theme" value="{% if user.theme == 'custom' %}true{% else %}false{% endif %}">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-sm">Primary Color</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="color" 
+                                    name="custom_theme_primary" 
+                                    id="custom_theme_primary"
+                                    value="{% if user.custom_theme.primary %}{{ user.custom_theme.primary }}{% else %}#3b82f6{% endif %}"
+                                    class="w-16 h-8 rounded border border-base-300"
+                                    onchange="updateCustomTheme()"
+                                >
+                                <input 
+                                    type="text" 
+                                    name="custom_theme_primary_text" 
+                                    id="custom_theme_primary_text"
+                                    value="{% if user.custom_theme.primary %}{{ user.custom_theme.primary }}{% else %}#3b82f6{% endif %}"
+                                    class="input input-bordered input-sm flex-1"
+                                    placeholder="#3b82f6"
+                                    onchange="updateColorFromText('primary')"
+                                >
+                            </div>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-sm">Secondary Color</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="color" 
+                                    name="custom_theme_secondary" 
+                                    id="custom_theme_secondary"
+                                    value="{% if user.custom_theme.secondary %}{{ user.custom_theme.secondary }}{% else %}#8b5cf6{% endif %}"
+                                    class="w-16 h-8 rounded border border-base-300"
+                                    onchange="updateCustomTheme()"
+                                >
+                                <input 
+                                    type="text" 
+                                    name="custom_theme_secondary_text" 
+                                    id="custom_theme_secondary_text"
+                                    value="{% if user.custom_theme.secondary %}{{ user.custom_theme.secondary }}{% else %}#8b5cf6{% endif %}"
+                                    class="input input-bordered input-sm flex-1"
+                                    placeholder="#8b5cf6"
+                                    onchange="updateColorFromText('secondary')"
+                                >
+                            </div>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-sm">Accent Color</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="color" 
+                                    name="custom_theme_accent" 
+                                    id="custom_theme_accent"
+                                    value="{% if user.custom_theme.accent %}{{ user.custom_theme.accent }}{% else %}#f59e0b{% endif %}"
+                                    class="w-16 h-8 rounded border border-base-300"
+                                    onchange="updateCustomTheme()"
+                                >
+                                <input 
+                                    type="text" 
+                                    name="custom_theme_accent_text" 
+                                    id="custom_theme_accent_text"
+                                    value="{% if user.custom_theme.accent %}{{ user.custom_theme.accent }}{% else %}#f59e0b{% endif %}"
+                                    class="input input-bordered input-sm flex-1"
+                                    placeholder="#f59e0b"
+                                    onchange="updateColorFromText('accent')"
+                                >
+                            </div>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-sm">Neutral Color</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="color" 
+                                    name="custom_theme_neutral" 
+                                    id="custom_theme_neutral"
+                                    value="{% if user.custom_theme.neutral %}{{ user.custom_theme.neutral }}{% else %}#3d4451{% endif %}"
+                                    class="w-16 h-8 rounded border border-base-300"
+                                    onchange="updateCustomTheme()"
+                                >
+                                <input 
+                                    type="text" 
+                                    name="custom_theme_neutral_text" 
+                                    id="custom_theme_neutral_text"
+                                    value="{% if user.custom_theme.neutral %}{{ user.custom_theme.neutral }}{% else %}#3d4451{% endif %}"
+                                    class="input input-bordered input-sm flex-1"
+                                    placeholder="#3d4451"
+                                    onchange="updateColorFromText('neutral')"
+                                >
+                            </div>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-sm">Base Background</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="color" 
+                                    name="custom_theme_base_100" 
+                                    id="custom_theme_base_100"
+                                    value="{% if user.custom_theme.base_100 %}{{ user.custom_theme.base_100 }}{% else %}#1d232a{% endif %}"
+                                    class="w-16 h-8 rounded border border-base-300"
+                                    onchange="updateCustomTheme()"
+                                >
+                                <input 
+                                    type="text" 
+                                    name="custom_theme_base_100_text" 
+                                    id="custom_theme_base_100_text"
+                                    value="{% if user.custom_theme.base_100 %}{{ user.custom_theme.base_100 }}{% else %}#1d232a{% endif %}"
+                                    class="input input-bordered input-sm flex-1"
+                                    placeholder="#1d232a"
+                                    onchange="updateColorFromText('base_100')"
+                                >
+                            </div>
+                        </div>
+                        
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-sm">Base Content (Text)</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input 
+                                    type="color" 
+                                    name="custom_theme_base_content" 
+                                    id="custom_theme_base_content"
+                                    value="{% if user.custom_theme.base_content %}{{ user.custom_theme.base_content }}{% else %}#a6adbb{% endif %}"
+                                    class="w-16 h-8 rounded border border-base-300"
+                                    onchange="updateCustomTheme()"
+                                >
+                                <input 
+                                    type="text" 
+                                    name="custom_theme_base_content_text" 
+                                    id="custom_theme_base_content_text"
+                                    value="{% if user.custom_theme.base_content %}{{ user.custom_theme.base_content }}{% else %}#a6adbb{% endif %}"
+                                    class="input input-bordered input-sm flex-1"
+                                    placeholder="#a6adbb"
+                                    onchange="updateColorFromText('base_content')"
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info py-2">
+                        <span class="text-xs">💡 Tip: Your custom theme will be applied immediately after saving.</span>
+                    </div>
+                </div>
+                
+                <div class="form-control mt-4">
+                    <button type="submit" class="btn btn-primary btn-sm">Update Theme</button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+        
+        {% if current_tab == 'password' %}
+        <div id="tab-password" class="card bg-base-200 border border-base-300">
+            <form method="post" action="{% url 'users:profile' %}?tab=password" class="card-body p-4">
+                {% csrf_token %}
+                <h2 class="card-title text-lg mb-4">Change Password</h2>
+                
+                <div class="form-control">
+                    <label class="label py-1" for="id_current_password">
+                        <span class="label-text text-sm">Current Password</span>
+                    </label>
+                    <input 
+                        type="password" 
+                        name="current_password" 
+                        id="id_current_password" 
+                        class="input input-bordered input-sm"
+                        placeholder="Enter current password to change it"
+                    >
+                    <label class="label">
+                        <span class="label-text-alt text-xs">Leave blank if you don't want to change your password</span>
+                    </label>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label py-1" for="id_new_password">
+                        <span class="label-text text-sm">New Password</span>
+                    </label>
+                    <input 
+                        type="password" 
+                        name="new_password" 
+                        id="id_new_password" 
+                        class="input input-bordered input-sm"
+                        placeholder="Enter new password"
+                        minlength="8"
+                    >
+                    <label class="label">
+                        <span class="label-text-alt text-xs">Must be at least 8 characters</span>
+                    </label>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label py-1" for="id_confirm_password">
+                        <span class="label-text text-sm">Confirm New Password</span>
+                    </label>
+                    <input 
+                        type="password" 
+                        name="confirm_password" 
+                        id="id_confirm_password" 
+                        class="input input-bordered input-sm"
+                        placeholder="Confirm new password"
+                        minlength="8"
+                    >
+                </div>
+                
+                <div class="form-control mt-4">
+                    <button type="submit" class="btn btn-primary btn-sm">Update Password</button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+        
+        {% if current_tab == 'account' %}
+        <div id="tab-account" class="card bg-base-200 border border-base-300">
+            <div class="card-body p-4">
+                <h2 class="card-title text-lg mb-4">Account Actions</h2>
                 <form method="post" action="{% url 'users:sign_out' %}" class="inline">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-error">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <button type="submit" class="btn btn-error btn-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
                         </svg>
                         Sign Out
@@ -318,6 +378,8 @@
                 </form>
             </div>
         </div>
+        {% endif %}
+        
     </div>
 </div>
 
@@ -327,13 +389,13 @@
         const customThemeSection = document.getElementById('custom-theme-section');
         const useCustomTheme = document.getElementById('use_custom_theme');
         
-        if (themeSelect.value === 'custom') {
-            customThemeSection.classList.remove('hidden');
-            useCustomTheme.value = 'true';
+        if (themeSelect && themeSelect.value === 'custom') {
+            if (customThemeSection) customThemeSection.classList.remove('hidden');
+            if (useCustomTheme) useCustomTheme.value = 'true';
             updateCustomTheme(); // Apply preview
         } else {
-            customThemeSection.classList.add('hidden');
-            useCustomTheme.value = 'false';
+            if (customThemeSection) customThemeSection.classList.add('hidden');
+            if (useCustomTheme) useCustomTheme.value = 'false';
             // Remove custom theme styles
             const styleElement = document.getElementById('custom-theme-styles');
             if (styleElement) {

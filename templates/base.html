@@ -34,19 +34,154 @@
             width: 4rem; /* 64px - collapsed width */
         }
         .sidebar-content {
-            transition: opacity 0.2s ease-in-out;
             white-space: nowrap;
             overflow: hidden;
-            opacity: 0;
-            pointer-events: none;
+            position: relative;
         }
         .sidebar:not(.collapsed) .sidebar-content {
+            display: block;
             opacity: 1;
+            visibility: visible;
             pointer-events: auto;
+            transition: opacity 0.1s ease-in-out 0.1s, visibility 0.1s ease-in-out 0.1s; /* Delay showing when expanding */
         }
         .sidebar.collapsed .sidebar-content {
+            display: none; /* Completely remove from layout when collapsed */
             opacity: 0;
+            visibility: hidden;
             pointer-events: none;
+        }
+        /* Icon-only menu for collapsed state */
+        .sidebar-icons {
+            position: absolute;
+            top: 4rem; /* Start below the header (header is ~4rem/64px) */
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out 0.3s, visibility 0.2s ease-in-out 0.3s;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        /* Footer icons - separate from navigation icons */
+        .sidebar-footer-icons {
+            display: none;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out 0.3s, visibility 0.2s ease-in-out 0.3s;
+        }
+        .sidebar.collapsed .sidebar-footer-icons {
+            display: block;
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        .sidebar.collapsed .sidebar-footer-icons a,
+        .sidebar.collapsed .sidebar-footer-icons .sidebar-icon-btn {
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 11;
+        }
+        .sidebar:not(.collapsed) .sidebar-footer-icons {
+            display: none;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition-delay: 0s;
+        }
+        /* Ensure sidebar-content doesn't block footer icon clicks when collapsed */
+        .sidebar.collapsed .sidebar-content {
+            pointer-events: none !important;
+        }
+        .sidebar.collapsed .sidebar-content * {
+            pointer-events: none !important;
+        }
+        .sidebar.collapsed .sidebar-icons {
+            display: flex;
+            flex-direction: column;
+            /* Delay showing icons until after collapse animation completes (0.3s) */
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        .sidebar.collapsed .sidebar-icons a,
+        .sidebar.collapsed .sidebar-icons .sidebar-icon-btn,
+        .sidebar.collapsed .sidebar-icons li {
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 11;
+        }
+        .sidebar.collapsed .sidebar-icons ul {
+            pointer-events: auto !important;
+        }
+        /* Ensure sidebar-content doesn't block clicks when collapsed */
+        .sidebar.collapsed .sidebar-content {
+            pointer-events: none !important;
+        }
+        .sidebar.collapsed .sidebar-content * {
+            pointer-events: none !important;
+        }
+        .sidebar:not(.collapsed) .sidebar-icons {
+            display: none;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition-delay: 0s;
+        }
+        .sidebar-icon-btn {
+            width: 100%;
+            justify-content: center;
+            padding: 0.75rem;
+            transition: background-color 0.2s ease-in-out;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            cursor: pointer;
+            position: relative;
+        }
+        /* Tooltip for icon buttons */
+        .sidebar-icon-btn::after {
+            content: attr(title);
+            position: absolute;
+            left: 100%;
+            margin-left: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background-color: hsl(var(--b2));
+            color: hsl(var(--bc));
+            border: 1px solid hsl(var(--b3));
+            border-radius: 0.375rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out 0.5s, visibility 0.2s ease-in-out 0.5s;
+            z-index: 50;
+            font-size: 0.875rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .sidebar-icon-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+        .sidebar-icon-btn:hover,
+        .sidebar-icon-btn.btn:hover {
+            background-color: hsl(var(--bc) / 0.1) !important;
+        }
+        .sidebar-icon-btn:active,
+        .sidebar-icon-btn.btn:active {
+            background-color: hsl(var(--bc) / 0.2) !important;
+        }
+        .sidebar-icon-btn.btn-primary:hover {
+            background-color: hsl(var(--p) / 0.8) !important;
+        }
+        .sidebar-icon-btn.btn-primary:active {
+            background-color: hsl(var(--p)) !important;
         }
         .sidebar a,
         .sidebar button,
@@ -73,6 +208,81 @@
         .main-content {
             transition: margin-left 0.3s ease-in-out;
             margin-left: 4rem; /* Default to collapsed margin - will be updated by JS if needed */
+            margin-top: 4rem; /* Space for top navbar */
+        }
+        .navbar {
+            height: 4rem; /* 64px */
+            padding: 0 1rem;
+            transition: margin-left 0.3s ease-in-out;
+        }
+        #top-navbar {
+            margin-left: 4rem; /* Default to collapsed sidebar width */
+        }
+        /* Search results dropdown */
+        #search-results {
+            min-width: 100%;
+            opacity: 1 !important;
+            visibility: visible !important;
+            display: block !important;
+            background-color: #ffffff !important; /* White background */
+            color: #374151 !important; /* Dark grey text */
+            max-height: 64vh; /* Smaller max height */
+        }
+        #search-results.hidden {
+            display: none !important;
+        }
+        #search-results-content {
+            color: #374151 !important; /* Dark grey text */
+            padding: 0.25rem; /* Reduced padding */
+        }
+        .search-result-item {
+            padding: 0.5rem 0.75rem; /* Reduced padding */
+            border-bottom: 1px solid hsl(var(--b3));
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            display: block;
+            text-decoration: none;
+            color: #374151 !important; /* Dark grey text */
+        }
+        .search-result-item:hover {
+            background-color: #f3f4f6 !important; /* Light grey */
+        }
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        .search-result-category {
+            font-size: 0.6875rem; /* Smaller font (11px) */
+            font-weight: 600;
+            color: #374151 !important; /* Dark grey text */
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.375rem 0.75rem; /* Reduced padding */
+            background-color: #f3f4f6 !important; /* Light grey background */
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .search-result-title {
+            font-weight: 600;
+            font-size: 0.875rem; /* Smaller font (14px) */
+            color: #111827 !important; /* Very dark grey/black */
+            margin-bottom: 0.125rem; /* Reduced margin */
+        }
+        .search-result-meta {
+            font-size: 0.75rem; /* Smaller font (12px) */
+            color: #6B7280 !important; /* Medium grey */
+        }
+        @media (max-width: 768px) {
+            #top-navbar {
+                margin-left: 0 !important;
+            }
+            .navbar {
+                padding: 0 0.5rem;
+            }
+            .navbar input {
+                font-size: 0.875rem;
+            }
+            .navbar input::placeholder {
+                font-size: 0.75rem;
+            }
         }
         @media (max-width: 768px) {
             .sidebar {
@@ -121,7 +331,8 @@
                 style.textContent = `
                     #sidebar { width: 16rem !important; }
                     #sidebar.collapsed { width: 16rem !important; }
-                    #main-content { margin-left: 16rem !important; }
+                    #main-content { margin-left: 16rem !important; margin-top: 4rem !important; }
+                    #top-navbar { margin-left: 16rem !important; }
                     #sidebar .sidebar-content { opacity: 1 !important; pointer-events: auto !important; }
                     #sidebar .sidebar-toggle-container { justify-content: space-between !important; }
                     #sidebar-toggle-open { display: none !important; }
@@ -143,13 +354,46 @@
     </script>
 </head>
 <body class="min-h-screen bg-base-100 text-base-content">
+    <!-- Top Navigation Bar -->
+    <nav class="navbar bg-base-200 border-b border-base-300 fixed top-0 z-50 px-4" id="top-navbar" style="margin-left: 4rem;">
+        <div class="flex-1 w-full">
+            <form method="get" action="{% url 'grants:search' %}" class="w-full max-w-2xl mx-auto relative" id="search-form">
+                <div class="form-control">
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            name="q" 
+                            id="search-input"
+                            placeholder="Search grants, companies, funding searches..." 
+                            class="input input-bordered input-sm flex-1 min-w-0"
+                            value="{{ request.GET.q|default:'' }}"
+                            autocomplete="off"
+                            style="font-size: 0.875rem;"
+                        >
+                        <button type="submit" class="btn btn-square btn-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Search Results Dropdown -->
+                <div id="search-results" class="hidden absolute top-full left-0 right-0 mt-1 bg-base-100 border border-base-300 rounded-lg shadow-lg overflow-y-auto z-50">
+                    <div id="search-results-content" class="p-2">
+                        <!-- Results will be inserted here -->
+                    </div>
+                </div>
+            </form>
+        </div>
+    </nav>
+    
     <!-- Sidebar Overlay for Mobile -->
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
     
     <!-- Left Sidebar -->
     <aside id="sidebar" class="sidebar collapsed fixed left-0 top-0 h-screen bg-base-200 border-r border-base-300 z-50 flex flex-col overflow-hidden">
         <!-- Sidebar Header - Always Visible -->
-        <div class="sidebar-toggle-container flex items-center justify-between p-4 border-b border-base-300 flex-shrink-0">
+        <div class="sidebar-toggle-container flex items-center justify-between p-4 flex-shrink-0">
             <a href="/" class="text-xl font-bold sidebar-content">
                 Trellis
             </a>
@@ -165,6 +409,77 @@
             </button>
         </div>
         
+        <!-- Icon-only Navigation for Collapsed State -->
+        <nav class="sidebar-icons flex-1 overflow-y-auto p-2">
+            {% if user.is_authenticated %}
+            <ul class="menu menu-vertical w-full gap-2">
+                <li>
+                    <a href="{% url 'grants:list' %}" class="sidebar-icon-btn btn btn-ghost" title="Grants">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'companies:list' %}" class="sidebar-icon-btn btn btn-ghost" title="Companies">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+                        </svg>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'companies:funding_searches_list' %}" class="sidebar-icon-btn btn btn-ghost" title="My Funding Searches">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                        </svg>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'companies:questionnaires_list' %}" class="sidebar-icon-btn btn btn-ghost" title="Questionnaires">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h11.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+                        </svg>
+                    </a>
+                </li>
+                {% if user.admin %}
+                <li>
+                    <a href="{% url 'admin_panel:conversations_page' %}" class="sidebar-icon-btn btn btn-ghost" title="My Conversations">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+                        </svg>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'admin_panel:dashboard' %}" class="sidebar-icon-btn btn btn-ghost" title="Admin">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                        </svg>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+            {% else %}
+            <ul class="menu menu-vertical w-full gap-2">
+                <li>
+                    <a href="{% url 'users:sign_in' %}" class="sidebar-icon-btn btn btn-ghost" title="Sign In">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                        </svg>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'users:sign_up' %}" class="sidebar-icon-btn btn btn-primary" title="Sign Up">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                        </svg>
+                    </a>
+                </li>
+            </ul>
+            {% endif %}
+        </nav>
+        
+        <!-- Sidebar Navigation Container - Relative positioning for absolute icons -->
+        <div class="flex-1 overflow-hidden relative">
         <!-- Sidebar Navigation - Hidden when collapsed -->
         <nav class="sidebar-content flex-1 overflow-y-auto p-4">
             {% if user.is_authenticated %}
@@ -231,9 +546,21 @@
             </ul>
             {% endif %}
         </nav>
+        </div>
+        
+        <!-- Sidebar Footer Icon-only for Collapsed State -->
+        {% if user.is_authenticated %}
+        <div class="sidebar-footer-icons p-2 border-t border-base-300 flex-shrink-0">
+            <a href="{% url 'users:profile' %}" class="sidebar-icon-btn btn btn-ghost w-full" title="My Profile">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+            </a>
+        </div>
+        {% endif %}
         
         <!-- Sidebar Footer - Hidden when collapsed -->
-            {% if user.is_authenticated %}
+        {% if user.is_authenticated %}
         <div class="sidebar-content p-4 border-t border-base-300 flex-shrink-0">
             <a href="{% url 'users:profile' %}" class="btn btn-ghost w-full justify-start h-auto py-3 whitespace-nowrap overflow-hidden">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0">
@@ -255,7 +582,7 @@
         </svg>
     </button>
 
-    <main class="main-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-4" id="main-content">
+    <main class="main-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" id="main-content">
     {% if messages %}
         <div class="mb-4">
         {% for message in messages %}
@@ -1386,6 +1713,8 @@
             const isCollapsed = sidebar.classList.contains('collapsed');
             const isMobile = window.innerWidth < 768;
             
+            const navbar = document.getElementById('top-navbar');
+            
             if (isCollapsed) {
                 sidebar.classList.remove('collapsed');
                 if (overlay) overlay.classList.add('active');
@@ -1393,6 +1722,10 @@
                     if (!isMobile) {
                         mainContent.style.marginLeft = '16rem'; // 256px - expanded width
                     }
+                    mainContent.style.marginTop = '4rem'; // Space for navbar
+                }
+                if (navbar && !isMobile) {
+                    navbar.style.marginLeft = '16rem'; // 256px - expanded width
                 }
                 if (mobileToggle && isMobile) {
                     mobileToggle.classList.add('hidden');
@@ -1411,6 +1744,10 @@
                     } else {
                         mainContent.style.marginLeft = '0';
                     }
+                    mainContent.style.marginTop = '4rem'; // Space for navbar
+                }
+                if (navbar && !isMobile) {
+                    navbar.style.marginLeft = '4rem'; // 64px - collapsed width
                 }
                 if (mobileToggle && isMobile) {
                     mobileToggle.classList.remove('hidden');
@@ -1436,11 +1773,17 @@
             const savedState = localStorage.getItem('sidebarCollapsed');
             const isMobile = window.innerWidth < 768;
             
+            const navbar = document.getElementById('top-navbar');
+            
             if (isMobile) {
                 // On mobile, start collapsed
                 sidebar.classList.add('collapsed');
                 if (overlay) overlay.classList.remove('active');
-                if (mainContent) mainContent.style.marginLeft = '0';
+                if (mainContent) {
+                    mainContent.style.marginLeft = '0';
+                    mainContent.style.marginTop = '4rem'; // Space for navbar
+                }
+                if (navbar) navbar.style.marginLeft = '0';
                 if (mobileToggle) mobileToggle.classList.remove('hidden');
                 // Set icons for collapsed state
                 if (toggleOpenIcon) toggleOpenIcon.classList.remove('hidden');
@@ -1450,13 +1793,21 @@
                 const shouldCollapse = savedState === null || savedState === 'true';
                 if (shouldCollapse) {
                     sidebar.classList.add('collapsed');
-                    if (mainContent) mainContent.style.marginLeft = '4rem'; // 64px - collapsed width
+                    if (mainContent) {
+                        mainContent.style.marginLeft = '4rem'; // 64px - collapsed width
+                        mainContent.style.marginTop = '4rem'; // Space for navbar
+                    }
+                    if (navbar) navbar.style.marginLeft = '4rem'; // 64px - collapsed width
                     // Set icons for collapsed state
                     if (toggleOpenIcon) toggleOpenIcon.classList.remove('hidden');
                     if (toggleCloseIcon) toggleCloseIcon.classList.add('hidden');
                 } else {
                     sidebar.classList.remove('collapsed');
-                    if (mainContent) mainContent.style.marginLeft = '16rem'; // 256px - expanded width
+                    if (mainContent) {
+                        mainContent.style.marginLeft = '16rem'; // 256px - expanded width
+                        mainContent.style.marginTop = '4rem'; // Space for navbar
+                    }
+                    if (navbar) navbar.style.marginLeft = '16rem'; // 256px - expanded width
                     // Set icons for expanded state
                     if (toggleOpenIcon) toggleOpenIcon.classList.add('hidden');
                     if (toggleCloseIcon) toggleCloseIcon.classList.remove('hidden');
@@ -1469,6 +1820,8 @@
                 const isMobileNow = window.innerWidth < 768;
                 const isCollapsed = sidebar.classList.contains('collapsed');
                 
+                const navbar = document.getElementById('top-navbar');
+                
                 if (isMobileNow) {
                     // On mobile, show toggle button when collapsed
                     if (mobileToggle) {
@@ -1478,15 +1831,23 @@
                             mobileToggle.classList.add('hidden');
                         }
                     }
-                    if (mainContent) mainContent.style.marginLeft = '0';
+                    if (mainContent) {
+                        mainContent.style.marginLeft = '0';
+                        mainContent.style.marginTop = '4rem'; // Space for navbar
+                    }
+                    if (navbar) navbar.style.marginLeft = '0';
                 } else {
                     // On desktop, hide mobile toggle
                     if (mobileToggle) mobileToggle.classList.add('hidden');
                     // Restore desktop state
+                    if (mainContent) mainContent.style.marginTop = '4rem'; // Space for navbar
+                    if (navbar) navbar.style.marginTop = '0';
                     if (isCollapsed) {
                         if (mainContent) mainContent.style.marginLeft = '4rem'; // 64px - collapsed width
+                        if (navbar) navbar.style.marginLeft = '4rem'; // 64px - collapsed width
                     } else {
                         if (mainContent) mainContent.style.marginLeft = '16rem'; // 256px - expanded width
+                        if (navbar) navbar.style.marginLeft = '16rem'; // 256px - expanded width
                     }
                 }
             });
@@ -1515,6 +1876,170 @@
                 }
             });
         });
+    </script>
+    <script>
+        // Live search functionality
+        (function() {
+            const searchInput = document.getElementById('search-input');
+            const searchResults = document.getElementById('search-results');
+            const searchResultsContent = document.getElementById('search-results-content');
+            const searchForm = document.getElementById('search-form');
+            
+            if (!searchInput || !searchResults || !searchResultsContent) return;
+            
+            let searchTimeout = null;
+            let currentSearchQuery = '';
+            
+            // Debounced search function
+            function performSearch(query) {
+                if (query.length < 2) {
+                    searchResults.classList.add('hidden');
+                    return;
+                }
+                
+                // Show loading state
+                searchResultsContent.innerHTML = '<div class="p-4 text-center text-base-content/60">Searching...</div>';
+                searchResults.classList.remove('hidden');
+                
+                // Make AJAX request
+                const searchUrl = '{% url "grants:search" %}';
+                const url = new URL(window.location.origin + searchUrl);
+                url.searchParams.set('q', query);
+                
+                fetch(url.toString(), {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    displayResults(data, query);
+                })
+                .catch(error => {
+                    console.error('Search error:', error);
+                    searchResultsContent.innerHTML = '<div class="p-4 text-center text-error">Error loading results</div>';
+                });
+            }
+            
+            // Display search results
+            function displayResults(data, query) {
+                if (!data || (!data.grants || data.grants.length === 0) && 
+                    (!data.companies || data.companies.length === 0) && 
+                    (!data.funding_searches || data.funding_searches.length === 0)) {
+                    searchResultsContent.innerHTML = '<div class="p-4 text-center text-base-content/60">No results found</div>';
+                    return;
+                }
+                
+                let html = '';
+                
+                // Grants
+                if (data.grants && data.grants.length > 0) {
+                    html += `
+                        <div class="search-result-category flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Grants
+                        </div>
+                    `;
+                    data.grants.forEach(grant => {
+                        html += `
+                            <a href="${grant.url}" class="search-result-item block">
+                                <div class="search-result-title">${escapeHtml(grant.title)}</div>
+                                <div class="search-result-meta">${escapeHtml(grant.source)}${grant.summary ? ' • ' + escapeHtml(grant.summary) : ''}</div>
+                            </a>
+                        `;
+                    });
+                }
+                
+                // Companies
+                if (data.companies && data.companies.length > 0) {
+                    html += `
+                        <div class="search-result-category flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+                            </svg>
+                            Companies
+                        </div>
+                    `;
+                    data.companies.forEach(company => {
+                        html += `
+                            <a href="${company.url}" class="search-result-item block">
+                                <div class="search-result-title">${escapeHtml(company.name)}</div>
+                                <div class="search-result-meta">${company.company_number ? 'Company No: ' + escapeHtml(company.company_number) : 'Unregistered'}</div>
+                            </a>
+                        `;
+                    });
+                }
+                
+                // Funding Searches
+                if (data.funding_searches && data.funding_searches.length > 0) {
+                    html += `
+                        <div class="search-result-category flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                            My Funding Searches
+                        </div>
+                    `;
+                    data.funding_searches.forEach(fs => {
+                        html += `
+                            <a href="${fs.url}" class="search-result-item block">
+                                <div class="search-result-title">${escapeHtml(fs.name)}</div>
+                                <div class="search-result-meta">${escapeHtml(fs.company_name)}</div>
+                            </a>
+                        `;
+                    });
+                }
+                
+                searchResultsContent.innerHTML = html;
+            }
+            
+            // Escape HTML to prevent XSS
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Handle input changes with debounce
+            searchInput.addEventListener('input', function(e) {
+                const query = e.target.value.trim();
+                currentSearchQuery = query;
+                
+                // Clear previous timeout
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                
+                // Hide results if query is too short
+                if (query.length < 2) {
+                    searchResults.classList.add('hidden');
+                    return;
+                }
+                
+                // Debounce: wait 500ms after user stops typing
+                searchTimeout = setTimeout(() => {
+                    if (query === currentSearchQuery) {
+                        performSearch(query);
+                    }
+                }, 500);
+            });
+            
+            // Hide results when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!searchForm.contains(e.target)) {
+                    searchResults.classList.add('hidden');
+                }
+            });
+            
+            // Handle form submission (allow normal form submission)
+            searchForm.addEventListener('submit', function(e) {
+                // Don't prevent default - allow normal form submission
+                searchResults.classList.add('hidden');
+            });
+        })();
     </script>
 </body>
 </html>
