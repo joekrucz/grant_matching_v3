@@ -8,6 +8,44 @@ from app.utils.normalisation import parse_deadline
 from app.utils.http_client import create_session, fetch_with_retry
 
 
+def _map_funder_to_source(funder_text):
+    """
+    Map UKRI funder name to source code.
+    Returns the source code or 'ukri' as fallback.
+    """
+    if not funder_text:
+        return 'ukri'
+    
+    funder_lower = funder_text.lower()
+    
+    # Map common UKRI council names to source codes
+    council_mappings = {
+        'bbsrc': 'bbsrc',
+        'biotechnology and biological sciences research council': 'bbsrc',
+        'epsrc': 'epsrc',
+        'engineering and physical sciences research council': 'epsrc',
+        'mrc': 'mrc',
+        'medical research council': 'mrc',
+        'stfc': 'stfc',
+        'science and technology facilities council': 'stfc',
+        'ahrc': 'ahrc',
+        'arts and humanities research council': 'ahrc',
+        'esrc': 'esrc',
+        'economic and social research council': 'esrc',
+        'nerc': 'nerc',
+        'natural environment research council': 'nerc',
+        'innovate uk': 'innovate_uk',
+    }
+    
+    # Check for exact matches or partial matches
+    for key, source_code in council_mappings.items():
+        if key in funder_lower:
+            return source_code
+    
+    # Fallback to 'ukri' if no match
+    return 'ukri'
+
+
 def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[str, Any]]:
   """
   Scrape UKRI funding opportunities from https://www.ukri.org/opportunity/
@@ -237,6 +275,8 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
         opening_date_raw = None
         summary_content = {}
         closing_date_found = False  # Flag to track if we've processed the closing date field
+        funder = None  # Extract funder to determine source
+        source = 'ukri'  # Default source, will be updated if funder found
         
         # First, try to extract from the structured dl.opportunity__summary format
         summary_dl = detail_soup.select_one("dl.govuk-table.opportunity__summary, dl.opportunity__summary")
@@ -252,10 +292,21 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
               # Store all summary fields
               summary_content[dt_text] = dd_text
               
-              # Check for opening date - exact match for "Opening date:"
+              # Extract funder if this is the "Funders:" field
               dt_text_lower = dt_text.lower().strip()
+              if dt_text_lower == "funders:" or dt_text_lower == "funder:":
+                # Extract text from the link if present, otherwise use the text
+                funder_link = dd.select_one("a.ukri-funder__link")
+                if funder_link:
+                  funder = funder_link.get_text(strip=True)
+                else:
+                  funder = dd_text.strip()
+                
+                # Map funder to source
+                source = _map_funder_to_source(funder)
               
-              if dt_text_lower == "opening date:" or dt_text_lower == "opening date":
+              # Check for opening date - exact match for "Opening date:"
+              elif dt_text_lower == "opening date:" or dt_text_lower == "opening date":
                 opening_date_raw = dd_text
               # Check for closing date - exact match for "Closing date:"
               elif dt_text_lower == "closing date:" or dt_text_lower == "closing date":
@@ -336,7 +387,7 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
             formatted_description = "\n\n".join(formatted_parts)
         
         grant: Dict[str, Any] = {
-            "source": "ukri",
+            "source": source,  # Use mapped source based on funder
             "title": title,
             "url": url,
             "summary": summary,
@@ -349,7 +400,8 @@ def scrape_ukri(existing_grants: Dict[str, Dict[str, Any]] = None) -> List[Dict[
                 "listing_url": base_url,
                 "scraped_url": url,
                 "sections": sections if sections else None,
-                "opportunity_summary": summary_content if summary_content else None
+                "opportunity_summary": summary_content if summary_content else None,
+                "funder": funder,  # Store original funder name in raw_data
             },
         }
         grant["hash_checksum"] = sha256_for_grant(grant)

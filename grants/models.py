@@ -10,7 +10,14 @@ from django.utils.text import slugify
 
 
 GRANT_SOURCES = [
-    ('ukri', 'UKRI'),
+    ('ukri', 'UKRI'),  # Fallback for grants without specific council
+    ('bbsrc', 'BBSRC'),
+    ('epsrc', 'EPSRC'),
+    ('mrc', 'MRC'),
+    ('stfc', 'STFC'),
+    ('ahrc', 'AHRC'),
+    ('esrc', 'ESRC'),
+    ('nerc', 'NERC'),
     ('nihr', 'NIHR'),
     ('catapult', 'Catapult'),
     ('innovate_uk', 'Innovate UK'),

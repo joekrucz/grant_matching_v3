@@ -1359,7 +1359,7 @@ def wipe_grants_by_source(request, source):
     """Delete grants from a specific source (admin only)."""
     if request.method == 'POST':
         # Validate source
-        valid_sources = ['ukri', 'nihr', 'catapult', 'innovate_uk']
+        valid_sources = ['ukri', 'bbsrc', 'epsrc', 'mrc', 'stfc', 'ahrc', 'esrc', 'nerc', 'nihr', 'catapult', 'innovate_uk']
         if source not in valid_sources:
             messages.error(request, f'Invalid source: {source}')
             return redirect('admin_panel:dashboard')

@@ -264,7 +264,8 @@ def grant_detail(request, slug):
         elif grant.source == 'nihr':
             # Matches NIHR site tab order
             section_order = ["overview", "research_specification", "application_guidance", "application_process", "contact"]
-        elif grant.source == 'ukri':
+        elif grant.source in ['ukri', 'bbsrc', 'epsrc', 'mrc', 'stfc', 'ahrc', 'esrc', 'nerc']:
+            # All UKRI councils use the same section ordering
             section_order = ["overview", "scope", "eligibility", "funding", "how_to_apply", "dates", "assessment", "contact", "terms"]
         elif grant.source == 'innovate_uk':
             # Matches Innovate UK site tab order
