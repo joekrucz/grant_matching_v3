@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% load percentage %}
 {% load json_filter %}
+{% load grant_filters %}
+{% load static %}
 
 {% block title %}{{ funding_search.name }} - Grants Aggregator{% endblock %}
 
@@ -580,6 +582,8 @@
                                             {% if funding_search.matching_status == 'running' %}disabled{% endif %}
                                             data-funding-search-id="{{ funding_search.id }}"
                                         >
+                                        {% grant_source_logo source_code as logo_path %}
+                                        <img src="{% static logo_path %}" alt="{{ source_name }}" class="h-4 w-auto" onerror="this.style.display='none'">
                                         <span class="label-text">{{ source_name }}</span>
                                     </label>
                                     {% endfor %}
@@ -603,7 +607,11 @@
                                         {% for source_code in funding_search.selected_grant_sources %}
                                             {% for code, name in grant_sources %}
                                                 {% if code == source_code %}
-                                                <div class="badge badge-primary badge-outline">{{ name }}</div>
+                                                <div class="badge badge-primary badge-outline flex items-center gap-1">
+                                                    {% grant_source_logo code as logo_path %}
+                                                    <img src="{% static logo_path %}" alt="{{ name }}" class="h-4 w-auto" onerror="this.style.display='none'">
+                                                    <span>{{ name }}</span>
+                                                </div>
                                                 {% endif %}
                                             {% endfor %}
                                         {% endfor %}
@@ -1498,8 +1506,10 @@
                                     <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-sm">
                                         {{ match.grant.get_status_display }}
                 </div>
-                                    <span class="badge badge-primary badge-outline badge-sm">
-                                        {% if match.grant.get_source_display == "Innovate UK" %}IUK{% else %}{{ match.grant.get_source_display }}{% endif %}
+                                    <span class="badge badge-primary badge-outline badge-sm flex items-center gap-1">
+                                        {% grant_source_logo match.grant.source as logo_path %}
+                                        <img src="{% static logo_path %}" alt="{{ match.grant.get_source_display }}" class="h-3 w-auto" onerror="this.style.display='none'">
+                                        <span>{% if match.grant.get_source_display == "Innovate UK" %}IUK{% else %}{{ match.grant.get_source_display }}{% endif %}</span>
                                     </span>
                                     {% if match.grant.deadline %}
                                     <span class="badge badge-primary badge-outline badge-sm">{{ match.grant.deadline|date:"M d, Y" }}</span>

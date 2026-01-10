@@ -133,3 +133,35 @@ def markdown_headers(value):
     
     return mark_safe(html)
 
+
+@register.simple_tag
+def grant_source_logo(source):
+    """Return the static path to the logo file for a given grant source.
+    
+    Usage: {% grant_source_logo grant.source as logo_path %}
+    """
+    logo_map = {
+        'ukri': 'logos/ukri-research-england-standard-logo.png',  # Using Research England as general UKRI
+        'bbsrc': 'logos/ukri-bbsrc-standard-logo.png',
+        'epsrc': 'logos/ukri-epsrc-standard-logo.png',
+        'mrc': 'logos/ukri-mrc-standard-logo.png',
+        'stfc': 'logos/ukri-stfc-standard-logo.png',
+        'ahrc': 'logos/ukri-ahrc-standard-logo.png',
+        'esrc': 'logos/ukri-esrc-standard-logo.png',
+        'nerc': 'logos/ukri-nerc-standard-logo.png',
+        'innovate_uk': 'logos/ukri-innovate-uk-standard-logo.png',
+        'nihr': 'logos/nihr-logo.png',
+        'catapult': 'logos/catapult-logo.png',
+    }
+    return logo_map.get(source, 'logos/default.svg')
+
+
+@register.simple_tag
+def grant_source_logo_exists(source):
+    """Check if a logo exists for a given grant source (for conditional rendering).
+    
+    Usage: {% grant_source_logo_exists grant.source as has_logo %}
+    """
+    valid_sources = ['ukri', 'bbsrc', 'epsrc', 'mrc', 'stfc', 'ahrc', 'esrc', 'nerc', 'nihr', 'catapult', 'innovate_uk']
+    return source in valid_sources
+

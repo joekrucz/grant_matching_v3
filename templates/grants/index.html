@@ -1,11 +1,39 @@
 {% extends 'base.html' %}
+{% load grant_filters %}
+{% load static %}
 
 {% block title %}Trellis - Find and Match UK Funding Opportunities{% endblock %}
 
 {% block content %}
+<style>
+    @keyframes scroll {
+        0% {
+            transform: translateX(0);
+        }
+        100% {
+            transform: translateX(-50%);
+        }
+    }
+    
+    .animate-scroll {
+        animation: scroll 30s linear infinite;
+        display: flex;
+        width: max-content;
+    }
+    
+    .animate-scroll:hover {
+        animation-play-state: paused;
+    }
+    
+    /* Fade edges for smooth appearance */
+    .logo-scroll-container {
+        mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+        -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+    }
+</style>
 <!-- Hero Section -->
-<div class="hero min-h-[60vh] bg-gradient-to-br from-base-200 to-base-300">
-    <div class="hero-content text-center">
+<div class="hero min-h-[60vh] bg-gradient-to-br from-base-200 to-base-300 flex flex-col">
+    <div class="hero-content text-center flex-1">
         <div class="max-w-4xl">
             <h1 class="text-6xl font-bold mb-6">Find Your Perfect Grant Match</h1>
             <p class="text-xl mb-4 text-base-content/80">
@@ -19,6 +47,52 @@
                 <a href="{% url 'users:sign_up' %}" class="btn btn-primary btn-lg">Get Started Free</a>
             </div>
             {% endif %}
+        </div>
+    </div>
+    
+    <!-- Scrolling Logos Section -->
+    <div class="w-full mt-8 pb-8">
+        <div class="overflow-hidden relative logo-scroll-container">
+            <div class="flex animate-scroll gap-12 items-center">
+                <!-- First set of logos -->
+                {% grant_source_logo 'bbsrc' as bbsrc_logo %}
+                {% grant_source_logo 'epsrc' as epsrc_logo %}
+                {% grant_source_logo 'mrc' as mrc_logo %}
+                {% grant_source_logo 'stfc' as stfc_logo %}
+                {% grant_source_logo 'ahrc' as ahrc_logo %}
+                {% grant_source_logo 'esrc' as esrc_logo %}
+                {% grant_source_logo 'nerc' as nerc_logo %}
+                {% grant_source_logo 'innovate_uk' as innovate_uk_logo %}
+                {% grant_source_logo 'ukri' as ukri_logo %}
+                {% grant_source_logo 'nihr' as nihr_logo %}
+                {% grant_source_logo 'catapult' as catapult_logo %}
+                
+                <!-- Duplicate set for seamless loop -->
+                <img src="{% static bbsrc_logo %}" alt="BBSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static epsrc_logo %}" alt="EPSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static mrc_logo %}" alt="MRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static stfc_logo %}" alt="STFC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static ahrc_logo %}" alt="AHRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static esrc_logo %}" alt="ESRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static nerc_logo %}" alt="NERC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static innovate_uk_logo %}" alt="Innovate UK" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static ukri_logo %}" alt="UKRI" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static nihr_logo %}" alt="NIHR" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static catapult_logo %}" alt="Catapult" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                
+                <!-- Duplicate set for seamless loop -->
+                <img src="{% static bbsrc_logo %}" alt="BBSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static epsrc_logo %}" alt="EPSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static mrc_logo %}" alt="MRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static stfc_logo %}" alt="STFC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static ahrc_logo %}" alt="AHRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static esrc_logo %}" alt="ESRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static nerc_logo %}" alt="NERC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static innovate_uk_logo %}" alt="Innovate UK" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static ukri_logo %}" alt="UKRI" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static nihr_logo %}" alt="NIHR" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                <img src="{% static catapult_logo %}" alt="Catapult" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+            </div>
         </div>
     </div>
 </div>

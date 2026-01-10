@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% load grant_filters %}
+{% load static %}
 
 {% block title %}Grants - Grants Aggregator{% endblock %}
 
@@ -97,7 +99,11 @@
                     </a>
                 </td>
                 <td>
-                    {{ grant.get_source_display }}
+                    <div class="flex items-center gap-2">
+                        {% grant_source_logo grant.source as logo_path %}
+                        <img src="{% static logo_path %}" alt="{{ grant.get_source_display }}" class="h-4 w-auto" onerror="this.style.display='none'">
+                        <span>{{ grant.get_source_display }}</span>
+                    </div>
                 </td>
                 <td>
                     <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
@@ -144,7 +150,11 @@
                     </a>
                 </h2>
                 <div class="flex gap-2 flex-shrink-0">
-                    <span class="text-sm">{{ grant.get_source_display }}</span>
+                    <div class="flex items-center gap-1">
+                        {% grant_source_logo grant.source as logo_path %}
+                        <img src="{% static logo_path %}" alt="{{ grant.get_source_display }}" class="h-4 w-auto" onerror="this.style.display='none'">
+                        <span class="text-sm">{{ grant.get_source_display }}</span>
+                    </div>
                     <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
                         {{ grant.get_status_display }}
                     </div>

@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% load grant_filters %}
+{% load static %}
 
 {% block title %}Search Results - Trellis{% endblock %}
 
@@ -34,7 +36,11 @@
                                     </a>
                                 </h3>
                                 <p class="text-sm text-base-content/70">
-                                    <span class="badge badge-outline">{{ grant.get_source_display }}</span>
+                                    <span class="badge badge-outline flex items-center gap-1 w-fit">
+                                        {% grant_source_logo grant.source as logo_path %}
+                                        <img src="{% static logo_path %}" alt="{{ grant.get_source_display }}" class="h-4 w-auto" onerror="this.style.display='none'">
+                                        <span>{{ grant.get_source_display }}</span>
+                                    </span>
                                     {% if grant.deadline %}
                                         <span class="ml-2">Deadline: {{ grant.deadline|date:"M d, Y" }}</span>
                                     {% endif %}
