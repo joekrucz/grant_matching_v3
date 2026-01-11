@@ -441,7 +441,7 @@
                         </svg>
                     </a>
                 </li>
-                {% if user.admin %}
+                {% if user.admin and system_settings.ai_widget_enabled %}
                 <li>
                     <a href="{% url 'admin_panel:conversations_page' %}" class="sidebar-icon-btn btn btn-ghost" title="My Conversations">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
@@ -516,7 +516,7 @@
                         <span>Questionnaires</span>
                     </a>
                 </li>
-                {% if user.admin %}
+                {% if user.admin and system_settings.ai_widget_enabled %}
                 <li>
                     <a href="{% url 'admin_panel:conversations_page' %}" class="flex items-center gap-3">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
@@ -595,7 +595,7 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% if user.is_authenticated and user.admin %}
+    {% if user.is_authenticated and user.admin and system_settings.ai_widget_enabled %}
         {% if request.path|slice:":10" == "/companies/" and request.path|length > 11 or request.path|slice:":8" == "/grants/" and request.path|length > 8 %}
     <!-- Admin AI Assistant Popup -->
     <div id="admin-ai-assistant"

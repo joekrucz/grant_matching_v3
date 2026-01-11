@@ -623,6 +623,32 @@
         </div>
     </div>
     
+    <!-- Feature Flags -->
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title">Feature Flags</h2>
+            <div class="space-y-4">
+                <div>
+                    <form method="post" action="{% url 'admin_panel:system_settings' %}" id="ai-widget-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="grant_matching_batch_size" value="{{ system_settings.grant_matching_batch_size }}">
+                        <input type="hidden" name="update_feature_flag" value="1">
+                        <label class="label cursor-pointer justify-between gap-4">
+                            <span class="label-text font-semibold">AI Widget & Conversations</span>
+                            <input 
+                                type="checkbox" 
+                                name="ai_widget_enabled"
+                                class="toggle toggle-primary"
+                                {% if system_settings.ai_widget_enabled %}checked{% endif %}
+                                onchange="document.getElementById('ai-widget-form').submit()"
+                            >
+                        </label>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div class="card bg-base-200">
         <div class="card-body">
                 <div class="flex justify-between items-center mb-4">

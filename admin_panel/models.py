@@ -149,6 +149,12 @@ class SystemSettings(models.Model):
         help_text="Number of parallel ChatGPT API requests to make simultaneously (1-10 recommended)"
     )
     
+    # Feature flags
+    ai_widget_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable the AI widget and conversations feature"
+    )
+    
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -174,6 +180,9 @@ class SystemSettings(models.Model):
     @classmethod
     def get_settings(cls):
         """Get or create the singleton settings instance."""
-        settings_obj, created = cls.objects.get_or_create(id=1, defaults={'grant_matching_batch_size': 1})
+        settings_obj, created = cls.objects.get_or_create(id=1, defaults={
+            'grant_matching_batch_size': 1,
+            'ai_widget_enabled': False,
+        })
         return settings_obj
 

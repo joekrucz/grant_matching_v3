@@ -73,6 +73,15 @@ def _get_ai_client():
         return str(exc)
 
 
+def _check_ai_widget_enabled():
+    """Check if AI widget feature is enabled."""
+    from .models import SystemSettings
+    system_settings = SystemSettings.get_settings()
+    if not system_settings.ai_widget_enabled:
+        return _json_bad_request("AI widget and conversations feature is disabled.", status=403)
+    return None
+
+
 @login_required
 @admin_required
 def dashboard(request):
@@ -261,6 +270,10 @@ def ai_summarise_grant(request):
     """API endpoint: summarise a single grant for an admin."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     # SECURITY: Parse JSON with size limits
     from grants_aggregator.security_utils import safe_json_loads
     payload, error_response = safe_json_loads(request)
@@ -368,6 +381,10 @@ def ai_summarise_company(request):
     """API endpoint: summarise a single company for an admin."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     # SECURITY: Parse JSON with size limits
     from grants_aggregator.security_utils import safe_json_loads
     payload, error_response = safe_json_loads(request)
@@ -475,6 +492,10 @@ def ai_contextual_qa(request):
     """API endpoint: contextual Q&A for an admin based on current page context."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     # SECURITY: Parse JSON with size limits
     from grants_aggregator.security_utils import safe_json_loads
     payload, error_response = safe_json_loads(request)
@@ -683,6 +704,10 @@ def ai_search_companies(request):
     """API endpoint: search companies by name for AI assistant dropdowns."""
     if request.method != "GET":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     query = request.GET.get("q", "").strip()
     
@@ -707,6 +732,10 @@ def ai_search_grants(request):
     """API endpoint: search grants by title for AI assistant dropdowns."""
     if request.method != "GET":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     query = request.GET.get("q", "").strip()
     
@@ -732,6 +761,10 @@ def ai_grant_company_fit(request):
     """API endpoint: analyze how well a grant fits a company."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     # SECURITY: Parse JSON with size limits
     from grants_aggregator.security_utils import safe_json_loads
     payload, error_response = safe_json_loads(request)
@@ -865,6 +898,10 @@ def ai_search_grants_for_company(request):
     """API endpoint: search grants in DB that match a company."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     # SECURITY: Parse JSON with size limits
     from grants_aggregator.security_utils import safe_json_loads
     payload, error_response = safe_json_loads(request)
@@ -1044,6 +1081,10 @@ def ai_conversations_list(request):
     """API endpoint: list all conversations for the current user."""
     if request.method != "GET":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     conversations = Conversation.objects.filter(user=request.user).order_by("-updated_at")[:50]
     
@@ -1070,6 +1111,10 @@ def ai_conversation_detail(request, conversation_id):
     """API endpoint: get a conversation with all its messages."""
     if request.method != "GET":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
     
@@ -1104,6 +1149,10 @@ def ai_conversation_create(request):
     """API endpoint: create a new conversation."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     # SECURITY: Parse JSON with size limits
     from grants_aggregator.security_utils import safe_json_loads
@@ -1134,6 +1183,10 @@ def ai_conversation_add_message(request, conversation_id):
     """API endpoint: add a message to a conversation."""
     if request.method != "POST":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
     
@@ -1184,6 +1237,10 @@ def ai_conversation_update(request, conversation_id):
     """API endpoint: update a conversation (e.g., rename title)."""
     if request.method not in ["PUT", "PATCH"]:
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
     
@@ -1214,6 +1271,10 @@ def ai_conversation_delete(request, conversation_id):
     """API endpoint: delete a conversation."""
     if request.method != "DELETE":
         return _json_bad_request("Method not allowed", status=405)
+    # Check feature flag
+    feature_flag_error = _check_ai_widget_enabled()
+    if feature_flag_error:
+        return feature_flag_error
     
     conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
     conversation_id_value = conversation.id
@@ -1226,6 +1287,12 @@ def ai_conversation_delete(request, conversation_id):
 @admin_required
 def ai_conversations_page(request):
     """Dedicated page for viewing and managing AI conversations."""
+    from .models import SystemSettings
+    system_settings = SystemSettings.get_settings()
+    if not system_settings.ai_widget_enabled:
+        messages.error(request, 'AI widget and conversations feature is disabled.')
+        return redirect('admin_panel:dashboard')
+    
     conversations = Conversation.objects.filter(user=request.user).order_by("-updated_at")
     
     # Get selected conversation ID from query param or use most recent
@@ -1920,22 +1987,48 @@ def system_settings(request):
     
     elif request.method == 'POST':
         try:
+            import logging
+            logger = logging.getLogger(__name__)
             settings_obj = SystemSettings.get_settings()
-            batch_size = request.POST.get('grant_matching_batch_size')
             
-            if batch_size:
-                batch_size = int(batch_size)
-                # Clamp between 1 and 10
-                batch_size = max(1, min(10, batch_size))
-                settings_obj.grant_matching_batch_size = batch_size
+            # Check if this is a feature flag update or batch size update
+            is_feature_flag_update = request.POST.get('update_feature_flag') == '1'
+            
+            # Track if anything changed
+            batch_size_changed = False
+            ai_widget_changed = False
+            
+            if is_feature_flag_update:
+                # This is a feature flag form submission
+                ai_widget_enabled = request.POST.get('ai_widget_enabled') == 'on'
+                if settings_obj.ai_widget_enabled != ai_widget_enabled:
+                    settings_obj.ai_widget_enabled = ai_widget_enabled
+                    ai_widget_changed = True
+                    if ai_widget_enabled:
+                        messages.success(request, 'AI widget and conversations feature enabled.')
+                    else:
+                        messages.success(request, 'AI widget and conversations feature disabled.')
+            else:
+                # This is a batch size form submission
+                batch_size = request.POST.get('grant_matching_batch_size')
+                if batch_size:
+                    new_batch_size = int(batch_size)
+                    # Clamp between 1 and 10
+                    new_batch_size = max(1, min(10, new_batch_size))
+                    if settings_obj.grant_matching_batch_size != new_batch_size:
+                        settings_obj.grant_matching_batch_size = new_batch_size
+                        batch_size_changed = True
+                        messages.success(request, f'Grant matching batch size updated to {new_batch_size}.')
+            
+            # Save only if something changed
+            if batch_size_changed or ai_widget_changed:
                 settings_obj.updated_by = request.user
                 settings_obj.save()
-                messages.success(request, f'Grant matching batch size updated to {batch_size}.')
-            else:
-                messages.error(request, 'Batch size value is required.')
         except ValueError:
             messages.error(request, 'Invalid batch size value. Must be a number between 1 and 10.')
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
             logger.error(f"Error updating system settings: {e}", exc_info=True)
             messages.error(request, f'Error updating settings: {str(e)}')
     
