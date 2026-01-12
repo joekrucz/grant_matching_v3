@@ -33,6 +33,15 @@ else
     exit 1
 fi
 
+# Collect static files
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+if [ $? -eq 0 ]; then
+    echo "Static files collected successfully"
+else
+    echo "WARNING: collectstatic failed, but continuing..."
+fi
+
 # Start Gunicorn
 exec gunicorn --bind 0.0.0.0:$PORT --workers 3 --timeout 120 grants_aggregator.wsgi:application
 
