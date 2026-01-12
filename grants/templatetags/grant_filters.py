@@ -140,7 +140,7 @@ def grant_source_logo(source):
     
     Usage: {% grant_source_logo grant.source %}
     """
-    from django.templatetags.static import static
+    from django.contrib.staticfiles.storage import staticfiles_storage
     
     logo_map = {
         'ukri': 'logos/ukri-research-england-standard-logo.png',  # Using Research England as general UKRI
@@ -156,7 +156,7 @@ def grant_source_logo(source):
         'catapult': 'logos/catapult-logo.png',
     }
     logo_path = logo_map.get(source, 'logos/default.svg')
-    return static(logo_path)
+    return staticfiles_storage.url(logo_path)
 
 
 @register.simple_tag
