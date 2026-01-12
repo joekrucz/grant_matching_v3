@@ -582,8 +582,7 @@
                                             {% if funding_search.matching_status == 'running' %}disabled{% endif %}
                                             data-funding-search-id="{{ funding_search.id }}"
                                         >
-                                        {% grant_source_logo source_code as logo_path %}
-                                        <img src="{% static logo_path %}" alt="{{ source_name }}" class="h-4 w-auto" onerror="this.style.display='none'">
+                                        <img src="{% grant_source_logo source_code %}" alt="{{ source_name }}" class="h-4 w-auto" onerror="this.style.display='none'">
                                         <span class="label-text">{{ source_name }}</span>
                                     </label>
                                     {% endfor %}
@@ -608,8 +607,7 @@
                                             {% for code, name in grant_sources %}
                                                 {% if code == source_code %}
                                                 <div class="badge badge-primary badge-outline flex items-center gap-1">
-                                                    {% grant_source_logo code as logo_path %}
-                                                    <img src="{% static logo_path %}" alt="{{ name }}" class="h-4 w-auto" onerror="this.style.display='none'">
+                                                    <img src="{% grant_source_logo code %}" alt="{{ name }}" class="h-4 w-auto" onerror="this.style.display='none'">
                                                     <span>{{ name }}</span>
                                                 </div>
                                                 {% endif %}
@@ -1507,8 +1505,7 @@
                                         {{ match.grant.get_status_display }}
                 </div>
                                     <span class="badge badge-primary badge-outline badge-sm flex items-center gap-1">
-                                        {% grant_source_logo match.grant.source as logo_path %}
-                                        <img src="{% static logo_path %}" alt="{{ match.grant.get_source_display }}" class="h-3 w-auto" onerror="this.style.display='none'">
+                                        <img src="{% grant_source_logo match.grant.source %}" alt="{{ match.grant.get_source_display }}" class="h-3 w-auto" onerror="this.style.display='none'">
                                         <span>{% if match.grant.get_source_display == "Innovate UK" %}IUK{% else %}{{ match.grant.get_source_display }}{% endif %}</span>
                                     </span>
                                     {% if match.grant.deadline %}

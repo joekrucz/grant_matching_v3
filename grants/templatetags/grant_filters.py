@@ -136,10 +136,12 @@ def markdown_headers(value):
 
 @register.simple_tag
 def grant_source_logo(source):
-    """Return the static path to the logo file for a given grant source.
+    """Return the full static URL to the logo file for a given grant source.
     
-    Usage: {% grant_source_logo grant.source as logo_path %}
+    Usage: {% grant_source_logo grant.source %}
     """
+    from django.templatetags.static import static
+    
     logo_map = {
         'ukri': 'logos/ukri-research-england-standard-logo.png',  # Using Research England as general UKRI
         'bbsrc': 'logos/ukri-bbsrc-standard-logo.png',
@@ -153,7 +155,8 @@ def grant_source_logo(source):
         'nihr': 'logos/nihr-logo.png',
         'catapult': 'logos/catapult-logo.png',
     }
-    return logo_map.get(source, 'logos/default.svg')
+    logo_path = logo_map.get(source, 'logos/default.svg')
+    return static(logo_path)
 
 
 @register.simple_tag

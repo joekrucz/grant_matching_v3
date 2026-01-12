@@ -22,8 +22,7 @@
             <h1 class="card-title text-3xl">{{ grant.title }}</h1>
             <div class="flex gap-2">
                 <div class="badge {% if grant.source == 'ukri' or grant.source == 'bbsrc' or grant.source == 'epsrc' or grant.source == 'mrc' or grant.source == 'stfc' or grant.source == 'ahrc' or grant.source == 'esrc' or grant.source == 'nerc' %}badge-primary{% elif grant.source == 'nihr' %}badge-secondary{% else %}badge-accent{% endif %} badge-lg flex items-center gap-2">
-                    {% grant_source_logo grant.source as logo_path %}
-                    <img src="{% static logo_path %}" alt="{{ grant.get_source_display }}" class="h-5 w-auto" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo grant.source %}" alt="{{ grant.get_source_display }}" class="h-5 w-auto" onerror="this.style.display='none'">
                     <span>{{ grant.get_source_display }}</span>
                 </div>
                 <div class="badge {% if grant.computed_status == 'open' %}badge-success{% elif grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-lg">

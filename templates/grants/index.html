@@ -54,87 +54,74 @@
     <div class="w-full mt-8 pb-8">
         <div class="overflow-hidden relative logo-scroll-container">
             <div class="flex animate-scroll gap-12 items-center">
-                <!-- First set of logos -->
-                {% grant_source_logo 'bbsrc' as bbsrc_logo %}
-                {% grant_source_logo 'epsrc' as epsrc_logo %}
-                {% grant_source_logo 'mrc' as mrc_logo %}
-                {% grant_source_logo 'stfc' as stfc_logo %}
-                {% grant_source_logo 'ahrc' as ahrc_logo %}
-                {% grant_source_logo 'esrc' as esrc_logo %}
-                {% grant_source_logo 'nerc' as nerc_logo %}
-                {% grant_source_logo 'innovate_uk' as innovate_uk_logo %}
-                {% grant_source_logo 'ukri' as ukri_logo %}
-                {% grant_source_logo 'nihr' as nihr_logo %}
-                {% grant_source_logo 'catapult' as catapult_logo %}
-                
                 <!-- Duplicate set for seamless loop -->
                 <a href="{% url 'grants:list' %}?source=bbsrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static bbsrc_logo %}" alt="BBSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'bbsrc' %}" alt="BBSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=epsrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static epsrc_logo %}" alt="EPSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'epsrc' %}" alt="EPSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=mrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static mrc_logo %}" alt="MRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'mrc' %}" alt="MRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=stfc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static stfc_logo %}" alt="STFC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'stfc' %}" alt="STFC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=ahrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static ahrc_logo %}" alt="AHRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'ahrc' %}" alt="AHRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=esrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static esrc_logo %}" alt="ESRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'esrc' %}" alt="ESRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=nerc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static nerc_logo %}" alt="NERC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'nerc' %}" alt="NERC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=innovate_uk" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static innovate_uk_logo %}" alt="Innovate UK" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'innovate_uk' %}" alt="Innovate UK" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=ukri" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static ukri_logo %}" alt="UKRI" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'ukri' %}" alt="UKRI" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=nihr" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static nihr_logo %}" alt="NIHR" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'nihr' %}" alt="NIHR" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=catapult" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static catapult_logo %}" alt="Catapult" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'catapult' %}" alt="Catapult" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 
                 <!-- Duplicate set for seamless loop -->
                 <a href="{% url 'grants:list' %}?source=bbsrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static bbsrc_logo %}" alt="BBSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'bbsrc' %}" alt="BBSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=epsrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static epsrc_logo %}" alt="EPSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'epsrc' %}" alt="EPSRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=mrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static mrc_logo %}" alt="MRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'mrc' %}" alt="MRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=stfc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static stfc_logo %}" alt="STFC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'stfc' %}" alt="STFC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=ahrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static ahrc_logo %}" alt="AHRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'ahrc' %}" alt="AHRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=esrc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static esrc_logo %}" alt="ESRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'esrc' %}" alt="ESRC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=nerc" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static nerc_logo %}" alt="NERC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'nerc' %}" alt="NERC" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=innovate_uk" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static innovate_uk_logo %}" alt="Innovate UK" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'innovate_uk' %}" alt="Innovate UK" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=ukri" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static ukri_logo %}" alt="UKRI" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'ukri' %}" alt="UKRI" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=nihr" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static nihr_logo %}" alt="NIHR" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'nihr' %}" alt="NIHR" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
                 <a href="{% url 'grants:list' %}?source=catapult" class="block hover:opacity-100 transition-opacity">
-                    <img src="{% static catapult_logo %}" alt="Catapult" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
+                    <img src="{% grant_source_logo 'catapult' %}" alt="Catapult" class="h-12 w-auto opacity-80 hover:opacity-100 transition-opacity" onerror="this.style.display='none'">
                 </a>
             </div>
         </div>
