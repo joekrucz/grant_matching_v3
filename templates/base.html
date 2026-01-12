@@ -218,6 +218,10 @@
         #top-navbar {
             margin-left: 4rem; /* Default to collapsed sidebar width */
         }
+        #top-navbar > div {
+            display: flex !important;
+            width: 100% !important;
+        }
         /* Search results dropdown */
         #search-results {
             min-width: 100%;
@@ -269,6 +273,23 @@
         .search-result-meta {
             font-size: 0.75rem; /* Smaller font (12px) */
             color: #6B7280 !important; /* Medium grey */
+        }
+        #search-form {
+            width: 33.333% !important;
+            max-width: 33.333% !important;
+        }
+        #search-form .form-control {
+            width: 100% !important;
+        }
+        #search-form .input-group {
+            width: 100% !important;
+            display: flex !important;
+            max-width: 100% !important;
+        }
+        #search-input {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            max-width: calc(100% - 3rem) !important;
         }
         @media (max-width: 768px) {
             #top-navbar {
@@ -357,9 +378,9 @@
     <!-- Top Navigation Bar -->
     <nav class="navbar bg-base-200 border-b border-base-300 fixed top-0 z-50 px-4" id="top-navbar" style="margin-left: 4rem;">
         <div class="flex-1 w-full">
-            <form method="get" action="{% url 'grants:search' %}" class="w-full max-w-2xl mx-auto relative" id="search-form">
-                <div class="form-control">
-                    <div class="input-group">
+            <form method="get" action="{% url 'grants:search' %}" class="w-1/3 relative" id="search-form" style="width: 33.333%; max-width: 33.333%;">
+                <div class="form-control w-full">
+                    <div class="input-group w-full">
                         <input 
                             type="text" 
                             name="q" 
@@ -449,13 +470,6 @@
                         </svg>
                     </a>
                 </li>
-                <li>
-                    <a href="{% url 'admin_panel:dashboard' %}" class="sidebar-icon-btn btn btn-ghost" title="Admin">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                        </svg>
-                    </a>
-                </li>
                 {% endif %}
             </ul>
             {% else %}
@@ -525,14 +539,6 @@
                         <span>My Conversations</span>
                     </a>
                 </li>
-                <li>
-                    <a href="{% url 'admin_panel:dashboard' %}" class="flex items-center gap-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                        </svg>
-                        <span>Admin</span>
-                    </a>
-                </li>
                 {% endif %}
             </ul>
             {% else %}
@@ -548,6 +554,17 @@
         </nav>
         </div>
         
+        <!-- Admin Section - Icon-only for Collapsed State -->
+        {% if user.is_authenticated and user.admin %}
+        <div class="sidebar-footer-icons p-2 border-t border-base-300 flex-shrink-0">
+            <a href="{% url 'admin_panel:dashboard' %}" class="sidebar-icon-btn btn btn-ghost w-full" title="Dashboard">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                </svg>
+            </a>
+        </div>
+        {% endif %}
+        
         <!-- Sidebar Footer Icon-only for Collapsed State -->
         {% if user.is_authenticated %}
         <div class="sidebar-footer-icons p-2 border-t border-base-300 flex-shrink-0">
@@ -556,6 +573,23 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                 </svg>
             </a>
+        </div>
+        {% endif %}
+        
+        <!-- Admin Section - Expanded for Non-Collapsed State -->
+        {% if user.is_authenticated and user.admin %}
+        <div class="sidebar-content p-4 border-t border-base-300 flex-shrink-0">
+            <div class="text-xs font-semibold text-base-content/60 uppercase tracking-wider mb-3">Admin</div>
+            <ul class="menu menu-vertical w-full gap-2">
+                <li>
+                    <a href="{% url 'admin_panel:dashboard' %}" class="flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                        </svg>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+            </ul>
         </div>
         {% endif %}
         
