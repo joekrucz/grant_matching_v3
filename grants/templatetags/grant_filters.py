@@ -140,7 +140,7 @@ def grant_source_logo(source):
     
     Usage: {% grant_source_logo grant.source %}
     """
-    from django.contrib.staticfiles.storage import staticfiles_storage
+    from django.conf import settings
     
     logo_map = {
         'ukri': 'logos/ukri-research-england-standard-logo.png',  # Using Research England as general UKRI
@@ -156,7 +156,13 @@ def grant_source_logo(source):
         'catapult': 'logos/catapult-logo.png',
     }
     logo_path = logo_map.get(source, 'logos/default.svg')
-    return staticfiles_storage.url(logo_path)
+    
+    # Construct URL using STATIC_URL setting
+    # This is more reliable than using storage backends which may fail if files aren't collected
+    static_url = settings.STATIC_URL
+    if not static_url.endswith('/'):
+        static_url += '/'
+    return static_url + logo_path
 
 
 @register.simple_tag
