@@ -26,6 +26,21 @@
         return div.innerHTML;
     }
     
+    // Show pre-flight progress indicator
+    function showPreflightProgress() {
+        const statusAlert = document.getElementById('preflight-status-alert');
+        const preflightButton = document.getElementById('preflight-button');
+        
+        if (statusAlert) {
+            statusAlert.classList.remove('hidden');
+        }
+        
+        if (preflightButton) {
+            preflightButton.disabled = true;
+            preflightButton.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Running...';
+        }
+    }
+    
     // Real-time progress polling for matching status
     let progressPollInterval = null;
     
@@ -102,6 +117,63 @@
         }, 1000); // Poll every 1 second
     }
     
+    // Function to sort list view cards by recalculated overall match score (descending)
+    // This ensures the list view is ordered by the frontend-calculated score, not the database match_score
+    // Defined in global scope so it can be called from any DOMContentLoaded listener
+    function sortListViewCardsByOverallMatchScore() {
+        const listViewContainer = document.getElementById('list-view');
+        const remainingGrantsListContainer = document.getElementById('remaining-grants-list');
+        
+        function sortCardsByOverallMatchScore(container) {
+            if (!container) return;
+            
+            const cards = Array.from(container.querySelectorAll('.card[data-match-id]'));
+            cards.sort(function(a, b) {
+                // Check if either card is excluded (has "Excluded" badge)
+                const badgesA = a.querySelectorAll('.badge-error');
+                const badgesB = b.querySelectorAll('.badge-error');
+                let isExcludedA = false;
+                let isExcludedB = false;
+                
+                // Check if any error badge contains "Excluded" text
+                badgesA.forEach(function(badge) {
+                    if (badge.textContent.trim() === 'Excluded') {
+                        isExcludedA = true;
+                    }
+                });
+                badgesB.forEach(function(badge) {
+                    if (badge.textContent.trim() === 'Excluded') {
+                        isExcludedB = true;
+                    }
+                });
+                
+                // Excluded grants go to the bottom
+                if (isExcludedA && !isExcludedB) return 1;  // A goes after B
+                if (!isExcludedA && isExcludedB) return -1; // B goes after A
+                
+                // If both excluded or both not excluded, sort by score
+                const scoreA = a.querySelector('.overall-match-score');
+                const scoreB = b.querySelector('.overall-match-score');
+                
+                // Parse the percentage from the text content (e.g., "85%" -> 85)
+                const percentageA = scoreA ? parseFloat(scoreA.textContent.replace('%', '')) || 0 : 0;
+                const percentageB = scoreB ? parseFloat(scoreB.textContent.replace('%', '')) || 0 : 0;
+                
+                // Sort descending (highest first)
+                return percentageB - percentageA;
+            });
+            
+            // Re-insert cards in sorted order
+            cards.forEach(function(card) {
+                container.appendChild(card);
+            });
+        }
+        
+        // Sort both list view containers
+        sortCardsByOverallMatchScore(listViewContainer);
+        sortCardsByOverallMatchScore(remainingGrantsListContainer);
+    }
+    
     // Start polling if matching is running
     {% if funding_search.matching_status == 'running' %}
     var fundingSearchId = {{ funding_search.id }};
@@ -172,7 +244,7 @@
             </div>
             {% if can_edit %}
             <div class="dropdown dropdown-end">
-                <div tabindex="0" role="button" class="btn btn-sm btn-ghost opacity-0 group-hover:opacity-100 transition-opacity">
+                <div tabindex="0" role="button" class="btn btn-sm btn-ghost">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
                     </svg>
@@ -204,6 +276,7 @@
         <div class="md:hidden mb-2">
             <div class="tabs tabs-boxed w-full overflow-x-auto">
                 <a href="?tab=setup" class="tab {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grant Matching Setup</a>
+                <a href="?tab=preflight" class="tab {% if current_tab == 'preflight' %}tab-active font-bold{% else %}hover:underline{% endif %}">Pre-flight Checks</a>
                 <a href="?tab=results" class="tab {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grant Matching Results</a>
                 {% if can_edit %}
                 <a href="?tab=settings" class="tab {% if current_tab == 'settings' %}tab-active font-bold{% else %}hover:underline{% endif %}">Settings</a>
@@ -214,6 +287,9 @@
             <div class="tabs tabs-vertical tabs-l flex flex-col gap-1 bg-base-200 border border-base-300 rounded-xl p-2 w-full">
                 <a href="?tab=setup" class="tab w-full justify-start {% if current_tab == 'setup' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="setup">
                     Grant Matching Setup
+                </a>
+                <a href="?tab=preflight" class="tab w-full justify-start {% if current_tab == 'preflight' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="preflight">
+                    Pre-flight Checks
                 </a>
                 <a href="?tab=results" class="tab w-full justify-start {% if current_tab == 'results' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-funding-tab="results">
                     Grant Matching Results
@@ -378,35 +454,42 @@
                             </div>
                     </div>
                     
-                        <!-- Selected Company Sources -->
+                        <!-- Company Information (Always Included) -->
                     <div class="border border-base-300 rounded-lg p-4 bg-white">
-                        {% with file_count=selected_files|length %}
                         <div class="flex justify-between items-center mb-3">
                             <div class="font-semibold">
-                                Company Sources
-                                {% if file_count > 0 or funding_search.use_company_website %}
-                                ({% if file_count > 0 %}{{ file_count }} file{{ file_count|pluralize }}{% endif %}{% if file_count > 0 and funding_search.use_company_website %}, {% endif %}{% if funding_search.use_company_website %}Website{% endif %})
-                        {% endif %}
-                    </div>
-                            {% if can_edit %}
-                            <a href="{% url 'companies:funding_search_select_data' funding_search.id %}" class="btn btn-sm btn-outline {% if funding_search.matching_status == 'running' %}btn-disabled{% endif %}">
-                                Edit Sources
-                            </a>
-                {% endif %}
+                                Company Information
+                                <span class="text-xs font-normal text-base-content/70 ml-2">(Always included)</span>
+                            </div>
                         </div>
                         <div class="space-y-2">
-                    <!-- Company Website -->
-                    {% if funding_search.use_company_website and funding_search.company.website %}
-                            <div class="flex items-center gap-3 p-2 bg-base-200 rounded">
-                                <div class="badge badge-outline">Website</div>
-                            <div class="flex-1">
-                                    <a href="{{ funding_search.company.website }}" target="_blank" class="link link-primary text-xs font-medium">
-                                    {{ funding_search.company.website }}
-                                </a>
+                            <div class="text-sm text-base-content/70">
+                                The following company information is automatically included in all matching:
+                            </div>
+                            <ul class="list-disc list-inside text-sm space-y-1 ml-2">
+                                <li>Company registration details (name, number, status, type)</li>
+                                <li>SIC codes and descriptions</li>
+                                <li>Registered address</li>
+                                {% if funding_search.company.website %}
+                                <li>Company website content</li>
+                                {% endif %}
+                                {% if funding_search.company.grants_received_360 and funding_search.company.grants_received_360.grants %}
+                                <li>Grant history from 360Giving ({{ funding_search.company.grants_received_360.grants|length }} grant{{ funding_search.company.grants_received_360.grants|length|pluralize }})</li>
+                                {% endif %}
+                            </ul>
                         </div>
                     </div>
-                    {% endif %}
                     
+                    <!-- Uploaded Files -->
+                    {% if selected_files %}
+                    <div class="border border-base-300 rounded-lg p-4 bg-white">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="font-semibold">
+                                Uploaded Files
+                                <span class="text-xs font-normal text-base-content/70 ml-2">({{ selected_files|length }} file{{ selected_files|length|pluralize }})</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
                             {% for file in selected_files %}
                             <div class="flex items-center gap-3 p-2 bg-base-200 rounded">
                                 <div class="badge badge-outline">File</div>
@@ -419,8 +502,8 @@
                             </div>
                             {% endfor %}
                         </div>
-                        {% endwith %}
                     </div>
+                    {% endif %}
                     </div>
                     
                     <!-- Selected Company Notes -->
@@ -599,6 +682,56 @@
                                             <span class="label-text text-xs">Exclude closed competitions</span>
                                         </label>
                                     </div>
+                                    <div class="border-t border-base-300 pt-3 mt-3">
+                                        <div class="text-xs font-semibold mb-2 text-base-content/80">Checklist Assessment Options</div>
+                                        <div class="space-y-2">
+                                            <label class="flex items-start gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
+                                                <input 
+                                                    type="checkbox" 
+                                                    name="assess_exclusions" 
+                                                    id="assess-exclusions"
+                                                    class="checkbox checkbox-primary grant-source-checkbox mt-0.5"
+                                                    {% if funding_search.assess_exclusions != False %}checked{% endif %}
+                                                    {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                                                >
+                                                <span class="label-text text-xs">
+                                                    Assess Exclusions Checklist 
+                                                    <span class="text-xs text-base-content/60 block mt-0.5">(Recommended: Check first - if excluded, skip other assessments)</span>
+                                                </span>
+                                            </label>
+                                            <label class="flex items-start gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
+                                                <input 
+                                                    type="checkbox" 
+                                                    name="assess_eligibility" 
+                                                    id="assess-eligibility"
+                                                    class="checkbox checkbox-primary grant-source-checkbox mt-0.5"
+                                                    {% if funding_search.assess_eligibility != False %}checked{% endif %}
+                                                    {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                                                >
+                                                <span class="label-text text-xs">
+                                                    Assess Eligibility Checklist 
+                                                    <span class="text-xs text-base-content/60 block mt-0.5">(Recommended: Check second - if not eligible, skip competitiveness)</span>
+                                                </span>
+                                            </label>
+                                            <label class="flex items-start gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
+                                                <input 
+                                                    type="checkbox" 
+                                                    name="assess_competitiveness" 
+                                                    id="assess-competitiveness"
+                                                    class="checkbox checkbox-primary grant-source-checkbox mt-0.5"
+                                                    {% if funding_search.assess_competitiveness != False %}checked{% endif %}
+                                                    {% if funding_search.matching_status == 'running' %}disabled{% endif %}
+                                                >
+                                                <span class="label-text text-xs">
+                                                    Assess Competitiveness Checklist 
+                                                    <span class="text-xs text-base-content/60 block mt-0.5">(Recommended: Check last - only if eligible and not excluded)</span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <div class="text-xs text-base-content/60 mt-2">
+                                            Assessment order: Exclusions → Eligibility → Competitiveness (if selected)
+                                        </div>
+                                    </div>
                                         </form>
                                 {% else %}
                                 <div class="flex flex-wrap gap-2">
@@ -623,6 +756,174 @@
             </div>
         </div>
         {% endif %}
+
+{% if current_tab == 'preflight' %}
+<div id="tab-preflight" class="card bg-base-200 border border-base-300">
+    <div class="card-body">
+        <h2 class="card-title text-lg mb-4">Pre-flight Checks</h2>
+
+        <p class="text-sm text-base-content/70 mb-4">
+            Run pre-flight checks on the input material (questionnaire, notes, files, website)
+            to estimate how well-prepared this funding search is before starting a full
+            grant matching job.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <!-- Input summary -->
+            <div class="p-4 bg-base-100 rounded-lg border border-base-300">
+                <h3 class="font-semibold mb-2 text-sm">Current inputs</h3>
+                <ul class="text-xs space-y-1 text-base-content/80">
+                    <li>
+                        Questionnaire:
+                        {% if funding_search.questionnaire %}
+                            <span class="font-medium">Linked ({{ funding_search.questionnaire.name }})</span>
+                        {% else %}
+                            <span class="text-error">Not linked</span>
+                        {% endif %}
+                    </li>
+                    <li>
+                        Funding search files:
+                        {% if uploaded_files %}
+                            <span class="font-medium">{{ uploaded_files|length }} file{{ uploaded_files|length|pluralize }}</span>
+                        {% else %}
+                            <span class="text-warning">None uploaded</span>
+                        {% endif %}
+                    </li>
+                    <li>
+                        Company registration details:
+                        <span class="font-medium">Always included</span>
+                        {% if funding_search.company.company_number %}
+                            <span class="text-xs text-base-content/70">(Company Number: {{ funding_search.company.company_number }})</span>
+                        {% endif %}
+                    </li>
+                    <li>
+                        Company website:
+                        {% if funding_search.company.website %}
+                            <span class="font-medium">Always included if available</span>
+                        {% else %}
+                            <span class="text-warning">No website set</span>
+                        {% endif %}
+                    </li>
+                    <li>
+                        Company grant history:
+                        {% if funding_search.company.grants_received_360 and funding_search.company.grants_received_360.grants %}
+                            <span class="font-medium">Always included ({{ funding_search.company.grants_received_360.grants|length }} grant{{ funding_search.company.grants_received_360.grants|length|pluralize }})</span>
+                        {% else %}
+                            <span class="text-warning">No grant history available</span>
+                        {% endif %}
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Pre-flight score and details -->
+            <div class="p-4 bg-base-100 rounded-lg border border-base-300">
+                <h3 class="font-semibold mb-2 text-sm">Pre-flight score</h3>
+
+                {% if funding_search.preflight_result %}
+                    {% with pf=funding_search.preflight_result %}
+                    
+                    {% if pf.recommendations %}
+                    <div class="mb-4">
+                        <h4 class="font-semibold text-xs mb-2">Top recommendations</h4>
+                        <ul class="list-disc list-inside text-xs space-y-1">
+                            {% if pf.recommendations.critical %}
+                                {% for item in pf.recommendations.critical %}
+                                    <li><span class="font-semibold">Critical:</span> {{ item.title|default:item }}</li>
+                                {% endfor %}
+                            {% endif %}
+                            {% if pf.recommendations.high %}
+                                {% for item in pf.recommendations.high %}
+                                    <li><span class="font-semibold">High:</span> {{ item.title|default:item }}</li>
+                                {% endfor %}
+                            {% endif %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    {# TRL Assessment #}
+                    <div class="border-t border-base-300 pt-3 mt-3">
+                        <h4 class="font-semibold text-xs mb-2">TRL Assessment</h4>
+                        {% if pf.trl_assessment %}
+                            {% with trl=pf.trl_assessment %}
+                                {% if trl.assessed_trl_level and trl.assessed_trl_level != "unknown" %}
+                                    <div class="mb-2">
+                                        <span class="badge badge-sm badge-info">{{ trl.assessed_trl_level }}</span>
+                                        {% if trl.confidence %}
+                                            <span class="text-[0.65rem] text-base-content/60 ml-2">
+                                                ({{ trl.confidence }} confidence)
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    {% if trl.reasoning %}
+                                        <p class="text-xs text-base-content/70 mb-2">
+                                            {{ trl.reasoning }}
+                                        </p>
+                                    {% endif %}
+                                    {% if trl.indicators %}
+                                        <div class="text-xs text-base-content/60">
+                                            <span class="font-semibold">Indicators:</span>
+                                            <ul class="list-disc list-inside mt-1">
+                                                {% for indicator in trl.indicators %}
+                                                    <li>{{ indicator }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <p class="text-xs text-base-content/70">
+                                        {% if trl.reasoning %}
+                                            {{ trl.reasoning }}
+                                        {% else %}
+                                            TRL level could not be determined from the input material.
+                                        {% endif %}
+                                    </p>
+                                {% endif %}
+                            {% endwith %}
+                        {% else %}
+                            <p class="text-xs text-base-content/70">
+                                TRL assessment not available. Please run pre-flight checks again.
+                            </p>
+                        {% endif %}
+                    </div>
+
+                    <p class="text-[0.65rem] text-base-content/60 mt-3">
+                        Last checked:
+                        {{ pf.checked_at|default:"Not available" }}
+                    </p>
+                    {% endwith %}
+                {% else %}
+                    <p class="text-xs text-base-content/70 mb-3">
+                        No pre-flight checks have been run yet for this funding search.
+                    </p>
+                {% endif %}
+
+                {% if can_edit %}
+                <!-- Pre-flight Status Alert (hidden by default) -->
+                <div id="preflight-status-alert" class="alert alert-info mt-4 hidden">
+                    <div class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        <span>Running pre-flight checks... This may take a minute.</span>
+                    </div>
+                </div>
+                
+                <form method="post" action="{% url 'companies:funding_search_preflight' funding_search.id %}" id="preflight-form" onsubmit="showPreflightProgress(); return true;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-primary" id="preflight-button"
+                            {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
+                        Run pre-flight checks
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <p class="text-xs text-base-content/60">
+            Pre-flight checks do not run grant matching. They only assess the quality and completeness
+            of the input material to reduce the risk of low-quality matches.
+        </p>
+    </div>
+</div>
+{% endif %}
 
 {% if current_tab == 'results' %}
 <div id="tab-results" class="card bg-base-200 border border-base-300">
@@ -738,9 +1039,9 @@
             {% endif %}
         </p>
         
-        <!-- Top 9 Results - List View -->
+        <!-- Top 5 Results - List View -->
         <div id="list-view" class="space-y-4 view-container" {% if current_view != 'list' %}style="display: none;"{% endif %}>
-            {% for match_data in match_results_with_json|slice:":9" %}
+            {% for match_data in match_results_with_json|slice:":5" %}
             {% with match=match_data.match %}
             <div class="card bg-base-100 border border-base-300 {% if forloop.first %}border-2 border-primary{% endif %}" data-match-id="{{ match.id }}">
                 {% if forloop.first %}
@@ -768,6 +1069,14 @@
                                 <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                 {% if match.grant.deadline %}
                                 <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                                {% endif %}
+                                {% if match.grant.trl_requirements.trl_levels %}
+                                    <span class="badge badge-outline" title="Grant TRL requirements">
+                                        Grant TRL: {% if match.grant.trl_requirements.trl_range %}{{ match.grant.trl_requirements.trl_range }}{% else %}{{ match.grant.trl_requirements.trl_levels|trl_levels_to_range }}{% endif %}
+                                    </span>
+                                {% endif %}
+                                {% if match_data.is_excluded %}
+                                <span class="badge badge-error">Excluded</span>
                                 {% endif %}
                             </div>
                             <div class="text-base-content mt-3">
@@ -1032,7 +1341,7 @@
                                 <div>
                             <div class="stat-value text-primary text-4xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                     <div class="stat-desc text-xs">Overall Match</div>
-                                    <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}">Calculating...</div>
+                                    <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
                                 </div>
                             </div>
                             {% if match.eligibility_score is not None or match.competitiveness_score is not None or match.match_reasons.exclusions_checklist %}
@@ -1073,6 +1382,32 @@
                                         </div>
                                     </div>
                                     {% endif %}
+                                    
+                                    {# Other Checks Section #}
+                                    {% if match.match_reasons.project_type_and_trl_focus %}
+                                        {% if match.grant.trl_requirements %}
+                                            {% if match.grant.trl_requirements.trl_levels %}
+                                            <div class="border-t border-base-300 pt-3 mt-3">
+                                                <div class="text-xs font-bold mb-2 text-left">Other Checks:</div>
+                                                <div>
+                                                    {% check_project_trl_in_grant_range match.match_reasons.project_type_and_trl_focus match.grant.trl_requirements as trl_check_status %}
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-xs text-base-content/70">TRL Range</span>
+                                                        <span class="text-xs font-semibold">
+                                                            {% if trl_check_status == "yes" %}
+                                                                <span class="text-success">✓</span>
+                                                            {% elif trl_check_status == "no" %}
+                                                                <span class="text-error">✗</span>
+                                                            {% else %}
+                                                                <span class="text-warning">?</span>
+                                                            {% endif %}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
                                 </div>
                             </div>
                             {% else %}
@@ -1107,6 +1442,9 @@
                         {% if match.grant.deadline %}
                         <span class="badge badge-primary badge-outline badge-sm">{{ match.grant.deadline|date:"M d, Y" }}</span>
                         {% endif %}
+                        {% if match_data.is_excluded %}
+                        <span class="badge badge-error badge-sm">Excluded</span>
+                        {% endif %}
                     </div>
                                 <div class="mt-4 flex items-center justify-center gap-3">
                                     {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
@@ -1123,7 +1461,7 @@
                                     <div class="text-center">
                                         <div class="stat-value text-primary text-2xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                         <div class="stat-desc text-xs">Overall Match</div>
-                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}">Calculating...</div>
+                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
                         </div>
                     </div>
                 </div>
@@ -1149,10 +1487,10 @@
             </button>
             
             <div id="remaining-grants-section" class="hidden mt-4">
-                <div class="border border-base-300 rounded-lg p-4 bg-base-100" style="max-height: 600px; overflow-y: auto;">
+                <div class="border border-base-300 rounded-lg p-4 bg-base-100" style="max-height: 800px; overflow-y: auto;">
                     <!-- Remaining Grants - List View -->
                     <div id="remaining-grants-list" class="space-y-4 remaining-grants-view" {% if current_view != 'list' %}style="display: none;"{% endif %}>
-                        {% for match_data in match_results_with_json|slice:"9:" %}
+                        {% for match_data in match_results_with_json|slice:"5:" %}
                         {% with match=match_data.match %}
                         <div class="card bg-base-100 border border-base-300">
                             <div class="card-body pb-0">
@@ -1170,6 +1508,14 @@
                                             <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
                                             {% if match.grant.deadline %}
                                             <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                                            {% endif %}
+                                            {% if match.grant.trl_requirements.trl_levels %}
+                                                <span class="badge badge-outline" title="Grant TRL requirements">
+                                                    Grant TRL: {% if match.grant.trl_requirements.trl_range %}{{ match.grant.trl_requirements.trl_range }}{% else %}{{ match.grant.trl_requirements.trl_levels|trl_levels_to_range }}{% endif %}
+                                                </span>
+                                            {% endif %}
+                                            {% if match_data.is_excluded %}
+                                            <span class="badge badge-error">Excluded</span>
                                             {% endif %}
                                         </div>
                                         <div class="text-base-content mt-3">
@@ -1434,7 +1780,7 @@
                                             <div>
                                         <div class="stat-value text-primary text-4xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                                 <div class="stat-desc text-xs">Overall Match</div>
-                                                <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}">Calculating...</div>
+                                                <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
                                             </div>
                                         </div>
                                         {% if match.eligibility_score is not None or match.competitiveness_score is not None or match.match_reasons.exclusions_checklist %}
@@ -1475,6 +1821,32 @@
                                                     </div>
                                                 </div>
                                                 {% endif %}
+                                                
+                                                {# Other Checks Section #}
+                                                {% if match.match_reasons.project_type_and_trl_focus %}
+                                                    {% if match.grant.trl_requirements %}
+                                                        {% if match.grant.trl_requirements.trl_levels %}
+                                                        <div class="border-t border-base-300 pt-3 mt-3">
+                                                            <div class="text-xs font-bold mb-2 text-left">Other Checks:</div>
+                                                            <div>
+                                                                {% check_project_trl_in_grant_range match.match_reasons.project_type_and_trl_focus match.grant.trl_requirements as trl_check_status %}
+                                                                <div class="flex justify-between items-center">
+                                                                    <span class="text-xs text-base-content/70">TRL Range</span>
+                                                                    <span class="text-xs font-semibold">
+                                                                        {% if trl_check_status == "yes" %}
+                                                                            <span class="text-success">✓</span>
+                                                                        {% elif trl_check_status == "no" %}
+                                                                            <span class="text-error">✗</span>
+                                                                        {% else %}
+                                                                            <span class="text-warning">?</span>
+                                                                        {% endif %}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {% endif %}
+                                                    {% endif %}
+                                                {% endif %}
                                             </div>
                                         </div>
                                         {% else %}
@@ -1511,6 +1883,14 @@
                                     {% if match.grant.deadline %}
                                     <span class="badge badge-primary badge-outline badge-sm">{{ match.grant.deadline|date:"M d, Y" }}</span>
                                     {% endif %}
+                                    {% if match.grant.trl_requirements.trl_levels %}
+                                        <span class="badge badge-outline badge-sm" title="Grant TRL requirements">
+                                            Grant TRL: {% if match.grant.trl_requirements.trl_range %}{{ match.grant.trl_requirements.trl_range }}{% else %}{{ match.grant.trl_requirements.trl_levels|trl_levels_to_range }}{% endif %}
+                                        </span>
+                                    {% endif %}
+                                    {% if match_data.is_excluded %}
+                                    <span class="badge badge-error badge-sm">Excluded</span>
+                                    {% endif %}
                                 </div>
                                 <div class="mt-4 flex items-center justify-center gap-3">
                                     {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
@@ -1527,7 +1907,7 @@
                                     <div class="text-center">
                                         <div class="stat-value text-primary text-2xl overall-match-score">{{ match.match_score|percentage }}%</div>
                                         <div class="stat-desc text-xs">Overall Match</div>
-                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}">Calculating...</div>
+                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
                                     </div>
                                 </div>
                             </div>
@@ -1540,6 +1920,762 @@
         </div>
         {% endwith %}
         {% endif %}
+        {% endif %}
+        
+        <!-- Not Eligible Grants (Expandable) -->
+        {% if not_eligible_grants_with_json|length > 0 %}
+        {% with not_eligible_count=not_eligible_grants_with_json|length %}
+        <div class="mt-6">
+            <button 
+                id="toggle-not-eligible-grants" 
+                class="btn btn-outline btn-warning w-full"
+                onclick="toggleNotEligibleGrants()"
+                data-not-eligible-count="{{ not_eligible_count }}"
+            >
+                <span id="toggle-not-eligible-text">View {{ not_eligible_count }} Not Eligible Grant{{ not_eligible_count|pluralize }}</span>
+                <svg id="toggle-not-eligible-icon" class="w-5 h-5 ml-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            
+            <div id="not-eligible-grants-section" class="hidden mt-4">
+                <div class="border border-warning rounded-lg p-4 bg-base-100" style="max-height: 800px; overflow-y: auto;">
+                    <!-- Not Eligible Grants - List View -->
+                    <div id="not-eligible-grants-list" class="space-y-4 not-eligible-grants-view" {% if current_view != 'list' %}style="display: none;"{% endif %}>
+                        {% for match_data in not_eligible_grants_with_json %}
+                        {% with match=match_data.match %}
+                        <div class="card bg-base-100 border border-warning">
+                            <div class="card-body pb-0">
+                                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
+                                    <div class="flex-1">
+                                        <h3 class="card-title text-base">
+                                            <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary">
+                                                {{ match.grant.title }}
+                                            </a>
+                                        </h3>
+                                        <div class="flex gap-2 mt-2 flex-wrap">
+                                            <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
+                                                {{ match.grant.get_status_display }}
+                                            </div>
+                                            <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
+                                            {% if match.grant.deadline %}
+                                            <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                                            {% endif %}
+                                            {% if match.grant.trl_requirements.trl_levels %}
+                                                <span class="badge badge-outline" title="Grant TRL requirements">
+                                                    Grant TRL: {% if match.grant.trl_requirements.trl_range %}{{ match.grant.trl_requirements.trl_range }}{% else %}{{ match.grant.trl_requirements.trl_levels|trl_levels_to_range }}{% endif %}
+                                                </span>
+                                            {% endif %}
+                                            <span class="badge badge-warning">Not Eligible</span>
+                                        </div>
+                                        <div class="text-base-content mt-3">
+                                    <div class="mt-4 -mx-4 -mb-2">
+                                        <div class="collapse">
+                                            <input type="checkbox" id="more-details-not-eligible-{{ match.id }}" />
+                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2 cursor-pointer">
+                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                </svg>
+                                                <span>Details</span>
+                                            </div>
+                                            <div class="collapse-content px-4 pb-2 pt-0">
+                                                {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
+                                                <div class="mt-2">
+                                                    <div class="font-semibold text-xs mb-2">Summary</div>
+                                                <div class="space-y-2">
+                                                    {% if match.match_reasons.project_type_and_trl_focus %}
+                                                    <div class="mt-2">
+                                                            <div class="font-semibold text-xs mb-1">
+                                                                Project type and TRL focus
+                                                            </div>
+                                                            <div class="pb-2">
+                                                                <p class="text-xs mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if match.match_reasons.why_it_matches %}
+                                                    <div class="mt-2">
+                                                            <div class="font-semibold text-xs mb-1">
+                                                                Why it matches
+                                                            </div>
+                                                            <div class="pb-2">
+                                                                <p class="text-xs mt-1">{{ match.match_reasons.why_it_matches }}</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if match.match_reasons.key_risks_and_uncertainties %}
+                                                    <div class="mt-2">
+                                                            <div class="font-semibold text-xs mb-1">
+                                                                Key risks and uncertainties
+                                                            </div>
+                                                            <div class="pb-2">
+                                                                <p class="text-xs mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                    </div>
+                                </div>
+                                {% elif match.match_reasons.explanation %}
+                                                <div class="mt-2">
+                                                    <div class="font-semibold text-xs mb-2">Summary</div>
+                                                    <p class="text-xs"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                                <div class="mt-4">
+                                                    <div class="font-semibold text-xs mb-2">Checklists</div>
+                                            <div class="space-y-2">
+                                {% if match.match_reasons.eligibility_checklist %}
+                                                <div>
+                                                    <div class="collapse">
+                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-xs px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                            Eligibility Checklist
+                                            <span class="text-xs font-normal text-base-content/70 eligibility-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-0 pt-2">
+                                            <div class="space-y-2 eligibility-checklist-items">
+                                        {% for item in match.match_reasons.eligibility_checklist %}
+                                        <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
+                                            {% if item.status == "yes" %}
+                                            <span class="text-success text-base checklist-status-icon w-6 flex-shrink-0">✓</span>
+                                            {% elif item.status == "no" %}
+                                            <span class="text-error text-base checklist-status-icon w-6 flex-shrink-0">✗</span>
+                                            {% else %}
+                                            <span class="text-warning text-base checklist-status-icon w-6 flex-shrink-0">?</span>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs font-medium">{{ item.criterion }}</span>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'eligibility', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                    {% if item.manually_edited %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'eligibility', {{ forloop.counter0 }})">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                        </svg>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% endif %}
+                                                </div>
+                                                {% if item.manually_edited %}
+                                                <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                                {% elif item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.competitiveness_checklist %}
+                                                <div>
+                                    <div class="collapse">
+                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-xs px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                            Competitiveness Checklist
+                                            <span class="text-xs font-normal text-base-content/70 competitiveness-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-0 pt-2">
+                                            <div class="space-y-2 competitiveness-checklist-items">
+                                        {% for item in match.match_reasons.competitiveness_checklist %}
+                                        <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
+                                            {% if item.status == "yes" %}
+                                            <span class="text-success text-base checklist-status-icon w-6 flex-shrink-0">✓</span>
+                                            {% elif item.status == "no" %}
+                                            <span class="text-error text-base checklist-status-icon w-6 flex-shrink-0">✗</span>
+                                            {% else %}
+                                            <span class="text-warning text-base checklist-status-icon w-6 flex-shrink-0">?</span>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs font-medium">{{ item.criterion }}</span>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'competitiveness', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                    {% if item.manually_edited %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'competitiveness', {{ forloop.counter0 }})">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                        </svg>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% endif %}
+                                                </div>
+                                                {% if item.manually_edited %}
+                                                <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                                {% elif item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                                            </div>
+                                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.exclusions_checklist %}
+                                                <div>
+                                    <div class="collapse">
+                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-xs px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                            Exclusions Checklist
+                                            <span class="text-xs font-normal text-base-content/70 exclusions-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                            <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-0 pt-2">
+                                            <div class="space-y-2 exclusions-checklist-items">
+                                                {% for item in match.match_reasons.exclusions_checklist %}
+                                                <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
+                                                    {% if item.status == "yes" %}
+                                                                    <span class="text-error text-base checklist-status-icon w-6 flex-shrink-0">✗</span>
+                                                    {% elif item.status == "no" %}
+                                                                    <span class="text-success text-base checklist-status-icon w-6 flex-shrink-0">✓</span>
+                                                    {% else %}
+                                                    <span class="text-warning text-base checklist-status-icon w-6 flex-shrink-0">?</span>
+                                                    {% endif %}
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-xs font-medium">{{ item.criterion }}</span>
+                                                            {% if can_edit %}
+                                                            <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'exclusions', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                            </button>
+                                                    {% endif %}
+                                                </div>
+                                                            {% if item.manually_edited %}
+                                                        <div class="flex items-center gap-2 mt-1">
+                                                            <p class="text-xs font-bold text-accent">Manually edited</p>
+                                                            {% if can_edit %}
+                                                            <button type="button" class="btn btn-ghost btn-xs text-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'exclusions', {{ forloop.counter0 }})">
+                                                                Undo
+                                                            </button>
+                                                            {% endif %}
+                                                </div>
+                                                {% elif item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
+                                <div class="mt-4">
+                                    <div class="alert alert-info">
+                                        <span class="text-xs">Checklists not available. Please run a new matching job to see eligibility and competitiveness checklists.</span>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                            <div class="mt-4 pt-3 border-t border-base-300">
+                                                <button type="button" class="btn btn-ghost btn-sm w-full" onclick="document.getElementById('more-details-not-eligible-{{ match.id }}').checked = false; document.getElementById('more-details-not-eligible-{{ match.id }}').dispatchEvent(new Event('change'));">
+                                                    Hide
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                                    </div>
+                                    <div class="lg:text-right lg:ml-4 min-w-[200px]">
+                                        <div class="flex items-center justify-end gap-3 mb-3">
+                                            {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                            <div>
+                                                <svg width="90" height="90" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                                     data-match-id="{{ match.id }}"
+                                                     data-eligibility='{{ match_data.eligibility_json }}'
+                                                     data-competitiveness='{{ match_data.competitiveness_json }}'
+                                                     data-exclusions='{{ match_data.exclusions_json }}'>
+                                                    <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                                </svg>
+                                            </div>
+                                            {% endif %}
+                                            <div>
+                                        <div class="stat-value text-warning text-4xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                                <div class="stat-desc text-xs">Overall Match</div>
+                                                <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                </div>
+                            </div>
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Not Eligible Grants - Grid View -->
+                    <div id="not-eligible-grants-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4 not-eligible-grants-view" {% if current_view != 'grid' %}style="display: none;"{% endif %}>
+                        {% for match_data in not_eligible_grants_with_json %}
+                        {% with match=match_data.match %}
+                        <div class="card bg-base-100 border border-warning cursor-pointer" onclick="openGrantModal({{ match.id }})" data-match-id="{{ match.id }}">
+                            <div class="card-body pb-4">
+                                <h3 class="card-title text-sm">
+                                    <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary line-clamp-2" onclick="event.stopPropagation();">
+                                        {{ match.grant.title }}
+                                    </a>
+                                </h3>
+                                <div class="flex gap-2 mt-2 flex-wrap">
+                                    <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-sm">
+                                        {{ match.grant.get_status_display }}
+                </div>
+                                    <span class="badge badge-primary badge-outline badge-sm flex items-center gap-1">
+                                        <img src="{% grant_source_logo match.grant.source %}" alt="{{ match.grant.get_source_display }}" class="h-3 w-auto" onerror="this.style.display='none'">
+                                        <span>{% if match.grant.get_source_display == "Innovate UK" %}IUK{% else %}{{ match.grant.get_source_display }}{% endif %}</span>
+                                    </span>
+                                    {% if match.grant.deadline %}
+                                    <span class="badge badge-primary badge-outline badge-sm">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                                    {% endif %}
+                                    {% if match.grant.trl_requirements.trl_levels %}
+                                        <span class="badge badge-outline badge-sm" title="Grant TRL requirements">
+                                            Grant TRL: {% if match.grant.trl_requirements.trl_range %}{{ match.grant.trl_requirements.trl_range }}{% else %}{{ match.grant.trl_requirements.trl_levels|trl_levels_to_range }}{% endif %}
+                                        </span>
+                                    {% endif %}
+                                    <span class="badge badge-warning badge-sm">Not Eligible</span>
+                                </div>
+                                <div class="mt-4 flex items-center justify-center gap-3">
+                                    {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                    <div>
+                                        <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                             data-match-id="{{ match.id }}"
+                                             data-eligibility='{{ match_data.eligibility_json }}'
+                                             data-competitiveness='{{ match_data.competitiveness_json }}'
+                                             data-exclusions='{{ match_data.exclusions_json }}'>
+                                            <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                        </svg>
+                                    </div>
+                                    {% endif %}
+                                    <div class="text-center">
+                                        <div class="stat-value text-warning text-3xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-desc text-xs">Overall Match</div>
+                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endwith %}
+        {% endif %}
+        
+        <!-- Excluded Grants (Expandable) -->
+        {% if excluded_grants_with_json|length > 0 %}
+        {% with excluded_count=excluded_grants_with_json|length %}
+        <div class="mt-6">
+            <button 
+                id="toggle-excluded-grants" 
+                class="btn btn-outline btn-error w-full"
+                onclick="toggleExcludedGrants()"
+                data-excluded-count="{{ excluded_count }}"
+            >
+                <span id="toggle-excluded-text">View {{ excluded_count }} Excluded Grant{{ excluded_count|pluralize }}</span>
+                <svg id="toggle-excluded-icon" class="w-5 h-5 ml-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            
+            <div id="excluded-grants-section" class="hidden mt-4">
+                <div class="border border-error rounded-lg p-4 bg-base-100" style="max-height: 800px; overflow-y: auto;">
+                    <!-- Excluded Grants - List View -->
+                    <div id="excluded-grants-list" class="space-y-4 excluded-grants-view" {% if current_view != 'list' %}style="display: none;"{% endif %}>
+                        {% for match_data in excluded_grants_with_json %}
+                        {% with match=match_data.match %}
+                        <div class="card bg-base-100 border border-error">
+                            <div class="card-body pb-0">
+                                <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-2 gap-4">
+                                    <div class="flex-1">
+                                        <h3 class="card-title text-base">
+                                            <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary">
+                                                {{ match.grant.title }}
+                                            </a>
+                                        </h3>
+                                        <div class="flex gap-2 mt-2 flex-wrap">
+                                            <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %}">
+                                                {{ match.grant.get_status_display }}
+                                            </div>
+                                            <span class="badge badge-primary badge-outline">{{ match.grant.get_source_display }}</span>
+                                            {% if match.grant.deadline %}
+                                            <span class="badge badge-primary badge-outline">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                                            {% endif %}
+                                            {% if match.grant.trl_requirements.trl_levels %}
+                                                <span class="badge badge-outline" title="Grant TRL requirements">
+                                                    Grant TRL: {% if match.grant.trl_requirements.trl_range %}{{ match.grant.trl_requirements.trl_range }}{% else %}{{ match.grant.trl_requirements.trl_levels|trl_levels_to_range }}{% endif %}
+                                                </span>
+                                            {% endif %}
+                                            <span class="badge badge-error">Excluded</span>
+                                        </div>
+                                        <div class="text-base-content mt-3">
+                                    <div class="mt-4 -mx-4 -mb-2">
+                                        <div class="collapse">
+                                            <input type="checkbox" id="more-details-excluded-{{ match.id }}" />
+                                            <div class="collapse-title font-semibold text-sm px-4 min-h-0 flex items-center gap-2 cursor-pointer">
+                                                <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                </svg>
+                                                <span>Details</span>
+                                            </div>
+                                            <div class="collapse-content px-4 pb-2 pt-0">
+                                                {% if match.match_reasons.project_type_and_trl_focus or match.match_reasons.why_it_matches or match.match_reasons.key_risks_and_uncertainties %}
+                                                <div class="mt-2">
+                                                    <div class="font-semibold text-xs mb-2">Summary</div>
+                                                <div class="space-y-2">
+                                                    {% if match.match_reasons.project_type_and_trl_focus %}
+                                                    <div class="mt-2">
+                                                            <div class="font-semibold text-xs mb-1">
+                                                                Project type and TRL focus
+                                                            </div>
+                                                            <div class="pb-2">
+                                                                <p class="text-xs mt-1">{{ match.match_reasons.project_type_and_trl_focus }}</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if match.match_reasons.why_it_matches %}
+                                                    <div class="mt-2">
+                                                            <div class="font-semibold text-xs mb-1">
+                                                                Why it matches
+                                                            </div>
+                                                            <div class="pb-2">
+                                                                <p class="text-xs mt-1">{{ match.match_reasons.why_it_matches }}</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if match.match_reasons.key_risks_and_uncertainties %}
+                                                    <div class="mt-2">
+                                                            <div class="font-semibold text-xs mb-1">
+                                                                Key risks and uncertainties
+                                                            </div>
+                                                            <div class="pb-2">
+                                                                <p class="text-xs mt-1">{{ match.match_reasons.key_risks_and_uncertainties }}</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                    </div>
+                                </div>
+                                {% elif match.match_reasons.explanation %}
+                                                <div class="mt-2">
+                                                    <div class="font-semibold text-xs mb-2">Summary</div>
+                                                    <p class="text-xs"><strong>Summary:</strong> {{ match.match_reasons.explanation }}</p>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                                <div class="mt-4">
+                                                    <div class="font-semibold text-xs mb-2">Checklists</div>
+                                            <div class="space-y-2">
+                                {% if match.match_reasons.eligibility_checklist %}
+                                                <div>
+                                                    <div class="collapse">
+                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-xs px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                            Eligibility Checklist
+                                            <span class="text-xs font-normal text-base-content/70 eligibility-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-0 pt-2">
+                                            <div class="space-y-2 eligibility-checklist-items">
+                                        {% for item in match.match_reasons.eligibility_checklist %}
+                                        <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="eligibility" data-item-index="{{ forloop.counter0 }}">
+                                            {% if item.status == "yes" %}
+                                            <span class="text-success text-base checklist-status-icon w-6 flex-shrink-0">✓</span>
+                                            {% elif item.status == "no" %}
+                                            <span class="text-error text-base checklist-status-icon w-6 flex-shrink-0">✗</span>
+                                            {% else %}
+                                            <span class="text-warning text-base checklist-status-icon w-6 flex-shrink-0">?</span>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs font-medium">{{ item.criterion }}</span>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'eligibility', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                    {% if item.manually_edited %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'eligibility', {{ forloop.counter0 }})">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                        </svg>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% endif %}
+                                                </div>
+                                                {% if item.manually_edited %}
+                                                <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                                {% elif item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.competitiveness_checklist %}
+                                                <div>
+                                    <div class="collapse">
+                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-xs px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                            Competitiveness Checklist
+                                            <span class="text-xs font-normal text-base-content/70 competitiveness-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-0 pt-2">
+                                            <div class="space-y-2 competitiveness-checklist-items">
+                                        {% for item in match.match_reasons.competitiveness_checklist %}
+                                        <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="competitiveness" data-item-index="{{ forloop.counter0 }}">
+                                            {% if item.status == "yes" %}
+                                            <span class="text-success text-base checklist-status-icon w-6 flex-shrink-0">✓</span>
+                                            {% elif item.status == "no" %}
+                                            <span class="text-error text-base checklist-status-icon w-6 flex-shrink-0">✗</span>
+                                            {% else %}
+                                            <span class="text-warning text-base checklist-status-icon w-6 flex-shrink-0">?</span>
+                                            {% endif %}
+                                            <div class="flex-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs font-medium">{{ item.criterion }}</span>
+                                                    {% if can_edit %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'competitiveness', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                        </svg>
+                                                    </button>
+                                                    {% if item.manually_edited %}
+                                                    <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'competitiveness', {{ forloop.counter0 }})">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                        </svg>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% endif %}
+                                                </div>
+                                                {% if item.manually_edited %}
+                                                <p class="text-xs font-bold text-accent mt-1">Manually edited</p>
+                                                {% elif item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                                            </div>
+                                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if match.match_reasons.exclusions_checklist %}
+                                                <div>
+                                    <div class="collapse">
+                                        <input type="checkbox" />
+                                                        <div class="collapse-title font-semibold text-xs px-4 min-h-0 flex items-center gap-2">
+                                            <svg class="w-4 h-4 transition-transform duration-200 collapse-arrow-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                            Exclusions Checklist
+                                            <span class="text-xs font-normal text-base-content/70 exclusions-checklist-score">
+                                                (calculating...)
+                                            </span>
+                                            <span class="exclusions-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>
+                                        </div>
+                                        <div class="collapse-content px-4 pb-0 pt-2">
+                                            <div class="space-y-2 exclusions-checklist-items">
+                                                {% for item in match.match_reasons.exclusions_checklist %}
+                                                <div class="flex items-start gap-2 group checklist-item" data-match-id="{{ match.id }}" data-checklist-type="exclusions" data-item-index="{{ forloop.counter0 }}">
+                                                    {% if item.status == "yes" %}
+                                                                    <span class="text-error text-base checklist-status-icon w-6 flex-shrink-0">✗</span>
+                                                    {% elif item.status == "no" %}
+                                                                    <span class="text-success text-base checklist-status-icon w-6 flex-shrink-0">✓</span>
+                                                    {% else %}
+                                                    <span class="text-warning text-base checklist-status-icon w-6 flex-shrink-0">?</span>
+                                                    {% endif %}
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-xs font-medium">{{ item.criterion }}</span>
+                                                            {% if can_edit %}
+                                                            <button type="button" class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="openChecklistEditModal({{ match.id }}, 'exclusions', {{ forloop.counter0 }}, '{{ item.status }}', '{{ item.criterion|escapejs }}')">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                                </svg>
+                                                            </button>
+                                                    {% endif %}
+                                                </div>
+                                                            {% if item.manually_edited %}
+                                                        <div class="flex items-center gap-2 mt-1">
+                                                            <p class="text-xs font-bold text-accent">Manually edited</p>
+                                                            {% if can_edit %}
+                                                            <button type="button" class="btn btn-ghost btn-xs text-xs opacity-0 group-hover:opacity-100 transition-opacity" onclick="undoChecklistEdit({{ match.id }}, 'exclusions', {{ forloop.counter0 }})">
+                                                                Undo
+                                                            </button>
+                                                            {% endif %}
+                                                </div>
+                                                {% elif item.reason %}
+                                                <p class="text-xs text-base-content/70 mt-1">{{ item.reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if not match.match_reasons.eligibility_checklist and not match.match_reasons.competitiveness_checklist and not match.match_reasons.exclusions_checklist %}
+                                <div class="mt-4">
+                                    <div class="alert alert-info">
+                                        <span class="text-xs">Checklists not available. Please run a new matching job to see eligibility and competitiveness checklists.</span>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                            <div class="mt-4 pt-3 border-t border-base-300">
+                                                <button type="button" class="btn btn-ghost btn-sm w-full" onclick="document.getElementById('more-details-excluded-{{ match.id }}').checked = false; document.getElementById('more-details-excluded-{{ match.id }}').dispatchEvent(new Event('change'));">
+                                                    Hide
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                                    </div>
+                                    <div class="lg:text-right lg:ml-4 min-w-[200px]">
+                                        <div class="flex items-center justify-end gap-3 mb-3">
+                                            {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                            <div>
+                                                <svg width="90" height="90" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                                     data-match-id="{{ match.id }}"
+                                                     data-eligibility='{{ match_data.eligibility_json }}'
+                                                     data-competitiveness='{{ match_data.competitiveness_json }}'
+                                                     data-exclusions='{{ match_data.exclusions_json }}'>
+                                                    <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                                </svg>
+                                            </div>
+                                            {% endif %}
+                                            <div>
+                                        <div class="stat-value text-error text-4xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                                <div class="stat-desc text-xs">Overall Match</div>
+                                                <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                </div>
+                            </div>
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Excluded Grants - Grid View -->
+                    <div id="excluded-grants-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4 excluded-grants-view" {% if current_view != 'grid' %}style="display: none;"{% endif %}>
+                        {% for match_data in excluded_grants_with_json %}
+                        {% with match=match_data.match %}
+                        <div class="card bg-base-100 border border-error cursor-pointer" onclick="openGrantModal({{ match.id }})" data-match-id="{{ match.id }}">
+                            <div class="card-body pb-4">
+                                <h3 class="card-title text-sm">
+                                    <a href="{% url 'grants:detail' match.grant.slug %}" class="link link-primary line-clamp-2" onclick="event.stopPropagation();">
+                                        {{ match.grant.title }}
+                                    </a>
+                                </h3>
+                                <div class="flex gap-2 mt-2 flex-wrap">
+                                    <div class="badge {% if match.grant.computed_status == 'open' %}badge-success{% elif match.grant.computed_status == 'closed' %}badge-error{% else %}badge-warning{% endif %} badge-sm">
+                                        {{ match.grant.get_status_display }}
+                </div>
+                                    <span class="badge badge-primary badge-outline badge-sm flex items-center gap-1">
+                                        <img src="{% grant_source_logo match.grant.source %}" alt="{{ match.grant.get_source_display }}" class="h-3 w-auto" onerror="this.style.display='none'">
+                                        <span>{% if match.grant.get_source_display == "Innovate UK" %}IUK{% else %}{{ match.grant.get_source_display }}{% endif %}</span>
+                                    </span>
+                                    {% if match.grant.deadline %}
+                                    <span class="badge badge-primary badge-outline badge-sm">{{ match.grant.deadline|date:"M d, Y" }}</span>
+                                    {% endif %}
+                                    {% if match.grant.trl_requirements.trl_levels %}
+                                        <span class="badge badge-outline badge-sm" title="Grant TRL requirements">
+                                            Grant TRL: {% if match.grant.trl_requirements.trl_range %}{{ match.grant.trl_requirements.trl_range }}{% else %}{{ match.grant.trl_requirements.trl_levels|trl_levels_to_range }}{% endif %}
+                                        </span>
+                                    {% endif %}
+                                    <span class="badge badge-error badge-sm">Excluded</span>
+                                </div>
+                                <div class="mt-4 flex items-center justify-center gap-3">
+                                    {% if match.match_reasons.eligibility_checklist or match.match_reasons.competitiveness_checklist or match.match_reasons.exclusions_checklist %}
+                                    <div>
+                                        <svg width="60" height="60" viewBox="0 0 60 60" class="checklist-pie-chart" 
+                                             data-match-id="{{ match.id }}"
+                                             data-eligibility='{{ match_data.eligibility_json }}'
+                                             data-competitiveness='{{ match_data.competitiveness_json }}'
+                                             data-exclusions='{{ match_data.exclusions_json }}'>
+                                            <circle cx="30" cy="30" r="25" fill="none" stroke="#e5e7eb" stroke-width="8"/>
+                                        </svg>
+                                    </div>
+                                    {% endif %}
+                                    <div class="text-center">
+                                        <div class="stat-value text-error text-2xl overall-match-score">{{ match.match_score|percentage }}%</div>
+                                        <div class="stat-desc text-xs">Overall Match</div>
+                                        <div class="stat-desc text-xs mt-1 certainty-percentage" data-match-id="{{ match.id }}" {% if match_data.certainty is not None %}data-certainty="{{ match_data.certainty }}"{% endif %}>Calculating...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endwith %}
         {% endif %}
     </div>
 </div>
@@ -2009,7 +3145,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Handle grant sources checkbox changes with AJAX to prevent page scroll to top
-    const grantSourceCheckboxes = document.querySelectorAll('.grant-source-checkbox');
+    // Only treat actual grant source checkboxes (not the options below like "Exclude closed competitions" or checklist toggles)
+    const grantSourceCheckboxes = document.querySelectorAll(
+        '#grant-sources-form input.grant-source-checkbox[name="grant_sources"]'
+    );
     const grantSourcesForm = document.getElementById('grant-sources-form');
     
     if (grantSourceCheckboxes.length > 0 && grantSourcesForm && !isMatchingRunning) {
@@ -2170,18 +3309,11 @@ document.addEventListener('DOMContentLoaded', function() {
             let ticks = 0, crosses = 0, questions = 0;
             
             // Process eligibility and competitiveness checklists
+            // Exclusions checklist is NOT included in pie chart
             [...eligibility, ...competitiveness].forEach(item => {
                 const status = item.status;
                 if (status === 'yes') ticks++;
                 else if (status === 'no') crosses++;
-                else questions++;
-            });
-            
-            // Process exclusions checklist (inverted logic: 'no' = good/✓, 'yes' = bad/✗)
-            exclusions.forEach(item => {
-                const status = item.status;
-                if (status === 'no') ticks++;  // Exclusion doesn't apply = good
-                else if (status === 'yes') crosses++;  // Exclusion applies = bad
                 else questions++;
             });
             
@@ -2403,6 +3535,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Recalculate scores and update pie chart
                     updateChecklistScores(checklistItem);
                     updatePieChartForMatch(currentEditData.matchId);
+                    // Update overall match score for this card
+                    // DISABLED: Display database value instead of recalculating
+                    // updateOverallMatchScore(checklistItem.closest('.card'));
+                    // Re-sort list view cards by updated overall match score
+                    sortListViewCardsByOverallMatchScore();
                 }
                 
                 document.getElementById('checklist-edit-modal').close();
@@ -2426,65 +3563,87 @@ document.addEventListener('DOMContentLoaded', function() {
             if (container.classList.contains('eligibility-checklist-items')) {
                 // Recalculate eligibility score
                 const items = container.querySelectorAll('.checklist-item');
+                const totalItems = items.length; // Count all items including "don't know"
                 let yesCount = 0;
-                let totalCount = items.length;
+                let noCount = 0;
                 
                 items.forEach(item => {
                     const icon = item.querySelector('.checklist-status-icon');
-                    if (icon && icon.textContent.includes('✓')) {
-                        yesCount++;
+                    if (icon) {
+                        if (icon.textContent.includes('✓')) {
+                            yesCount++;
+                        } else if (icon.textContent.includes('✗')) {
+                            noCount++;
+                        }
                     }
+                    // "don't know" items are counted in totalItems but not in yesCount/noCount
                 });
                 
-                const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
-                const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+                const scoreText = totalItems > 0 ? `(${yesCount}/${totalItems})` : '';
+                const percentage = totalItems > 0 ? Math.round((yesCount / totalItems) * 100) : 0;
                 
                 const collapseSection = container.closest('.collapse');
                 const scoreSpan = collapseSection ? collapseSection.querySelector('.eligibility-checklist-score') : null;
-                if (scoreSpan && totalCount > 0) {
+                if (scoreSpan && totalItems > 0) {
                     scoreSpan.textContent = scoreText;
                 }
                 
                 const card = container.closest('.card');
                 const breakdownPercentage = card ? card.querySelector('.eligibility-breakdown-percentage') : null;
-                if (breakdownPercentage && totalCount > 0) {
+                if (breakdownPercentage && totalItems > 0) {
                     // Safe: percentage and scoreText are numbers/calculated values, not user input
                     breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
                 }
+                // Update overall match score
+                // DISABLED: Display database value instead of recalculating
+                // if (card) {
+                //     updateOverallMatchScore(card);
+                // }
             } else if (container.classList.contains('competitiveness-checklist-items')) {
                 // Recalculate competitiveness score
                 const items = container.querySelectorAll('.checklist-item');
+                const totalItems = items.length; // Count all items including "don't know"
                 let yesCount = 0;
-                let totalCount = items.length;
+                let noCount = 0;
                 
                 items.forEach(item => {
                     const icon = item.querySelector('.checklist-status-icon');
-                    if (icon && icon.textContent.includes('✓')) {
-                        yesCount++;
+                    if (icon) {
+                        if (icon.textContent.includes('✓')) {
+                            yesCount++;
+                        } else if (icon.textContent.includes('✗')) {
+                            noCount++;
+                        }
                     }
+                    // "don't know" items are counted in totalItems but not in yesCount/noCount
                 });
                 
-                const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
-                const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+                const scoreText = totalItems > 0 ? `(${yesCount}/${totalItems})` : '';
+                const percentage = totalItems > 0 ? Math.round((yesCount / totalItems) * 100) : 0;
                 
                 const collapseSection = container.closest('.collapse');
                 const scoreSpan = collapseSection ? collapseSection.querySelector('.competitiveness-checklist-score') : null;
-                if (scoreSpan && totalCount > 0) {
+                if (scoreSpan && totalItems > 0) {
                     scoreSpan.textContent = scoreText;
                 }
                 
                 const card = container.closest('.card');
                 const breakdownPercentage = card ? card.querySelector('.competitiveness-breakdown-percentage') : null;
-                if (breakdownPercentage && totalCount > 0) {
+                if (breakdownPercentage && totalItems > 0) {
                     // Safe: percentage and scoreText are numbers/calculated values, not user input
                     breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
                 }
+                // Update overall match score
+                // DISABLED: Display database value instead of recalculating
+                // if (card) {
+                //     updateOverallMatchScore(card);
+                // }
             } else if (container.classList.contains('exclusions-checklist-items')) {
                 // Recalculate exclusions score (for exclusions, "no" is good)
                 const items = container.querySelectorAll('.checklist-item');
+                const totalItems = items.length; // Count all items including "don't know"
                 let noCount = 0;
                 let yesCount = 0;
-                let totalCount = items.length;
                 
                 items.forEach(item => {
                     const icon = item.querySelector('.checklist-status-icon');
@@ -2495,20 +3654,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             yesCount++; // "yes" status shows red X (excluded = bad)
                         }
                     }
+                    // "don't know" items are counted in totalItems but not in yesCount/noCount
                 });
                 
-                const scoreText = totalCount > 0 ? `(${noCount}/${totalCount})` : '';
-                const percentage = totalCount > 0 ? Math.round((noCount / totalCount) * 100) : 0;
+                const scoreText = totalItems > 0 ? `(${noCount}/${totalItems})` : '';
+                const percentage = totalItems > 0 ? Math.round((noCount / totalItems) * 100) : 0;
                 
                 const collapseSection = container.closest('.collapse');
                 const scoreSpan = collapseSection ? collapseSection.querySelector('.exclusions-checklist-score') : null;
-                if (scoreSpan && totalCount > 0) {
+                if (scoreSpan && totalItems > 0) {
                     scoreSpan.textContent = scoreText;
                 }
                 
                 const card = container.closest('.card');
                 const breakdownPercentage = card ? card.querySelector('.exclusions-breakdown-percentage') : null;
-                if (breakdownPercentage && totalCount > 0) {
+                if (breakdownPercentage && totalItems > 0) {
                     // Safe: percentage and scoreText are numbers/calculated values, not user input
                     breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 exclusions-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
                     const warningIcon = breakdownPercentage.querySelector('.exclusions-breakdown-warning-icon');
@@ -2516,8 +3676,104 @@ document.addEventListener('DOMContentLoaded', function() {
                         warningIcon.style.display = yesCount > 0 ? 'inline' : 'none';
                     }
                 }
+                // Update overall match score
+                // DISABLED: Display database value instead of recalculating
+                // if (card) {
+                //     updateOverallMatchScore(card);
+                // }
             }
         }
+    }
+    
+    function updateOverallMatchScore(card) {
+        // Update overall match score for a specific card
+        // Uses multiplicative approach: eligibility × (0.3 + 0.7 × competitiveness)
+        // Eligibility acts as a base multiplier - if eligibility is 0%, overall is 0%
+        // Exclusions are disqualifying only (not included in calculation)
+        if (!card) return;
+        
+        // Check if project is excluded first
+        const exclusionsItems = card.querySelectorAll('.exclusions-checklist-items .checklist-item');
+        let exclusionsYesCount = 0;
+        let exclusionsDecidedCount = 0;
+        exclusionsItems.forEach(function(item) {
+            const icon = item.querySelector('.checklist-status-icon');
+            const status = icon ? (icon.textContent.includes('✓') ? 'no' : icon.textContent.includes('✗') ? 'yes' : 'don\'t know') : 'don\'t know';
+            if (status !== 'don\'t know') {
+                exclusionsDecidedCount++;
+                if (status === 'yes') {  // "yes" means IS excluded (bad)
+                    exclusionsYesCount++;
+                }
+            }
+        });
+        
+        // If excluded (any "yes" in exclusions checklist), score is 0
+        if (exclusionsDecidedCount > 0) {
+            // If there's even one "yes", the grant is excluded
+            if (exclusionsYesCount > 0) {
+                const overallMatchScores = card.querySelectorAll('.overall-match-score');
+                overallMatchScores.forEach(function(scoreElement) {
+                    scoreElement.textContent = '0%';
+                });
+                return;
+            }
+        }
+        
+        // Calculate eligibility score (percentage of "yes" out of decided items)
+        const eligibilityItems = card.querySelectorAll('.eligibility-checklist-items .checklist-item');
+        let eligibilityYesCount = 0;
+        let eligibilityDecidedCount = 0;
+        eligibilityItems.forEach(function(item) {
+            const icon = item.querySelector('.checklist-status-icon');
+            const status = icon ? (icon.textContent.includes('✓') ? 'yes' : icon.textContent.includes('✗') ? 'no' : 'don\'t know') : 'don\'t know';
+            if (status !== 'don\'t know') {
+                eligibilityDecidedCount++;
+                if (status === 'yes') {
+                    eligibilityYesCount++;
+                }
+            }
+        });
+        const eligibilityScore = eligibilityDecidedCount > 0 ? eligibilityYesCount / eligibilityDecidedCount : 0;
+        
+        // Calculate competitiveness score (percentage of "yes" out of decided items)
+        const competitivenessItems = card.querySelectorAll('.competitiveness-checklist-items .checklist-item');
+        let competitivenessYesCount = 0;
+        let competitivenessDecidedCount = 0;
+        competitivenessItems.forEach(function(item) {
+            const icon = item.querySelector('.checklist-status-icon');
+            const status = icon ? (icon.textContent.includes('✓') ? 'yes' : icon.textContent.includes('✗') ? 'no' : 'don\'t know') : 'don\'t know';
+            if (status !== 'don\'t know') {
+                competitivenessDecidedCount++;
+                if (status === 'yes') {
+                    competitivenessYesCount++;
+                }
+            }
+        });
+        const competitivenessScore = competitivenessDecidedCount > 0 ? competitivenessYesCount / competitivenessDecidedCount : 0;
+        
+        // Calculate multiplicative score: eligibility × (0.3 + 0.7 × competitiveness)
+        // Eligibility acts as a base multiplier (paramount importance)
+        let overallScore = 0;
+        if (eligibilityDecidedCount > 0 && competitivenessDecidedCount > 0) {
+            // Both assessed: multiplicative (eligibility as base)
+            overallScore = eligibilityScore * (0.3 + 0.7 * competitivenessScore);
+        } else if (eligibilityDecidedCount > 0) {
+            // Only eligibility assessed
+            overallScore = eligibilityScore;
+        } else if (competitivenessDecidedCount > 0) {
+            // Only competitiveness assessed
+            overallScore = competitivenessScore;
+        }
+        
+        // Update display only if we have checklist data (otherwise keep database score)
+        if (eligibilityDecidedCount > 0 || competitivenessDecidedCount > 0 || exclusionsDecidedCount > 0) {
+            const overallPercentage = Math.round(overallScore * 100);
+            const overallMatchScores = card.querySelectorAll('.overall-match-score');
+            overallMatchScores.forEach(function(scoreElement) {
+                scoreElement.textContent = `${overallPercentage}%`;
+            });
+        }
+        // If no checklist data found, leave the database score as-is (don't overwrite with 0)
     }
     
     function updatePieChartForMatch(matchId) {
@@ -2633,6 +3889,15 @@ function calculateAllCertainty() {
     document.querySelectorAll('.certainty-percentage').forEach(function(certaintyElement) {
         if (certaintyElement.textContent === 'Calculating...' || certaintyElement.textContent.trim() === '') {
             try {
+                // First, check if backend certainty is available
+                const backendCertainty = certaintyElement.getAttribute('data-certainty');
+                if (backendCertainty !== null && backendCertainty !== '') {
+                    const certaintyPercentage = Math.round(parseFloat(backendCertainty) * 100);
+                    certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
+                    return;
+                }
+                
+                // Fallback to calculating from checklist data
                 const matchId = certaintyElement.getAttribute('data-match-id');
                 // Search in the entire document for the pie chart
                 const svgElement = document.querySelector(`svg.checklist-pie-chart[data-match-id="${matchId}"]`);
@@ -2640,9 +3905,9 @@ function calculateAllCertainty() {
                 if (svgElement) {
                     const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
                     const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
-                    const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
+                    // Exclusions checklist is NOT included in certainty calculation
                     
-                    const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
+                    const allItems = [...eligibilityData, ...competitivenessData];
                     const totalItems = allItems.length;
                     
                     if (totalItems > 0) {
@@ -2666,6 +3931,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const gridView = document.getElementById('grid-view');
     const remainingGrantsList = document.getElementById('remaining-grants-list');
     const remainingGrantsGrid = document.getElementById('remaining-grants-grid');
+    const excludedGrantsList = document.getElementById('excluded-grants-list');
+    const excludedGrantsGrid = document.getElementById('excluded-grants-grid');
     
     // Get current view from URL or default to list
     const urlParams = new URLSearchParams(window.location.search);
@@ -2678,11 +3945,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (gridView) gridView.style.display = 'none';
             if (remainingGrantsList) remainingGrantsList.style.display = 'block';
             if (remainingGrantsGrid) remainingGrantsGrid.style.display = 'none';
+            if (excludedGrantsList) excludedGrantsList.style.display = 'block';
+            if (excludedGrantsGrid) excludedGrantsGrid.style.display = 'none';
         } else if (view === 'grid') {
             if (listView) listView.style.display = 'none';
             if (gridView) gridView.style.display = 'grid';
             if (remainingGrantsList) remainingGrantsList.style.display = 'none';
             if (remainingGrantsGrid) remainingGrantsGrid.style.display = 'grid';
+            if (excludedGrantsList) excludedGrantsList.style.display = 'none';
+            if (excludedGrantsGrid) excludedGrantsGrid.style.display = 'grid';
             // Recalculate certainty when switching to grid view
             setTimeout(calculateAllCertainty, 100);
         }
@@ -2754,6 +4025,124 @@ function toggleRemainingGrants() {
         }
     }
 }
+
+// Toggle not eligible grants section
+function toggleNotEligibleGrants() {
+    const section = document.getElementById('not-eligible-grants-section');
+    const button = document.getElementById('toggle-not-eligible-grants');
+    const text = document.getElementById('toggle-not-eligible-text');
+    const icon = document.getElementById('toggle-not-eligible-icon');
+    const notEligibleGrantsList = document.getElementById('not-eligible-grants-list');
+    const notEligibleGrantsGrid = document.getElementById('not-eligible-grants-grid');
+    
+    // Determine current view mode from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentView = urlParams.get('view') || 'list';
+    
+    if (section && button && text && icon) {
+        const isHidden = section.classList.contains('hidden');
+        const notEligibleCount = parseInt(button.getAttribute('data-not-eligible-count')) || 0;
+        
+        if (isHidden) {
+            section.classList.remove('hidden');
+            text.textContent = 'Hide Not Eligible Grants';
+            icon.style.transform = 'rotate(180deg)';
+            
+            // Show the appropriate view based on current mode
+            if (currentView === 'grid') {
+                if (notEligibleGrantsList) notEligibleGrantsList.style.display = 'none';
+                if (notEligibleGrantsGrid) notEligibleGrantsGrid.style.display = 'grid';
+                setTimeout(calculateAllCertainty, 100);
+            } else {
+                if (notEligibleGrantsList) notEligibleGrantsList.style.display = 'block';
+                if (notEligibleGrantsGrid) notEligibleGrantsGrid.style.display = 'none';
+            }
+        } else {
+            section.classList.add('hidden');
+            text.textContent = `View ${notEligibleCount} Not Eligible Grant${notEligibleCount !== 1 ? 's' : ''}`;
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
+// Toggle excluded grants section
+function toggleExcludedGrants() {
+    const section = document.getElementById('excluded-grants-section');
+    const button = document.getElementById('toggle-excluded-grants');
+    const text = document.getElementById('toggle-excluded-text');
+    const icon = document.getElementById('toggle-excluded-icon');
+    const excludedGrantsList = document.getElementById('excluded-grants-list');
+    const excludedGrantsGrid = document.getElementById('excluded-grants-grid');
+    
+    // Determine current view mode from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentView = urlParams.get('view') || 'list';
+    
+    if (section && button && text && icon) {
+        const isHidden = section.classList.contains('hidden');
+        const excludedCount = parseInt(button.getAttribute('data-excluded-count')) || 0;
+        
+        if (isHidden) {
+            section.classList.remove('hidden');
+            text.textContent = 'Hide Excluded Grants';
+            icon.style.transform = 'rotate(180deg)';
+            
+            // Show the appropriate view based on current mode
+            if (currentView === 'grid') {
+                if (excludedGrantsList) excludedGrantsList.style.display = 'none';
+                if (excludedGrantsGrid) excludedGrantsGrid.style.display = 'grid';
+                setTimeout(calculateAllCertainty, 100);
+            } else {
+                if (excludedGrantsList) excludedGrantsList.style.display = 'block';
+                if (excludedGrantsGrid) excludedGrantsGrid.style.display = 'none';
+            }
+        } else {
+            section.classList.add('hidden');
+            text.textContent = `View ${excludedCount} Excluded Grant${excludedCount !== 1 ? 's' : ''}`;
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
+// Extract and display TRL levels from text
+function extractAndDisplayTRL() {
+    const trlElements = document.querySelectorAll('.trl-extract');
+    trlElements.forEach(function(element) {
+        const text = element.textContent;
+        // Try to find TRL pattern (e.g., "TRL 5", "TRL-5", "Technology Readiness Level 5", "level 5")
+        const patterns = [
+            /TRL\s*[:\-]?\s*(\d)/i,
+            /Technology\s+Readiness\s+Level\s+(\d)/i,
+            /level\s+(\d)/i,
+        ];
+        
+        let trlNumber = null;
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match) {
+                trlNumber = parseInt(match[1]);
+                if (trlNumber >= 1 && trlNumber <= 9) {
+                    break;
+                }
+            }
+        }
+        
+        if (trlNumber) {
+            element.textContent = `TRL ${trlNumber}`;
+        } else {
+            // If no TRL found, hide the badge
+            const badge = element.closest('.badge');
+            if (badge && badge.textContent.includes('Project TRL:')) {
+                badge.style.display = 'none';
+            }
+        }
+    });
+}
+
+// Call TRL extraction on page load
+document.addEventListener('DOMContentLoaded', function() {
+    extractAndDisplayTRL();
+});
 
 // Inline name editing
 function editName() {
@@ -2851,32 +4240,70 @@ document.addEventListener('DOMContentLoaded', function() {
     const cardScores = new Map();
     
     // Calculate eligibility checklist scores
-    document.querySelectorAll('.eligibility-checklist-items').forEach(function(container) {
+    // Process list view first to maintain correct order, then grid view
+    const listView = document.getElementById('list-view');
+    const gridView = document.getElementById('grid-view');
+    const remainingGrantsList = document.getElementById('remaining-grants-list');
+    const remainingGrantsGrid = document.getElementById('remaining-grants-grid');
+    
+    // Process list view cards first (in DOM order)
+    const listViewContainers = [];
+    if (listView) {
+        listViewContainers.push(...listView.querySelectorAll('.eligibility-checklist-items'));
+    }
+    if (remainingGrantsList) {
+        listViewContainers.push(...remainingGrantsList.querySelectorAll('.eligibility-checklist-items'));
+    }
+    const excludedGrantsList = document.getElementById('excluded-grants-list');
+    if (excludedGrantsList) {
+        listViewContainers.push(...excludedGrantsList.querySelectorAll('.eligibility-checklist-items'));
+    }
+    
+    // Then process grid view cards
+    const gridViewContainers = [];
+    if (gridView) {
+        gridViewContainers.push(...gridView.querySelectorAll('.eligibility-checklist-items'));
+    }
+    if (remainingGrantsGrid) {
+        gridViewContainers.push(...remainingGrantsGrid.querySelectorAll('.eligibility-checklist-items'));
+    }
+    const excludedGrantsGrid = document.getElementById('excluded-grants-grid');
+    if (excludedGrantsGrid) {
+        gridViewContainers.push(...excludedGrantsGrid.querySelectorAll('.eligibility-checklist-items'));
+    }
+    
+    // Process in order: list view first, then grid view
+    [...listViewContainers, ...gridViewContainers].forEach(function(container) {
         const items = container.querySelectorAll('.flex.items-start');
+        const totalItems = items.length; // Count all items including "don't know"
         let yesCount = 0;
-        let totalCount = items.length;
+        let noCount = 0;
         
         items.forEach(function(item) {
-            const statusIcon = item.querySelector('.text-success');
-            if (statusIcon) {
+            const successIcon = item.querySelector('.text-success');
+            const errorIcon = item.querySelector('.text-error');
+            if (successIcon) {
                 yesCount++;
+            } else if (errorIcon) {
+                noCount++;
             }
+            // "don't know" items are counted in totalItems but not in yesCount/noCount
         });
         
-        const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
-        const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+        const scoreText = totalItems > 0 ? `(${yesCount}/${totalItems})` : '';
+        const percentage = totalItems > 0 ? Math.round((yesCount / totalItems) * 100) : 0;
         
         // Update heading score (look for it in the collapse-title)
         const collapseSection = container.closest('.collapse');
         const scoreSpan = collapseSection ? collapseSection.querySelector('.eligibility-checklist-score') : null;
-        if (scoreSpan && totalCount > 0) {
+        if (scoreSpan && totalItems > 0) {
             scoreSpan.textContent = scoreText;
         }
         
         // Update score breakdown percentage and count
         const card = container.closest('.card');
         const breakdownPercentage = card ? card.querySelector('.eligibility-breakdown-percentage') : null;
-        if (breakdownPercentage && totalCount > 0) {
+        if (breakdownPercentage && totalItems > 0) {
             // Safe: percentage and scoreText are numbers/calculated values, not user input
             breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 eligibility-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
         }
@@ -2891,32 +4318,60 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Calculate competitiveness checklist scores
-    document.querySelectorAll('.competitiveness-checklist-items').forEach(function(container) {
+    // Process list view first to maintain correct order, then grid view
+    const competitivenessListViewContainers = [];
+    if (listView) {
+        competitivenessListViewContainers.push(...listView.querySelectorAll('.competitiveness-checklist-items'));
+    }
+    if (remainingGrantsList) {
+        competitivenessListViewContainers.push(...remainingGrantsList.querySelectorAll('.competitiveness-checklist-items'));
+    }
+    if (excludedGrantsList) {
+        competitivenessListViewContainers.push(...excludedGrantsList.querySelectorAll('.competitiveness-checklist-items'));
+    }
+    
+    const competitivenessGridViewContainers = [];
+    if (gridView) {
+        competitivenessGridViewContainers.push(...gridView.querySelectorAll('.competitiveness-checklist-items'));
+    }
+    if (remainingGrantsGrid) {
+        competitivenessGridViewContainers.push(...remainingGrantsGrid.querySelectorAll('.competitiveness-checklist-items'));
+    }
+    if (excludedGrantsGrid) {
+        competitivenessGridViewContainers.push(...excludedGrantsGrid.querySelectorAll('.competitiveness-checklist-items'));
+    }
+    
+    [...competitivenessListViewContainers, ...competitivenessGridViewContainers].forEach(function(container) {
         const items = container.querySelectorAll('.flex.items-start');
+        const totalItems = items.length; // Count all items including "don't know"
         let yesCount = 0;
-        let totalCount = items.length;
+        let noCount = 0;
         
         items.forEach(function(item) {
-            const statusIcon = item.querySelector('.text-success');
-            if (statusIcon) {
+            const successIcon = item.querySelector('.text-success');
+            const errorIcon = item.querySelector('.text-error');
+            if (successIcon) {
                 yesCount++;
+            } else if (errorIcon) {
+                noCount++;
             }
+            // "don't know" items are counted in totalItems but not in yesCount/noCount
         });
         
-        const scoreText = totalCount > 0 ? `(${yesCount}/${totalCount})` : '';
-        const percentage = totalCount > 0 ? Math.round((yesCount / totalCount) * 100) : 0;
+        const scoreText = totalItems > 0 ? `(${yesCount}/${totalItems})` : '';
+        const percentage = totalItems > 0 ? Math.round((yesCount / totalItems) * 100) : 0;
         
         // Update heading score (look for it in the collapse-title)
         const collapseSection = container.closest('.collapse');
         const scoreSpan = collapseSection ? collapseSection.querySelector('.competitiveness-checklist-score') : null;
-        if (scoreSpan && totalCount > 0) {
+        if (scoreSpan && totalItems > 0) {
             scoreSpan.textContent = scoreText;
         }
         
         // Update score breakdown percentage and count
         const card = container.closest('.card');
         const breakdownPercentage = card ? card.querySelector('.competitiveness-breakdown-percentage') : null;
-        if (breakdownPercentage && totalCount > 0) {
+        if (breakdownPercentage && totalItems > 0) {
             // Safe: percentage and scoreText are numbers/calculated values, not user input
             breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 competitiveness-breakdown-count ml-1">${escapeHtml(scoreText)}</span>`;
         }
@@ -2931,11 +4386,33 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Calculate exclusions checklist scores (for exclusions, "no" is good - means NOT excluded)
-    document.querySelectorAll('.exclusions-checklist-items').forEach(function(container) {
+    // Process list view first to maintain correct order, then grid view
+    const exclusionsListViewContainers = [];
+    if (listView) {
+        exclusionsListViewContainers.push(...listView.querySelectorAll('.exclusions-checklist-items'));
+    }
+    if (remainingGrantsList) {
+        exclusionsListViewContainers.push(...remainingGrantsList.querySelectorAll('.exclusions-checklist-items'));
+    }
+    if (excludedGrantsList) {
+        exclusionsListViewContainers.push(...excludedGrantsList.querySelectorAll('.exclusions-checklist-items'));
+    }
+    
+    const exclusionsGridViewContainers = [];
+    if (gridView) {
+        exclusionsGridViewContainers.push(...gridView.querySelectorAll('.exclusions-checklist-items'));
+    }
+    if (remainingGrantsGrid) {
+        exclusionsGridViewContainers.push(...remainingGrantsGrid.querySelectorAll('.exclusions-checklist-items'));
+    }
+    if (excludedGrantsGrid) {
+        exclusionsGridViewContainers.push(...excludedGrantsGrid.querySelectorAll('.exclusions-checklist-items'));
+    }
+    
+    [...exclusionsListViewContainers, ...exclusionsGridViewContainers].forEach(function(container) {
         const items = container.querySelectorAll('.flex.items-start');
+        const totalItems = items.length; // Count all items including "don't know"
         let noCount = 0; // Count "no" answers (not excluded = good)
-        let totalCount = items.length;
-        
         let yesCount = 0; // Count "yes" answers (excluded = bad)
         
         items.forEach(function(item) {
@@ -2949,22 +4426,23 @@ document.addEventListener('DOMContentLoaded', function() {
             if (errorIcon && errorIcon.textContent.includes('✗')) {
                 yesCount++;
             }
+            // "don't know" items are counted in totalItems but not in yesCount/noCount
         });
         
-        const scoreText = totalCount > 0 ? `(${noCount}/${totalCount})` : '';
-        const percentage = totalCount > 0 ? Math.round((noCount / totalCount) * 100) : 0;
+        const scoreText = totalItems > 0 ? `(${noCount}/${totalItems})` : '';
+        const percentage = totalItems > 0 ? Math.round((noCount / totalItems) * 100) : 0;
         
         // Update heading score (look for it in the collapse-title)
         const collapseSection = container.closest('.collapse');
         const scoreSpan = collapseSection ? collapseSection.querySelector('.exclusions-checklist-score') : null;
-        if (scoreSpan && totalCount > 0) {
+        if (scoreSpan && totalItems > 0) {
             scoreSpan.textContent = scoreText;
         }
         
         // Update score breakdown percentage and count
         const card = container.closest('.card');
         const breakdownPercentage = card ? card.querySelector('.exclusions-breakdown-percentage') : null;
-        if (breakdownPercentage && totalCount > 0) {
+        if (breakdownPercentage && totalItems > 0) {
             // Safe: percentage and scoreText are numbers/calculated values, not user input
             const warningIconHtml = yesCount > 0 ? '<span class="exclusions-breakdown-warning-icon" style="display: inline; margin-left: 0.5rem;">⚠️</span>' : '<span class="exclusions-breakdown-warning-icon" style="display: none; margin-left: 0.5rem;">⚠️</span>';
             breakdownPercentage.innerHTML = `${percentage}% <span class="text-xs font-normal text-base-content/60 exclusions-breakdown-count ml-1">${escapeHtml(scoreText)}</span>${warningIconHtml}`;
@@ -2989,52 +4467,54 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Calculate and update overall match scores
+    // Overall match scores are now calculated by updateOverallMatchScore() 
+    // which is called for all cards below (line 4175)
+    // This removes duplicate calculation logic
+    
+    // DISABLED: Display database value instead of recalculating
+    // Ensure all cards with checklist items have their scores recalculated using updateOverallMatchScore
+    // This catches any cards that might have been missed in the cardScores loop
+    // document.querySelectorAll('.card').forEach(function(card) {
+    //     const hasChecklistItems = card.querySelectorAll('.eligibility-checklist-items .checklist-item, .competitiveness-checklist-items .checklist-item, .exclusions-checklist-items .checklist-item').length > 0;
+    //     if (hasChecklistItems) {
+    //         updateOverallMatchScore(card);
+    //     }
+    // });
+    
+    // Calculate certainty percentage
     cardScores.forEach(function(scores, card) {
-        const eligibility = scores.eligibility;
-        const competitiveness = scores.competitiveness;
-        const exclusions = scores.exclusions;
-        
-        // Build array of available scores
-        const scoreComponents = [];
-        if (eligibility !== undefined) scoreComponents.push(eligibility);
-        if (competitiveness !== undefined) scoreComponents.push(competitiveness);
-        if (exclusions !== undefined) scoreComponents.push(exclusions);
-        
-        if (scoreComponents.length > 0) {
-            // Calculate overall as average of all available scores
-            const overall = scoreComponents.reduce((a, b) => a + b, 0) / scoreComponents.length;
-            const overallPercentage = Math.round(overall * 100);
-            const overallMatchScore = card.querySelector('.overall-match-score');
-            if (overallMatchScore) {
-                overallMatchScore.textContent = `${overallPercentage}%`;
-            }
-        }
-        
         // Calculate certainty percentage
         const certaintyElement = card.querySelector('.certainty-percentage');
         if (certaintyElement) {
             try {
-                const matchId = certaintyElement.getAttribute('data-match-id');
-                const svgElement = card.querySelector(`svg[data-match-id="${matchId}"]`);
-                
-                if (svgElement) {
-                    const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
-                    const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
-                    const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
+                // First, check if backend certainty is available
+                const backendCertainty = certaintyElement.getAttribute('data-certainty');
+                if (backendCertainty !== null && backendCertainty !== '') {
+                    const certaintyPercentage = Math.round(parseFloat(backendCertainty) * 100);
+                    certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
+                } else {
+                    // Fallback to calculating from checklist data
+                    const matchId = certaintyElement.getAttribute('data-match-id');
+                    const svgElement = card.querySelector(`svg[data-match-id="${matchId}"]`);
                     
-                    const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
-                    const totalItems = allItems.length;
-                    
-                    if (totalItems > 0) {
-                        const yesNoCount = allItems.filter(item => item.status === 'yes' || item.status === 'no').length;
-                        const certaintyPercentage = Math.round((yesNoCount / totalItems) * 100);
-                        certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
+                    if (svgElement) {
+                        const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
+                        const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
+                        const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
+                        
+                        const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
+                        const totalItems = allItems.length;
+                        
+                        if (totalItems > 0) {
+                            const yesNoCount = allItems.filter(item => item.status === 'yes' || item.status === 'no').length;
+                            const certaintyPercentage = Math.round((yesNoCount / totalItems) * 100);
+                            certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
+                        } else {
+                            certaintyElement.textContent = '';
+                        }
                     } else {
                         certaintyElement.textContent = '';
                     }
-                } else {
-                    certaintyElement.textContent = '';
                 }
             } catch (e) {
                 console.error('Error calculating certainty:', e);
@@ -3043,10 +4523,33 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // DISABLED: Display database value instead of recalculating
+    // Ensure all cards with checklist items have their scores recalculated using updateOverallMatchScore
+    // This catches any cards that might have been missed in the cardScores loop
+    // document.querySelectorAll('.card').forEach(function(card) {
+    //     const hasChecklistItems = card.querySelectorAll('.eligibility-checklist-items .checklist-item, .competitiveness-checklist-items .checklist-item, .exclusions-checklist-items .checklist-item').length > 0;
+    //     if (hasChecklistItems) {
+    //         updateOverallMatchScore(card);
+    //     }
+    // });
+    
+    // Sort list view cards by recalculated overall match score (descending)
+    // This ensures the list view is ordered by the frontend-calculated score, not the database match_score
+    sortListViewCardsByOverallMatchScore();
+    
     // Calculate certainty for all cards (including grid view cards that might not have checklist scores)
     document.querySelectorAll('.certainty-percentage').forEach(function(certaintyElement) {
         if (certaintyElement.textContent === 'Calculating...') {
             try {
+                // First, check if backend certainty is available
+                const backendCertainty = certaintyElement.getAttribute('data-certainty');
+                if (backendCertainty !== null && backendCertainty !== '') {
+                    const certaintyPercentage = Math.round(parseFloat(backendCertainty) * 100);
+                    certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
+                    return;
+                }
+                
+                // Fallback to calculating from checklist data
                 const matchId = certaintyElement.getAttribute('data-match-id');
                 // Search in the entire document, not just within a card
                 const svgElement = document.querySelector(`svg.checklist-pie-chart[data-match-id="${matchId}"]`);
@@ -3054,9 +4557,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (svgElement) {
                     const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
                     const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
-                    const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
+                    // Exclusions checklist is NOT included in certainty calculation
                     
-                    const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
+                    const allItems = [...eligibilityData, ...competitivenessData];
                     const totalItems = allItems.length;
                     
                     if (totalItems > 0) {

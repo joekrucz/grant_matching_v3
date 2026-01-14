@@ -146,7 +146,7 @@ class SystemSettings(models.Model):
     # Grant matching settings
     grant_matching_batch_size = models.IntegerField(
         default=1,
-        help_text="Number of parallel ChatGPT API requests to make simultaneously (1-10 recommended)"
+        help_text="Number of parallel ChatGPT API requests to make simultaneously (1-100, optimized for tier 2 API limits: 5,000 RPM). Applies to both grant matching and checklist generation jobs."
     )
     
     # Feature flags

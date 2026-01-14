@@ -15,9 +15,10 @@ from grants.models import Grant
 from companies.models import Company
 
 try:
-    from openai import OpenAI  # type: ignore
+    from openai import OpenAI, AsyncOpenAI  # type: ignore
 except Exception:  # pragma: no cover - import guard for environments without openai
     OpenAI = None  # type: ignore
+    AsyncOpenAI = None  # type: ignore
 
 
 def _truncate(value: Optional[str], max_length: int = 2000) -> str:
@@ -167,6 +168,7 @@ class AiAssistantClient:
         if not api_key or OpenAI is None:
             raise AiAssistantError("AI assistant is not configured (missing OpenAI client or API key).")
         self.client = OpenAI(api_key=api_key)
+        self.async_client = AsyncOpenAI(api_key=api_key) if AsyncOpenAI else None
         # Allow overriding via env/settings; default to a cost-effective model
         self.model = getattr(settings, "ADMIN_AI_MODEL", "gpt-4o-mini")
 
@@ -450,20 +452,21 @@ class AiAssistantClient:
             "`funding_amount`, `status`, `source`, `url`.\n"
             "Your task is to:\n"
             "- Extract all eligibility requirements and criteria from the grant information.\n"
-            "- Create a comprehensive checklist of eligibility requirements that applicants must meet.\n"
-            "- Organize the checklist into clear, actionable items.\n"
+            "- Create a single comprehensive checklist of eligibility requirements that applicants must meet.\n"
+            "- Include ALL relevant information in one unified list: requirements, important notes, and any missing information.\n"
             "- Include requirements such as: organization type, sector/industry, location, company size, "
             "funding stage, project type, collaboration requirements, and any other specific criteria mentioned.\n"
-            "- If eligibility information is missing or unclear, note that in the checklist.\n"
+            "- If eligibility information is missing or unclear, include that as items in the checklist.\n"
             "Rules:\n"
             "- Use only the information in the provided grant object.\n"
             "- Extract requirements from all relevant fields (eligibility, description, summary, etc.).\n"
-            "- Be specific and actionable - each checklist item should be a clear requirement.\n"
-            "- If important information is missing, explicitly mention that instead of guessing.\n"
+            "- Be specific and actionable - each checklist item should be a clear requirement or note.\n"
+            "- Combine all information (requirements, notes, missing info) into a single unified checklist.\n"
+            "- If important information is missing, include that as checklist items.\n"
             "- Keep language clear and non-technical.\n"
             "- Do not invent requirements that are not present in the grant information.\n"
             "Always respond with a single JSON object: "
-            '{"checklist_items": [string], "notes": [string], "missing_info": [string]}.'
+            '{"checklist_items": [string]}.'
         )
         payload = {
             "task": "eligibility_checklist",
@@ -517,27 +520,65 @@ class AiAssistantClient:
             "Your task is to:\n"
             "- Identify what types of projects, activities, organizations, or expenses this grant will NOT fund.\n"
             "- Extract all explicit exclusions, restrictions, and ineligible items mentioned in the grant information.\n"
-            "- Create a comprehensive checklist of what the grant excludes or will not fund.\n"
+            "- Create a single comprehensive checklist of what the grant excludes or will not fund.\n"
+            "- Include ALL relevant information in one unified list: exclusions, important notes, and any missing information.\n"
             "- Include exclusions such as: ineligible organization types, excluded sectors/industries, "
             "restricted activities, excluded costs/expenses, geographic restrictions, project type restrictions, "
             "and any other specific exclusions mentioned.\n"
             "- Look for language like 'not eligible', 'excluded', 'will not fund', 'not covered', 'ineligible', etc.\n"
-            "- If exclusion information is missing or unclear, note that in the checklist.\n"
+            "- If exclusion information is missing or unclear, include that as items in the checklist.\n"
             "Rules:\n"
             "- Use only the information in the provided grant object.\n"
             "- Extract exclusions from all relevant fields (eligibility, description, summary, etc.).\n"
             "- Be specific and actionable - each checklist item should clearly state what is excluded.\n"
-            "- If important exclusion information is missing, explicitly mention that instead of guessing.\n"
+            "- Combine all information (exclusions, notes, missing info) into a single unified checklist.\n"
+            "- If important exclusion information is missing, include that as checklist items.\n"
             "- Keep language clear and non-technical.\n"
             "- Do not invent exclusions that are not present in the grant information.\n"
             "Always respond with a single JSON object: "
-            '{"checklist_items": [string], "notes": [string], "missing_info": [string]}.'
+            '{"checklist_items": [string]}.'
         )
         payload = {
             "task": "exclusions_checklist",
             "grant": grant_ctx,
         }
         return self._call_json_model(system_prompt, payload, max_tokens=800)
+
+    def trl_requirements(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Extract TRL (Technology Readiness Level) requirements from grant information."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a grant object with fields such as title, summary, description, eligibility, etc.\n"
+            "Your task is to:\n"
+            "- Extract all TRL (Technology Readiness Level) requirements mentioned in the grant.\n"
+            "- Identify which TRL levels (1-9) the grant supports, requires, or targets.\n"
+            "- Determine if the grant is technology-focused (even if no specific TRL is mentioned).\n"
+            "- Look for explicit mentions like 'TRL 1-3', 'TRL 4-6', 'early stage', 'proof of concept', 'commercialization', etc.\n"
+            "- Also look for implicit TRL indicators and technology readiness signals:\n"
+            "  * Technology keywords: 'technology', 'innovation', 'R&D', 'research and development', 'product development', 'new product', 'novel technology', 'technical', 'tech'\n"
+            "  * Early stage (TRL 1-3): 'early stage', 'proof of concept', 'feasibility', 'concept', 'idea', 'research', 'discovery', 'basic research', 'theoretical', 'exploratory'\n"
+            "  * Prototype stage (TRL 4-6): 'prototype', 'demonstration', 'validation', 'laboratory', 'testing', 'development', 'pilot testing', 'proof of principle'\n"
+            "  * Commercialization (TRL 7-9): 'pilot', 'deployment', 'commercialization', 'market ready', 'scale up', 'production', 'launch', 'rollout', 'market entry'\n"
+            "  * Innovation programs: Grants mentioning 'innovation', 'innovative', 'new technology', 'breakthrough', 'disruptive', 'cutting edge'\n"
+            "- If the grant is clearly technology-focused but no specific TRL range is indicated, infer the most likely range based on the language used.\n"
+            "- If a range is mentioned (e.g., 'TRL 1-3'), extract both the range and individual levels.\n"
+            "- If no TRL is mentioned or implied AND the grant is not technology-focused, return empty arrays and is_technology_focused: false.\n"
+            "Rules:\n"
+            "- Use only information from the provided grant object.\n"
+            "- Extract from all relevant fields (description, summary, eligibility, etc.).\n"
+            "- Return specific TRL levels as strings: 'TRL 1', 'TRL 2', etc.\n"
+            "- If a range is mentioned, include all levels in that range.\n"
+            "- Be thorough - if the grant is clearly about technology development, innovation, or R&D, infer appropriate TRL levels even if not explicitly stated.\n"
+            "- Set is_technology_focused to true if the grant is about technology, innovation, R&D, product development, or technical solutions, even if no specific TRL is found.\n"
+            "- If TRL requirements are completely unclear or the grant is not technology-related, return empty arrays and is_technology_focused: false.\n"
+            "Always respond with a JSON object: "
+            '{"trl_levels": ["TRL 1", "TRL 2", ...], "trl_range": "1-3" (optional), "is_technology_focused": true/false, "notes": "..." (optional)}.'
+        )
+        payload = {
+            "task": "trl_requirements",
+            "grant": grant_ctx,
+        }
+        return self._call_json_model(system_prompt, payload, max_tokens=500)
 
     def competitiveness_checklist(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
         """Generate a competitiveness checklist from grant information."""
@@ -548,27 +589,216 @@ class AiAssistantClient:
             "`funding_amount`, `status`, `source`, `url`.\n"
             "Your task is to:\n"
             "- Analyze the grant information to identify what makes an application competitive.\n"
-            "- Create a comprehensive checklist of factors that would make an applicant more competitive for this grant.\n"
+            "- Create a single comprehensive checklist of factors that would make an applicant more competitive for this grant.\n"
+            "- Include ALL relevant information in one unified list: competitive factors, important notes, and any missing information.\n"
             "- Focus on: project quality indicators, team/company strengths, innovation level, market potential, "
             "collaboration opportunities, track record requirements, impact potential, and alignment with grant objectives.\n"
             "- Identify what the grant assessors are likely looking for based on the grant description and requirements.\n"
             "- Note any specific competitive advantages mentioned in the grant information.\n"
-            "- If competitiveness factors are unclear, note that in the checklist.\n"
+            "- If competitiveness factors are unclear, include that as items in the checklist.\n"
             "Rules:\n"
             "- Use only the information in the provided grant object.\n"
             "- Analyze all relevant fields (description, summary, eligibility, etc.) to infer competitiveness factors.\n"
             "- Be specific and actionable - each checklist item should be a clear factor that improves competitiveness.\n"
+            "- Combine all information (factors, notes, missing info) into a single unified checklist.\n"
             "- Focus on what applicants should demonstrate or have to be competitive, not just basic eligibility.\n"
-            "- If important information is missing, explicitly mention that instead of guessing.\n"
+            "- If important information is missing, include that as checklist items.\n"
             "- Keep language clear and non-technical.\n"
             "- Do not invent factors that are not supported by the grant information.\n"
             "Always respond with a single JSON object: "
-            '{"checklist_items": [string], "notes": [string], "missing_info": [string]}.'
+            '{"checklist_items": [string]}.'
         )
         payload = {
             "task": "competitiveness_checklist",
             "grant": grant_ctx,
         }
         return self._call_json_model(system_prompt, payload, max_tokens=800)
+
+    # Async methods for batch processing
+    async def _call_json_model_async(
+        self,
+        system_prompt: str,
+        user_payload: Dict[str, Any],
+        max_tokens: int = 400,
+        temperature: float = 0.3,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Async version: Call the model and return parsed JSON, raw response, and latency in ms."""
+        if not self.async_client:
+            raise AiAssistantError("Async client is not available")
+        
+        start = time.time()
+        
+        # Build messages array
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add conversation history if provided
+        if conversation_history:
+            messages.extend(conversation_history)
+        
+        # Add current user message
+        messages.append({
+            "role": "user",
+            "content": json.dumps(user_payload),
+        })
+        
+        response = await self.async_client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+        )
+        latency_ms = int((time.time() - start) * 1000)
+        content = response.choices[0].message.content or "{}"
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            # Fallback: wrap raw content
+            parsed = {"answer": content}
+        raw = {
+            "id": response.id,
+            "model": response.model,
+            "usage": {
+                "input_tokens": getattr(response.usage, "prompt_tokens", None),
+                "output_tokens": getattr(response.usage, "completion_tokens", None),
+            },
+        }
+        return parsed, raw, latency_ms
+
+    async def eligibility_checklist_async(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Async version: Generate an eligibility checklist from grant information."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a single grant object with fields such as "
+            "`title`, `summary`, `description`, `eligibility`, `deadline`, "
+            "`funding_amount`, `status`, `source`, `url`.\n"
+            "Your task is to:\n"
+            "- Extract all eligibility requirements and criteria from the grant information.\n"
+            "- Create a single comprehensive checklist of eligibility requirements that applicants must meet.\n"
+            "- Include ALL relevant information in one unified list: requirements, important notes, and any missing information.\n"
+            "- Include requirements such as: organization type, sector/industry, location, company size, "
+            "funding stage, project type, collaboration requirements, and any other specific criteria mentioned.\n"
+            "- If eligibility information is missing or unclear, include that as items in the checklist.\n"
+            "Rules:\n"
+            "- Use only the information in the provided grant object.\n"
+            "- Extract requirements from all relevant fields (eligibility, description, summary, etc.).\n"
+            "- Be specific and actionable - each checklist item should be a clear requirement or note.\n"
+            "- Combine all information (requirements, notes, missing info) into a single unified checklist.\n"
+            "- If important information is missing, include that as checklist items.\n"
+            "- Keep language clear and non-technical.\n"
+            "- Do not invent requirements that are not present in the grant information.\n"
+            "Always respond with a single JSON object: "
+            '{"checklist_items": [string]}.'
+        )
+        payload = {
+            "task": "eligibility_checklist",
+            "grant": grant_ctx,
+        }
+        return await self._call_json_model_async(system_prompt, payload, max_tokens=800)
+
+    async def competitiveness_checklist_async(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Async version: Generate a competitiveness checklist from grant information."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a single grant object with fields such as "
+            "`title`, `summary`, `description`, `eligibility`, `deadline`, "
+            "`funding_amount`, `status`, `source`, `url`.\n"
+            "Your task is to:\n"
+            "- Analyze the grant information to identify what makes an application competitive.\n"
+            "- Create a single comprehensive checklist of factors that would make an applicant more competitive for this grant.\n"
+            "- Include ALL relevant information in one unified list: competitive factors, important notes, and any missing information.\n"
+            "- Focus on: project quality indicators, team/company strengths, innovation level, market potential, "
+            "collaboration opportunities, track record requirements, impact potential, and alignment with grant objectives.\n"
+            "- Identify what the grant assessors are likely looking for based on the grant description and requirements.\n"
+            "- Note any specific competitive advantages mentioned in the grant information.\n"
+            "- If competitiveness factors are unclear, include that as items in the checklist.\n"
+            "Rules:\n"
+            "- Use only the information in the provided grant object.\n"
+            "- Analyze all relevant fields (description, summary, eligibility, etc.) to infer competitiveness factors.\n"
+            "- Be specific and actionable - each checklist item should be a clear factor that improves competitiveness.\n"
+            "- Combine all information (factors, notes, missing info) into a single unified checklist.\n"
+            "- Focus on what applicants should demonstrate or have to be competitive, not just basic eligibility.\n"
+            "- If important information is missing, include that as checklist items.\n"
+            "- Keep language clear and non-technical.\n"
+            "- Do not invent factors that are not supported by the grant information.\n"
+            "Always respond with a single JSON object: "
+            '{"checklist_items": [string]}.'
+        )
+        payload = {
+            "task": "competitiveness_checklist",
+            "grant": grant_ctx,
+        }
+        return await self._call_json_model_async(system_prompt, payload, max_tokens=800)
+
+    async def exclusions_checklist_async(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Async version: Generate an exclusions checklist - what the grant will NOT fund."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a single grant object with fields such as "
+            "`title`, `summary`, `description`, `eligibility`, `deadline`, "
+            "`funding_amount`, `status`, `source`, `url`.\n"
+            "Your task is to:\n"
+            "- Identify what types of projects, activities, organizations, or expenses this grant will NOT fund.\n"
+            "- Extract all explicit exclusions, restrictions, and ineligible items mentioned in the grant information.\n"
+            "- Create a single comprehensive checklist of what the grant excludes or will not fund.\n"
+            "- Include ALL relevant information in one unified list: exclusions, important notes, and any missing information.\n"
+            "- Include exclusions such as: ineligible organization types, excluded sectors/industries, "
+            "restricted activities, excluded costs/expenses, geographic restrictions, project type restrictions, "
+            "and any other specific exclusions mentioned.\n"
+            "- Look for language like 'not eligible', 'excluded', 'will not fund', 'not covered', 'ineligible', etc.\n"
+            "- If exclusion information is missing or unclear, include that as items in the checklist.\n"
+            "Rules:\n"
+            "- Use only the information in the provided grant object.\n"
+            "- Extract exclusions from all relevant fields (eligibility, description, summary, etc.).\n"
+            "- Be specific and actionable - each checklist item should clearly state what is excluded.\n"
+            "- Combine all information (exclusions, notes, missing info) into a single unified checklist.\n"
+            "- If important exclusion information is missing, include that as checklist items.\n"
+            "- Keep language clear and non-technical.\n"
+            "- Do not invent exclusions that are not present in the grant information.\n"
+            "Always respond with a single JSON object: "
+            '{"checklist_items": [string]}.'
+        )
+        payload = {
+            "task": "exclusions_checklist",
+            "grant": grant_ctx,
+        }
+        return await self._call_json_model_async(system_prompt, payload, max_tokens=800)
+
+    async def trl_requirements_async(self, grant_ctx: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
+        """Async version: Extract TRL (Technology Readiness Level) requirements from grant information."""
+        system_prompt = (
+            "You are an assistant for grant administrators.\n"
+            "You receive a grant object with fields such as title, summary, description, eligibility, etc.\n"
+            "Your task is to:\n"
+            "- Extract all TRL (Technology Readiness Level) requirements mentioned in the grant.\n"
+            "- Identify which TRL levels (1-9) the grant supports, requires, or targets.\n"
+            "- Determine if the grant is technology-focused (even if no specific TRL is mentioned).\n"
+            "- Look for explicit mentions like 'TRL 1-3', 'TRL 4-6', 'early stage', 'proof of concept', 'commercialization', etc.\n"
+            "- Also look for implicit TRL indicators and technology readiness signals:\n"
+            "  * Technology keywords: 'technology', 'innovation', 'R&D', 'research and development', 'product development', 'new product', 'novel technology', 'technical', 'tech'\n"
+            "  * Early stage (TRL 1-3): 'early stage', 'proof of concept', 'feasibility', 'concept', 'idea', 'research', 'discovery', 'basic research', 'theoretical', 'exploratory'\n"
+            "  * Prototype stage (TRL 4-6): 'prototype', 'demonstration', 'validation', 'laboratory', 'testing', 'development', 'pilot testing', 'proof of principle'\n"
+            "  * Commercialization (TRL 7-9): 'pilot', 'deployment', 'commercialization', 'market ready', 'scale up', 'production', 'launch', 'rollout', 'market entry'\n"
+            "  * Innovation programs: Grants mentioning 'innovation', 'innovative', 'new technology', 'breakthrough', 'disruptive', 'cutting edge'\n"
+            "- If the grant is clearly technology-focused but no specific TRL range is indicated, infer the most likely range based on the language used.\n"
+            "- If a range is mentioned (e.g., 'TRL 1-3'), extract both the range and individual levels.\n"
+            "- If no TRL is mentioned or implied AND the grant is not technology-focused, return empty arrays and is_technology_focused: false.\n"
+            "Rules:\n"
+            "- Use only information from the provided grant object.\n"
+            "- Extract from all relevant fields (description, summary, eligibility, etc.).\n"
+            "- Return specific TRL levels as strings: 'TRL 1', 'TRL 2', etc.\n"
+            "- If a range is mentioned, include all levels in that range.\n"
+            "- Be thorough - if the grant is clearly about technology development, innovation, or R&D, infer appropriate TRL levels even if not explicitly stated.\n"
+            "- Set is_technology_focused to true if the grant is about technology, innovation, R&D, product development, or technical solutions, even if no specific TRL is found.\n"
+            "- If TRL requirements are completely unclear or the grant is not technology-related, return empty arrays and is_technology_focused: false.\n"
+            "Always respond with a JSON object: "
+            '{"trl_levels": ["TRL 1", "TRL 2", ...], "trl_range": "1-3" (optional), "is_technology_focused": true/false, "notes": "..." (optional)}.'
+        )
+        payload = {
+            "task": "trl_requirements",
+            "grant": grant_ctx,
+        }
+        return await self._call_json_model_async(system_prompt, payload, max_tokens=500)
 
 

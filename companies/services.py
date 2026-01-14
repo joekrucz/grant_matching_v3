@@ -442,7 +442,7 @@ class ChatGPTMatchingService:
         try:
             from admin_panel.models import SystemSettings
             system_settings = SystemSettings.get_settings()
-            self.parallel_batch_size = max(1, min(10, system_settings.grant_matching_batch_size))  # Clamp between 1-10
+            self.parallel_batch_size = max(1, min(100, system_settings.grant_matching_batch_size))  # Clamp between 1-100 (optimized for tier 2)
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
@@ -451,8 +451,8 @@ class ChatGPTMatchingService:
         
         self.batch_size = 1  # Process 1 grant per API call (for backward compatibility)
     
-    def format_grant_for_batch(self, grant_data, index):
-        """Format a single grant for batch prompt, including checklists if available."""
+    def format_grant_for_batch(self, grant_data, index, assess_exclusions=True, assess_eligibility=True, assess_competitiveness=True):
+        """Format a single grant for batch prompt, including checklists if selected."""
         deadline_str = grant_data.get('deadline', 'N/A')
         if deadline_str and deadline_str != 'N/A':
             try:
@@ -474,39 +474,54 @@ Grant #{index + 1}:
 - Status: {grant_data.get('status', 'unknown')}
 """
         
-        # Add eligibility checklist if available
-        eligibility_checklist = grant_data.get('eligibility_checklist', {})
-        eligibility_items = eligibility_checklist.get('checklist_items', [])
-        if eligibility_items:
-            grant_text += "\nEligibility Checklist:\n"
-            for i, item in enumerate(eligibility_items, 1):
-                grant_text += f"  {i}. {item}\n"
-        else:
-            grant_text += "\nEligibility Checklist: Not available (will need to extract from grant description)\n"
+        # Add checklists in order, only if selected
+        # 1. EXCLUSIONS FIRST (if selected)
+        if assess_exclusions:
+            exclusions_checklist = grant_data.get('exclusions_checklist', {})
+            exclusions_items = exclusions_checklist.get('checklist_items', [])
+            if exclusions_items:
+                grant_text += "\nExclusions Checklist (What This Grant Will NOT Fund):\n"
+                for i, item in enumerate(exclusions_items, 1):
+                    grant_text += f"  {i}. {item}\n"
+            else:
+                grant_text += "\nExclusions Checklist: Not available (will need to extract from grant description)\n"
         
-        # Add competitiveness checklist if available
-        competitiveness_checklist = grant_data.get('competitiveness_checklist', {})
-        competitiveness_items = competitiveness_checklist.get('checklist_items', [])
-        if competitiveness_items:
-            grant_text += "\nCompetitiveness Checklist:\n"
-            for i, item in enumerate(competitiveness_items, 1):
-                grant_text += f"  {i}. {item}\n"
-        else:
-            grant_text += "\nCompetitiveness Checklist: Not available (will need to extract from grant description)\n"
+        # 2. ELIGIBILITY SECOND (if selected)
+        if assess_eligibility:
+            eligibility_checklist = grant_data.get('eligibility_checklist', {})
+            eligibility_items = eligibility_checklist.get('checklist_items', [])
+            if eligibility_items:
+                grant_text += "\nEligibility Checklist:\n"
+                for i, item in enumerate(eligibility_items, 1):
+                    grant_text += f"  {i}. {item}\n"
+            else:
+                grant_text += "\nEligibility Checklist: Not available (will need to extract from grant description)\n"
         
-        # Add exclusions checklist if available
-        exclusions_checklist = grant_data.get('exclusions_checklist', {})
-        exclusions_items = exclusions_checklist.get('checklist_items', [])
-        if exclusions_items:
-            grant_text += "\nExclusions Checklist (What This Grant Will NOT Fund):\n"
-            for i, item in enumerate(exclusions_items, 1):
-                grant_text += f"  {i}. {item}\n"
-        else:
-            grant_text += "\nExclusions Checklist: Not available (will need to extract from grant description)\n"
+        # 3. COMPETITIVENESS LAST (if selected)
+        if assess_competitiveness:
+            competitiveness_checklist = grant_data.get('competitiveness_checklist', {})
+            competitiveness_items = competitiveness_checklist.get('checklist_items', [])
+            if competitiveness_items:
+                grant_text += "\nCompetitiveness Checklist:\n"
+                for i, item in enumerate(competitiveness_items, 1):
+                    grant_text += f"  {i}. {item}\n"
+            else:
+                grant_text += "\nCompetitiveness Checklist: Not available (will need to extract from grant description)\n"
+        
+        # Add TRL requirements if available
+        trl_requirements = grant_data.get('trl_requirements', {})
+        trl_levels = trl_requirements.get('trl_levels', [])
+        if trl_levels:
+            grant_text += f"\nTRL Requirements: {', '.join(trl_levels)}\n"
+        elif trl_requirements.get('trl_range'):
+            grant_text += f"\nTRL Range: {trl_requirements['trl_range']}\n"
+        if trl_requirements.get('notes'):
+            grant_text += f"TRL Notes: {trl_requirements['notes']}\n"
         
         return grant_text
     
-    def match_grants_batch(self, project_description, grants_batch, let_system_decide_trl=False):
+    def match_grants_batch(self, project_description, grants_batch, let_system_decide_trl=False,
+                          assess_exclusions=True, assess_eligibility=True, assess_competitiveness=True):
         """
         Match a batch of grants (1 at a time) against project.
         Returns list of match results.
@@ -515,10 +530,13 @@ Grant #{index + 1}:
             project_description: The project description text
             grants_batch: List of grant data dictionaries
             let_system_decide_trl: If True, the AI should assess the TRL level of the project
+            assess_exclusions: If True, assess exclusions checklist
+            assess_eligibility: If True, assess eligibility checklist
+            assess_competitiveness: If True, assess competitiveness checklist
         """
         # Since batch_size is 1, grants_batch will always have 1 grant
         grant = grants_batch[0]
-        grant_text = self.format_grant_for_batch(grant, 0)
+        grant_text = self.format_grant_for_batch(grant, 0, assess_exclusions, assess_eligibility, assess_competitiveness)
         
         trl_instruction = ""
         trl_focus_instruction = ""
@@ -530,6 +548,83 @@ it aligns with the grant's TRL requirements. Include this assessment in the "pro
 """
             trl_focus_instruction = " Explicitly state the assessed TRL level (1-9) of the project."
         
+        # Build assessment instructions based on selected checklists
+        assessment_instructions = []
+        checklist_order = []
+        
+        if assess_exclusions:
+            assessment_instructions.append(
+                "1. If the grant has an 'Exclusions Checklist' provided, you MUST use those EXACT items in the EXACT order shown. "
+                "Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize. "
+                "For Exclusions Checklist items: 'yes' means the project DOES fall into this exclusion (BAD - disqualifying), "
+                "'no' means it does NOT fall into this exclusion (GOOD), 'don't know' means insufficient information."
+            )
+            checklist_order.append("exclusions")
+        
+        if assess_eligibility:
+            step_num = len(assessment_instructions) + 1
+            assessment_instructions.append(
+                f"{step_num}. If the grant has an 'Eligibility Checklist' provided, you MUST use those EXACT items in the EXACT order shown. "
+                "Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize. "
+                "For Eligibility items: 'yes' means the project meets the criterion (GOOD), 'no' means it does not meet (BAD), "
+                "'don't know' means insufficient information."
+            )
+            checklist_order.append("eligibility")
+        
+        if assess_competitiveness:
+            step_num = len(assessment_instructions) + 1
+            assessment_instructions.append(
+                f"{step_num}. If the grant has a 'Competitiveness Checklist' provided, you MUST use those EXACT items in the EXACT order shown. "
+                "Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize. "
+                "For Competitiveness items: 'yes' means the project meets the criterion (GOOD), 'no' means it does not meet (BAD), "
+                "'don't know' means insufficient information."
+            )
+            checklist_order.append("competitiveness")
+        
+        # Add extraction instruction if any checklist is selected
+        if any([assess_exclusions, assess_eligibility, assess_competitiveness]):
+            step_num = len(assessment_instructions) + 1
+            assessment_instructions.append(
+                f"{step_num}. If checklists are not provided, extract the relevant criteria from the grant description based on which checklists "
+                "are being assessed."
+            )
+        
+        # Build scoring instructions
+        scoring_instructions = []
+        if assess_eligibility:
+            scoring_instructions.append(
+                f"{len(scoring_instructions) + 1}. Calculate eligibility_score (0.0-1.0) based on percentage of 'yes' answers in eligibility checklist."
+            )
+        if assess_competitiveness:
+            scoring_instructions.append(
+                f"{len(scoring_instructions) + 1}. Calculate competitiveness_score (0.0-1.0) based on percentage of 'yes' answers in competitiveness checklist."
+            )
+        if assess_exclusions:
+            scoring_instructions.append(
+                f"{len(scoring_instructions) + 1}. Calculate exclusions_score (0.0-1.0) based on percentage of 'no' answers in exclusions checklist "
+                "(higher is better - means fewer exclusions apply)."
+            )
+        
+        # Build format example dynamically
+        format_fields = ['"grant_index": 0']
+        if assess_eligibility:
+            format_fields.append('"eligibility_score": 0.90')
+        if assess_competitiveness:
+            format_fields.append('"competitiveness_score": 0.80')
+        if assess_exclusions:
+            format_fields.append('"exclusions_score": 0.95')
+        if assess_eligibility:
+            format_fields.append('"eligibility_checklist": [...]')
+        if assess_competitiveness:
+            format_fields.append('"competitiveness_checklist": [...]')
+        if assess_exclusions:
+            format_fields.append('"exclusions_checklist": [...]')
+        format_fields.extend([
+            '"project_type_and_trl_focus": "...",',
+            '"why_it_matches": "...",',
+            '"key_risks_and_uncertainties": "..."'
+        ])
+        
         prompt = f"""You are an expert grant matching assistant. Analyze how well a research project aligns with this funding opportunity.
 
 PROJECT DESCRIPTION:
@@ -538,61 +633,39 @@ PROJECT DESCRIPTION:
 FUNDING OPPORTUNITY:
 {grant_text}
 {trl_instruction}
-You must:
-1. If the grant has an "Eligibility Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
-2. If the grant has a "Competitiveness Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
-3. If the grant has an "Exclusions Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
-4. If checklists are not provided, extract eligibility criteria, competitiveness factors, and exclusions from the grant description.
-5. For EACH checklist item (whether provided or extracted), evaluate if the company/project meets the criterion based ONLY on the PROJECT DESCRIPTION provided above.
-6. For Exclusions Checklist items: "yes" means the project DOES fall into this exclusion (BAD - disqualifying), "no" means it does NOT fall into this exclusion (GOOD), "don't know" means insufficient information.
-7. For Eligibility and Competitiveness items: "yes" means the project meets the criterion (GOOD), "no" means it does not meet (BAD), "don't know" means insufficient information.
-8. Assign a status: "yes", "no", or "don't know" for each item.
-9. Provide a brief reason for each status.
-10. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist.
-11. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist.
-12. Calculate exclusions_score (0.0-1.0) based on percentage of "no" answers in exclusions checklist (higher is better - means fewer exclusions apply).
-13. Provide three separate summary sections:
+
+ASSESSMENT ORDER AND INSTRUCTIONS:
+{chr(10).join(assessment_instructions)}
+
+EVALUATION PROCESS:
+{len(assessment_instructions) + 1}. For EACH checklist item (whether provided or extracted), evaluate if the company/project meets the criterion based ONLY on the PROJECT DESCRIPTION provided above.
+{len(assessment_instructions) + 2}. Assign a status: "yes", "no", or "don't know" for each item.
+{len(assessment_instructions) + 3}. Provide a brief reason for each status (REQUIRED - explain why you assigned this status based on the project description).
+
+SCORING:
+{chr(10).join(scoring_instructions)}
+
+SUMMARY SECTIONS:
+{len(assessment_instructions) + len(scoring_instructions) + 4}. Provide three separate summary sections:
     - "project_type_and_trl_focus": Describe the project type and TRL (Technology Readiness Level) focus, including what stage of development this project is at and how it aligns with the grant's TRL requirements (2-3 sentences).{trl_focus_instruction}
     - "why_it_matches": Explain why this project matches this grant opportunity, highlighting key alignment points (2-3 sentences).
     - "key_risks_and_uncertainties": Identify key risks and uncertainties that could affect the project's success with this grant, including potential challenges or gaps (2-3 sentences).
 
+Format:
+{{
+    {', '.join(format_fields)}
+}}
+
 CRITICAL REQUIREMENTS:
-- If a grant provides checklists, you MUST copy the criterion text EXACTLY as shown - character for character, word for word. Do not modify, rephrase, or summarize the criterion text.
+- Assess checklists in this order: {', '.join(checklist_order) if checklist_order else 'N/A (no checklists selected)'}
+- If a grant provides checklists, you MUST copy the criterion text EXACTLY as shown - character for character, word for word.
 - Return evaluations in the SAME ORDER as the provided checklists.
 - The "criterion" field in your response must match the original text EXACTLY.
-- If checklists are not provided, extract ALL eligibility requirements, competitiveness factors, and exclusions from the grant description.
 - For each checklist item, evaluate based ONLY on the provided PROJECT DESCRIPTION. If information is not available, use "don't know".
 - For Exclusions Checklist: "yes" = project IS excluded (disqualifying), "no" = project is NOT excluded (good), "don't know" = insufficient info.
 - For Eligibility/Competitiveness: "yes" = project meets criterion (good), "no" = does not meet (bad), "don't know" = insufficient info.
+- Each checklist item MUST include: "criterion" (string), "status" ("yes"/"no"/"don't know"), and "reason" (string explaining the status - REQUIRED).
 - Respond with a valid JSON object containing a single match result (not an array)
-
-Format:
-{{
-    "grant_index": 0,
-    "eligibility_score": 0.90,
-    "competitiveness_score": 0.80,
-    "exclusions_score": 0.95,
-    "eligibility_checklist": [
-        {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
-        {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}},
-        {{"criterion": "Third criterion", "status": "no", "reason": "Project does not meet this requirement"}}
-    ],
-    "competitiveness_checklist": [
-        {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
-        {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}}
-    ],
-    "exclusions_checklist": [
-        {{"criterion": "Use the exact criterion text from the provided exclusions checklist", "status": "no", "reason": "Project does not fall into this exclusion category"}},
-        {{"criterion": "Another exclusion from the checklist", "status": "yes", "reason": "Project does fall into this exclusion - this is disqualifying"}}
-    ],
-    "project_type_and_trl_focus": "Describe the project type and TRL focus...",
-    "why_it_matches": "Explain why this project matches this grant...",
-    "key_risks_and_uncertainties": "Identify key risks and uncertainties..."
-}}
-
-IMPORTANT: 
-- If the grant provides checklists, use the EXACT criterion text from those checklists. Do not modify or rephrase them.
-- For each criterion, evaluate if the project meets it based on the PROJECT DESCRIPTION provided above.
 - Status must be one of: "yes", "no", or "don't know"
 - Return a single match object, not an array
 """
@@ -684,7 +757,8 @@ IMPORTANT:
             # Will be handled by retry logic
             raise
     
-    async def match_grants_batch_async(self, project_description, grant_data, grant_index, let_system_decide_trl=False):
+    async def match_grants_batch_async(self, project_description, grant_data, grant_index, let_system_decide_trl=False,
+                                      assess_exclusions=True, assess_eligibility=True, assess_competitiveness=True):
         """
         Async version: Match a single grant against project.
         Returns a single match result.
@@ -694,8 +768,11 @@ IMPORTANT:
             grant_data: Grant data dictionary
             grant_index: Index of the grant in the original list
             let_system_decide_trl: If True, the AI should assess the TRL level of the project
+            assess_exclusions: If True, assess exclusions checklist
+            assess_eligibility: If True, assess eligibility checklist
+            assess_competitiveness: If True, assess competitiveness checklist
         """
-        grant_text = self.format_grant_for_batch(grant_data, 0)
+        grant_text = self.format_grant_for_batch(grant_data, 0, assess_exclusions, assess_eligibility, assess_competitiveness)
         
         trl_instruction = ""
         trl_focus_instruction = ""
@@ -707,6 +784,83 @@ it aligns with the grant's TRL requirements. Include this assessment in the "pro
 """
             trl_focus_instruction = " Explicitly state the assessed TRL level (1-9) of the project."
         
+        # Build assessment instructions based on selected checklists (same logic as sync version)
+        assessment_instructions = []
+        checklist_order = []
+        
+        if assess_exclusions:
+            assessment_instructions.append(
+                "1. If the grant has an 'Exclusions Checklist' provided, you MUST use those EXACT items in the EXACT order shown. "
+                "Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize. "
+                "For Exclusions Checklist items: 'yes' means the project DOES fall into this exclusion (BAD - disqualifying), "
+                "'no' means it does NOT fall into this exclusion (GOOD), 'don't know' means insufficient information."
+            )
+            checklist_order.append("exclusions")
+        
+        if assess_eligibility:
+            step_num = len(assessment_instructions) + 1
+            assessment_instructions.append(
+                f"{step_num}. If the grant has an 'Eligibility Checklist' provided, you MUST use those EXACT items in the EXACT order shown. "
+                "Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize. "
+                "For Eligibility items: 'yes' means the project meets the criterion (GOOD), 'no' means it does not meet (BAD), "
+                "'don't know' means insufficient information."
+            )
+            checklist_order.append("eligibility")
+        
+        if assess_competitiveness:
+            step_num = len(assessment_instructions) + 1
+            assessment_instructions.append(
+                f"{step_num}. If the grant has a 'Competitiveness Checklist' provided, you MUST use those EXACT items in the EXACT order shown. "
+                "Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize. "
+                "For Competitiveness items: 'yes' means the project meets the criterion (GOOD), 'no' means it does not meet (BAD), "
+                "'don't know' means insufficient information."
+            )
+            checklist_order.append("competitiveness")
+        
+        # Add extraction instruction if any checklist is selected
+        if any([assess_exclusions, assess_eligibility, assess_competitiveness]):
+            step_num = len(assessment_instructions) + 1
+            assessment_instructions.append(
+                f"{step_num}. If checklists are not provided, extract the relevant criteria from the grant description based on which checklists "
+                "are being assessed."
+            )
+        
+        # Build scoring instructions
+        scoring_instructions = []
+        if assess_eligibility:
+            scoring_instructions.append(
+                f"{len(scoring_instructions) + 1}. Calculate eligibility_score (0.0-1.0) based on percentage of 'yes' answers in eligibility checklist."
+            )
+        if assess_competitiveness:
+            scoring_instructions.append(
+                f"{len(scoring_instructions) + 1}. Calculate competitiveness_score (0.0-1.0) based on percentage of 'yes' answers in competitiveness checklist."
+            )
+        if assess_exclusions:
+            scoring_instructions.append(
+                f"{len(scoring_instructions) + 1}. Calculate exclusions_score (0.0-1.0) based on percentage of 'no' answers in exclusions checklist "
+                "(higher is better - means fewer exclusions apply)."
+            )
+        
+        # Build format example dynamically
+        format_fields = [f'"grant_index": {grant_index}']
+        if assess_eligibility:
+            format_fields.append('"eligibility_score": 0.90')
+        if assess_competitiveness:
+            format_fields.append('"competitiveness_score": 0.80')
+        if assess_exclusions:
+            format_fields.append('"exclusions_score": 0.95')
+        if assess_eligibility:
+            format_fields.append('"eligibility_checklist": [...]')
+        if assess_competitiveness:
+            format_fields.append('"competitiveness_checklist": [...]')
+        if assess_exclusions:
+            format_fields.append('"exclusions_checklist": [...]')
+        format_fields.extend([
+            '"project_type_and_trl_focus": "...",',
+            '"why_it_matches": "...",',
+            '"key_risks_and_uncertainties": "..."'
+        ])
+        
         prompt = f"""You are an expert grant matching assistant. Analyze how well a research project aligns with this funding opportunity.
 
 PROJECT DESCRIPTION:
@@ -715,61 +869,39 @@ PROJECT DESCRIPTION:
 FUNDING OPPORTUNITY:
 {grant_text}
 {trl_instruction}
-You must:
-1. If the grant has an "Eligibility Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
-2. If the grant has a "Competitiveness Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
-3. If the grant has an "Exclusions Checklist" provided, you MUST use those EXACT items in the EXACT order shown. Copy the criterion text EXACTLY as provided - do not modify, rephrase, or summarize.
-4. If checklists are not provided, extract eligibility criteria, competitiveness factors, and exclusions from the grant description.
-5. For EACH checklist item (whether provided or extracted), evaluate if the company/project meets the criterion based ONLY on the PROJECT DESCRIPTION provided above.
-6. For Exclusions Checklist items: "yes" means the project DOES fall into this exclusion (BAD - disqualifying), "no" means it does NOT fall into this exclusion (GOOD), "don't know" means insufficient information.
-7. For Eligibility and Competitiveness items: "yes" means the project meets the criterion (GOOD), "no" means it does not meet (BAD), "don't know" means insufficient information.
-8. Assign a status: "yes", "no", or "don't know" for each item.
-9. Provide a brief reason for each status.
-10. Calculate eligibility_score (0.0-1.0) based on percentage of "yes" answers in eligibility checklist.
-11. Calculate competitiveness_score (0.0-1.0) based on percentage of "yes" answers in competitiveness checklist.
-12. Calculate exclusions_score (0.0-1.0) based on percentage of "no" answers in exclusions checklist (higher is better - means fewer exclusions apply).
-13. Provide three separate summary sections:
+
+ASSESSMENT ORDER AND INSTRUCTIONS:
+{chr(10).join(assessment_instructions)}
+
+EVALUATION PROCESS:
+{len(assessment_instructions) + 1}. For EACH checklist item (whether provided or extracted), evaluate if the company/project meets the criterion based ONLY on the PROJECT DESCRIPTION provided above.
+{len(assessment_instructions) + 2}. Assign a status: "yes", "no", or "don't know" for each item.
+{len(assessment_instructions) + 3}. Provide a brief reason for each status (REQUIRED - explain why you assigned this status based on the project description).
+
+SCORING:
+{chr(10).join(scoring_instructions)}
+
+SUMMARY SECTIONS:
+{len(assessment_instructions) + len(scoring_instructions) + 4}. Provide three separate summary sections:
     - "project_type_and_trl_focus": Describe the project type and TRL (Technology Readiness Level) focus, including what stage of development this project is at and how it aligns with the grant's TRL requirements (2-3 sentences).{trl_focus_instruction}
     - "why_it_matches": Explain why this project matches this grant opportunity, highlighting key alignment points (2-3 sentences).
     - "key_risks_and_uncertainties": Identify key risks and uncertainties that could affect the project's success with this grant, including potential challenges or gaps (2-3 sentences).
 
+Format:
+{{
+    {', '.join(format_fields)}
+}}
+
 CRITICAL REQUIREMENTS:
-- If a grant provides checklists, you MUST copy the criterion text EXACTLY as shown - character for character, word for word. Do not modify, rephrase, or summarize the criterion text.
+- Assess checklists in this order: {', '.join(checklist_order) if checklist_order else 'N/A (no checklists selected)'}
+- If a grant provides checklists, you MUST copy the criterion text EXACTLY as shown - character for character, word for word.
 - Return evaluations in the SAME ORDER as the provided checklists.
 - The "criterion" field in your response must match the original text EXACTLY.
-- If checklists are not provided, extract ALL eligibility requirements, competitiveness factors, and exclusions from the grant description.
 - For each checklist item, evaluate based ONLY on the provided PROJECT DESCRIPTION. If information is not available, use "don't know".
 - For Exclusions Checklist: "yes" = project IS excluded (disqualifying), "no" = project is NOT excluded (good), "don't know" = insufficient info.
 - For Eligibility/Competitiveness: "yes" = project meets criterion (good), "no" = does not meet (bad), "don't know" = insufficient info.
+- Each checklist item MUST include: "criterion" (string), "status" ("yes"/"no"/"don't know"), and "reason" (string explaining the status - REQUIRED).
 - Respond with a valid JSON object containing a single match result (not an array)
-
-Format:
-{{
-    "grant_index": {grant_index},
-    "eligibility_score": 0.90,
-    "competitiveness_score": 0.80,
-    "exclusions_score": 0.95,
-    "eligibility_checklist": [
-        {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
-        {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}},
-        {{"criterion": "Third criterion", "status": "no", "reason": "Project does not meet this requirement"}}
-    ],
-    "competitiveness_checklist": [
-        {{"criterion": "Use the exact criterion text from the provided checklist", "status": "yes", "reason": "Brief reason based on project description"}},
-        {{"criterion": "Another criterion from the checklist", "status": "don't know", "reason": "Insufficient information in project description"}}
-    ],
-    "exclusions_checklist": [
-        {{"criterion": "Use the exact criterion text from the provided exclusions checklist", "status": "no", "reason": "Project does not fall into this exclusion category"}},
-        {{"criterion": "Another exclusion from the checklist", "status": "yes", "reason": "Project does fall into this exclusion - this is disqualifying"}}
-    ],
-    "project_type_and_trl_focus": "Describe the project type and TRL focus...",
-    "why_it_matches": "Explain why this project matches this grant...",
-    "key_risks_and_uncertainties": "Identify key risks and uncertainties..."
-}}
-
-IMPORTANT: 
-- If the grant provides checklists, use the EXACT criterion text from those checklists. Do not modify or rephrase them.
-- For each criterion, evaluate if the project meets it based on the PROJECT DESCRIPTION provided above.
 - Status must be one of: "yes", "no", or "don't know"
 - Return a single match object, not an array
 """
@@ -826,7 +958,8 @@ IMPORTANT:
         except (RateLimitError, APIError) as e:
             raise
     
-    async def _match_all_grants_async(self, project_description, grants_data, progress_callback=None, let_system_decide_trl=False, funding_search_id=None):
+    async def _match_all_grants_async(self, project_description, grants_data, progress_callback=None, let_system_decide_trl=False, funding_search_id=None,
+                                      assess_exclusions=True, assess_eligibility=True, assess_competitiveness=True):
         """
         Async version: Match all grants using parallel API requests.
         
@@ -836,6 +969,9 @@ IMPORTANT:
             progress_callback: Optional function(current, total) for progress updates (for sequential processing)
             let_system_decide_trl: If True, let AI assess TRL level during matching
             funding_search_id: Optional funding search ID for database progress updates (for async context)
+            assess_exclusions: If True, assess exclusions checklist
+            assess_eligibility: If True, assess eligibility checklist
+            assess_competitiveness: If True, assess competitiveness checklist
         
         Returns:
             List of match results with grant_index, score, explanation, etc.
@@ -855,29 +991,24 @@ IMPORTANT:
                     return False
             return False
         
-        # Rate limiting: OpenAI has different tiers (3, 200, 500 RPM)
-        # Also need to account for token-per-minute (TPM) limits, not just requests-per-minute
-        # With large requests (~56k tokens each), parallel requests can quickly hit TPM limits
-        # Start very conservative to avoid 429 errors, then adapt based on actual behavior
-        target_rpm = 100  # Start conservative: 100 RPM = 1.67 req/s
-        safety_factor = 0.6  # Use 60% of target to account for bursts and multiple workers
+        # Rate limiting: OpenAI has different tiers with varying RPM and TPM limits
+        # Adaptive rate limiting will adjust based on actual API responses
+        # Optimized for tier 2 API limits (5,000 RPM)
+        target_rpm = 4000  # Use 80% of 5000 RPM limit (with 0.8 safety factor = 3200 effective)
+        safety_factor = 0.8  # Use 80% of target to account for bursts and multiple workers
         
-        # Reduce parallel batch size if it's too high (to avoid TPM limits)
-        # With ~56k tokens per request, 3 parallel requests = ~168k tokens
-        # If TPM limit is 200k, we need to be more conservative
-        effective_batch_size = min(self.parallel_batch_size, 2)  # Cap at 2 for TPM safety
-        if effective_batch_size < self.parallel_batch_size:
-            logger.warning(f"Reduced parallel_batch_size from {self.parallel_batch_size} to {effective_batch_size} to avoid token-per-minute limits")
+        # Use the configured batch size directly (no hardcoded cap)
+        # The adaptive rate limiting will handle any issues if they arise
+        effective_batch_size = self.parallel_batch_size
         
         parallel_factor = 1.0 + (effective_batch_size - 1) * 0.3  # Extra spacing for parallel requests
         base_delay = 60.0 / (target_rpm * safety_factor)  # Base delay per request
         rate_limit_delay = base_delay * parallel_factor  # Adjust for parallel batch size
-        # Cap at reasonable maximum (3 seconds) and minimum (0.5 seconds)
-        # With effective_batch_size=2: ~1.0s * 1.3 = ~1.3s delay between requests initially
-        rate_limit_delay = max(0.5, min(3.0, rate_limit_delay))
+        # Cap at reasonable maximum (2 seconds) and minimum (10ms for tier 2)
+        rate_limit_delay = max(0.01, min(2.0, rate_limit_delay))
         logger.info(f"Rate limiting configured: delay={rate_limit_delay:.2f}s between requests, parallel_batch_size={effective_batch_size}, target_rpm={target_rpm}")
         
-        # Process grants in parallel batches (use effective batch size to avoid TPM limits)
+        # Process grants in parallel batches
         semaphore = asyncio.Semaphore(effective_batch_size)  # Limit concurrent requests
         
         # Distributed rate limiter using Redis (coordinates across all Celery worker processes)
@@ -968,7 +1099,33 @@ IMPORTANT:
                             time_since_last = current_time - last_time
                             if time_since_last < current_delay:
                                 wait_time = current_delay - time_since_last
+                                # Check for cancellation during rate limit wait (save tokens)
+                                if is_cancelled():
+                                    logger.info(f"Matching cancelled during rate limit wait for grant {grant_index}")
+                                    return {
+                                        'grant_index': grant_index,
+                                        'eligibility_score': 0.0,
+                                        'competitiveness_score': 0.0,
+                                        'exclusions_score': 0.0,
+                                        'explanation': 'Matching job was cancelled',
+                                        'eligibility_checklist': [],
+                                        'competitiveness_checklist': [],
+                                        'exclusions_checklist': [],
+                                    }
                                 await asyncio.sleep(wait_time)
+                                # Check again after sleep
+                                if is_cancelled():
+                                    logger.info(f"Matching cancelled after rate limit wait for grant {grant_index}")
+                                    return {
+                                        'grant_index': grant_index,
+                                        'eligibility_score': 0.0,
+                                        'competitiveness_score': 0.0,
+                                        'exclusions_score': 0.0,
+                                        'explanation': 'Matching job was cancelled',
+                                        'eligibility_checklist': [],
+                                        'competitiveness_checklist': [],
+                                        'exclusions_checklist': [],
+                                    }
                                 current_time = time.time()  # Update after waiting
                         
                         # Update last request time atomically
@@ -989,13 +1146,40 @@ IMPORTANT:
                             time_since_last = current_time - last_request_time[0]
                             if time_since_last < current_delay:
                                 wait_time = current_delay - time_since_last
+                                # Check for cancellation during rate limit wait (save tokens)
+                                if is_cancelled():
+                                    logger.info(f"Matching cancelled during rate limit wait for grant {grant_index}")
+                                    return {
+                                        'grant_index': grant_index,
+                                        'eligibility_score': 0.0,
+                                        'competitiveness_score': 0.0,
+                                        'exclusions_score': 0.0,
+                                        'explanation': 'Matching job was cancelled',
+                                        'eligibility_checklist': [],
+                                        'competitiveness_checklist': [],
+                                        'exclusions_checklist': [],
+                                    }
                                 await asyncio.sleep(wait_time)
+                                # Check again after sleep
+                                if is_cancelled():
+                                    logger.info(f"Matching cancelled after rate limit wait for grant {grant_index}")
+                                    return {
+                                        'grant_index': grant_index,
+                                        'eligibility_score': 0.0,
+                                        'competitiveness_score': 0.0,
+                                        'exclusions_score': 0.0,
+                                        'explanation': 'Matching job was cancelled',
+                                        'eligibility_checklist': [],
+                                        'competitiveness_checklist': [],
+                                        'exclusions_checklist': [],
+                                    }
                             last_request_time[0] = time_module.time()
                     
                     # Now acquire semaphore and make the actual API call
                     async with semaphore:  # Limit concurrent requests
                         result = await self.match_grants_batch_async(
-                            project_description, grant_data, grant_index, let_system_decide_trl
+                            project_description, grant_data, grant_index, let_system_decide_trl,
+                            assess_exclusions, assess_eligibility, assess_competitiveness
                         )
                         
                         # Success! Gradually decrease adaptive multiplier if it was increased
@@ -1064,14 +1248,66 @@ IMPORTANT:
                                 logger.info(f"Extracted retry_after from error message: {wait_time}s")
                         
                         logger.warning(f"Grant {grant_index}, attempt {attempt + 1}: Rate limit hit, waiting {wait_time:.1f}s...")
+                        # Check for cancellation before waiting (save tokens)
+                        if is_cancelled():
+                            logger.info(f"Matching cancelled during rate limit retry wait for grant {grant_index}")
+                            return {
+                                'grant_index': grant_index,
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'exclusions_score': 0.0,
+                                'explanation': 'Matching job was cancelled',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
+                                'exclusions_checklist': [],
+                            }
                         await asyncio.sleep(wait_time)
+                        # Check again after sleep
+                        if is_cancelled():
+                            logger.info(f"Matching cancelled after rate limit retry wait for grant {grant_index}")
+                            return {
+                                'grant_index': grant_index,
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'exclusions_score': 0.0,
+                                'explanation': 'Matching job was cancelled',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
+                                'exclusions_checklist': [],
+                            }
                     else:
                         logger.error(f"Grant {grant_index}: Rate limit exceeded after {max_retries} retries")
                         raise GrantMatchingError(f"Rate limit exceeded for grant {grant_index}")
                 except (APIError, GrantMatchingError) as e:
                     if attempt < max_retries - 1:
                         logger.warning(f"Grant {grant_index}, attempt {attempt + 1}: Error {e}, retrying...")
+                        # Check for cancellation before retry wait (save tokens)
+                        if is_cancelled():
+                            logger.info(f"Matching cancelled during error retry wait for grant {grant_index}")
+                            return {
+                                'grant_index': grant_index,
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'exclusions_score': 0.0,
+                                'explanation': 'Matching job was cancelled',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
+                                'exclusions_checklist': [],
+                            }
                         await asyncio.sleep(2)
+                        # Check again after sleep
+                        if is_cancelled():
+                            logger.info(f"Matching cancelled after error retry wait for grant {grant_index}")
+                            return {
+                                'grant_index': grant_index,
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'exclusions_score': 0.0,
+                                'explanation': 'Matching job was cancelled',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
+                                'exclusions_checklist': [],
+                            }
                     else:
                         logger.error(f"Grant {grant_index}: Error after {max_retries} retries: {e}")
                         # Return placeholder result on final failure
@@ -1088,7 +1324,33 @@ IMPORTANT:
                 except Exception as e:
                     logger.error(f"Grant {grant_index}: Unexpected error: {e}", exc_info=True)
                     if attempt < max_retries - 1:
+                        # Check for cancellation before retry wait (save tokens)
+                        if is_cancelled():
+                            logger.info(f"Matching cancelled during unexpected error retry wait for grant {grant_index}")
+                            return {
+                                'grant_index': grant_index,
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'exclusions_score': 0.0,
+                                'explanation': 'Matching job was cancelled',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
+                                'exclusions_checklist': [],
+                            }
                         await asyncio.sleep(2)
+                        # Check again after sleep
+                        if is_cancelled():
+                            logger.info(f"Matching cancelled after unexpected error retry wait for grant {grant_index}")
+                            return {
+                                'grant_index': grant_index,
+                                'eligibility_score': 0.0,
+                                'competitiveness_score': 0.0,
+                                'exclusions_score': 0.0,
+                                'explanation': 'Matching job was cancelled',
+                                'eligibility_checklist': [],
+                                'competitiveness_checklist': [],
+                                'exclusions_checklist': [],
+                            }
                     else:
                         return {
                             'grant_index': grant_index,
@@ -1116,7 +1378,16 @@ IMPORTANT:
         for done_coro in asyncio.as_completed(task_list):
             # Check for cancellation before processing each result
             if is_cancelled():
-                logger.info(f"Matching cancelled, stopping result processing. Completed {completed}/{len(grants_data)}")
+                logger.info(f"Matching cancelled, cancelling remaining tasks. Completed {completed}/{len(grants_data)}")
+                # Cancel all remaining tasks that haven't completed to save API tokens
+                cancelled_count = 0
+                for task in task_list:
+                    if not task.done():
+                        task.cancel()
+                        cancelled_count += 1
+                logger.info(f"Cancelled {cancelled_count} remaining tasks to save API tokens")
+                # Wait a brief moment for cancellations to propagate
+                await asyncio.sleep(0.1)
                 break
             
             try:
@@ -1127,6 +1398,11 @@ IMPORTANT:
                     logger.warning(f"Result missing grant_index, this should not happen")
                 all_results.append(result)
                 completed += 1
+            except asyncio.CancelledError:
+                # Task was cancelled - this is expected when cancellation is requested
+                logger.info(f"Task cancelled (likely due to user cancellation)")
+                # Don't increment completed or add to results
+                continue
             except Exception as e:
                 # This shouldn't happen as process_grant_with_retry catches exceptions
                 # But if it does, we need to handle it
@@ -1174,7 +1450,8 @@ IMPORTANT:
         all_results.sort(key=lambda x: x.get('grant_index', 0))
         return all_results
     
-    def match_all_grants(self, project_description, grants_data, progress_callback=None, let_system_decide_trl=False, funding_search_id=None):
+    def match_all_grants(self, project_description, grants_data, progress_callback=None, let_system_decide_trl=False, funding_search_id=None,
+                        assess_exclusions=True, assess_eligibility=True, assess_competitiveness=True):
         """
         Match all grants in batches with retry logic.
         Uses async parallel processing if parallel_batch_size > 1, otherwise sequential.
@@ -1185,6 +1462,9 @@ IMPORTANT:
             progress_callback: Optional function(current, total) for progress updates
             let_system_decide_trl: If True, let AI assess TRL level during matching
             funding_search_id: Optional funding search ID for database progress updates (required for async context)
+            assess_exclusions: If True, assess exclusions checklist
+            assess_eligibility: If True, assess eligibility checklist
+            assess_competitiveness: If True, assess competitiveness checklist
         
         Returns:
             List of match results with grant_index, score, explanation, etc.
@@ -1195,11 +1475,13 @@ IMPORTANT:
         logger = logging.getLogger(__name__)
         logger.info(f"Starting to match {len(grants_data)} grants in {total_batches} batches of {self.batch_size}")
         logger.info(f"Parallel batch size: {self.parallel_batch_size} (will process {self.parallel_batch_size} grants simultaneously)")
+        logger.info(f"Checklist assessment: exclusions={assess_exclusions}, eligibility={assess_eligibility}, competitiveness={assess_competitiveness}")
         
         # Use async parallel processing if parallel_batch_size > 1
         if self.parallel_batch_size > 1:
             return asyncio.run(self._match_all_grants_async(
-                project_description, grants_data, progress_callback, let_system_decide_trl, funding_search_id
+                project_description, grants_data, progress_callback, let_system_decide_trl, funding_search_id,
+                assess_exclusions, assess_eligibility, assess_competitiveness
             ))
         
         # Helper function to check if matching was cancelled (for sequential processing)
@@ -1237,7 +1519,10 @@ IMPORTANT:
                         progress_callback(batch_num, len(grants_data))
                     
                     logger.info(f"Batch {batch_num_display}, attempt {attempt + 1}/{max_retries}: Calling match_grants_batch...")
-                    batch_results = self.match_grants_batch(project_description, batch, let_system_decide_trl=let_system_decide_trl)
+                    batch_results = self.match_grants_batch(
+                        project_description, batch, let_system_decide_trl=let_system_decide_trl,
+                        assess_exclusions=assess_exclusions, assess_eligibility=assess_eligibility, assess_competitiveness=assess_competitiveness
+                    )
                     logger.info(f"Batch {batch_num_display}: Got {len(batch_results)} results from match_grants_batch")
                     
                     # Adjust grant_index to match original position

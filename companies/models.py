@@ -45,8 +45,6 @@ class Company(models.Model):
     filing_history = models.JSONField(default=dict, blank=True)  # Stores filing history from Companies House
     grants_received_360 = models.JSONField(default=dict, blank=True)  # Grants received via 360Giving
     website = models.URLField(blank=True, null=True)
-    # Legacy single notes field (kept for backwards compatibility)
-    notes = models.TextField(blank=True, null=True)
     raw_data = models.JSONField(default=dict, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='companies')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -289,42 +287,6 @@ class Company(models.Model):
         return account_filings
 
 
-class CompanyNote(models.Model):
-    """Individual notes attached to a company."""
-
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='company_notes')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='company_notes')
-    title = models.CharField(max_length=255, blank=True, null=True)
-    body = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'company_notes'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        base = self.title or (self.body[:50] + '...' if len(self.body) > 50 else self.body)
-        return f"{self.company.name} - {base}"
-
-
-class CompanyFile(models.Model):
-    """Files uploaded for a company (e.g., supporting docs)."""
-
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='files')
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='company_files')
-    file = models.FileField(upload_to='company_files/%Y/%m/')
-    original_name = models.CharField(max_length=255, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'company_files'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return self.original_name or self.file.name
-
-
 class FundingSearchFile(models.Model):
     """Files uploaded for a funding search (e.g., project descriptions, proposals)."""
 
@@ -368,13 +330,39 @@ class FundingSearch(models.Model):
     file_type = models.CharField(max_length=50, blank=True, null=True)  # 'pdf', 'docx', 'txt', 'text'
     
     # Company data selections for matching
-    selected_company_files = models.ManyToManyField('CompanyFile', blank=True, related_name='funding_searches')
-    selected_company_notes = models.ManyToManyField('CompanyNote', blank=True, related_name='funding_searches')
     use_company_website = models.BooleanField(default=False)  # Whether to use company website as a source
+    use_company_grant_history = models.BooleanField(default=False)  # Whether to use company grant history (360Giving) as a source
     
     # Grant source selection for matching
     selected_grant_sources = models.JSONField(default=list, blank=True)  # List of grant source codes to match against (e.g., ['ukri', 'nihr'])
     exclude_closed_competitions = models.BooleanField(default=True)  # If True, exclude closed competitions from matching
+    
+    # Checklist assessment configuration
+    assess_exclusions = models.BooleanField(
+        default=True,
+        help_text="If True, assess exclusions checklist (recommended: assess first)"
+    )
+    assess_eligibility = models.BooleanField(
+        default=True,
+        help_text="If True, assess eligibility checklist (recommended: assess second)"
+    )
+    assess_competitiveness = models.BooleanField(
+        default=True,
+        help_text="If True, assess competitiveness checklist (recommended: assess last)"
+    )
+    # Assessment order (optional - for future use if we want to change order)
+    checklist_assessment_order = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Order of checklist assessment: ['exclusions', 'eligibility', 'competitiveness']"
+    )
+    
+    # Pre-flight checks result (quality of input material before matching)
+    preflight_result = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Pre-flight quality assessment for this funding search (coverage, clarity, completeness, etc.)"
+    )
     
     # Link to questionnaire used
     questionnaire = models.ForeignKey(
@@ -416,13 +404,13 @@ class FundingSearch(models.Model):
     
     def compile_input_sources_text(self):
         """
-        Compile text from all selected input sources for matching.
+        Compile text from all available input sources for matching.
         Returns combined text from:
+        - Company registration details (always included - registration status, company number, type, SIC codes, address)
+        - Company website (always included if available - scraped content)
+        - Company grant history (always included if available - grants received via 360Giving)
         - Questionnaire context (if questionnaire is linked - includes company info, project details, funding requirements, etc.)
         - Project description (if exists - for backward compatibility)
-        - Selected company files (extracted text)
-        - Selected company notes (body text)
-        - Company website (if selected - includes URL)
         - Uploaded file (if exists - extracted text)
         """
         def extract_text_from_file(file, file_type):
@@ -464,6 +452,126 @@ class FundingSearch(models.Model):
                 raise Exception(f"Unsupported file type: {file_type}")
         
         text_parts = []
+        
+        # Add company registration details (always included for eligibility checks)
+        company_info = []
+        company_info.append(f"Company Name: {self.company.name}")
+        
+        if self.company.company_number:
+            company_info.append(f"Company Number: {self.company.company_number}")
+        
+        if self.company.registration_status:
+            company_info.append(f"Registration Status: {self.company.get_registration_status_display()}")
+            if self.company.is_registered:
+                company_info.append("UK Registered: Yes")
+            else:
+                company_info.append("UK Registered: No")
+        
+        if self.company.company_type:
+            company_info.append(f"Company Type: {self.company.company_type}")
+        
+        if self.company.status:
+            company_info.append(f"Company Status: {self.company.status}")
+        
+        if self.company.date_of_creation:
+            company_info.append(f"Date of Creation: {self.company.date_of_creation}")
+        
+        # Add SIC codes with descriptions
+        sic_codes = self.company.sic_codes_with_descriptions()
+        if sic_codes:
+            sic_info = []
+            for sic in sic_codes:
+                sic_info.append(f"  - {sic['code']}: {sic['description']}")
+            company_info.append(f"SIC Codes:\n" + "\n".join(sic_info))
+        
+        # Add formatted address
+        formatted_address = self.company.formatted_address()
+        if formatted_address:
+            company_info.append(f"Registered Address: {formatted_address}")
+        
+        if company_info:
+            text_parts.append("Company Registration Details:\n" + "\n".join(company_info) + "\n")
+        
+        # Add company website (always included if available)
+        if self.company.website:
+            try:
+                # SECURITY: Validate URL to prevent SSRF attacks
+                from .security import validate_url_for_ssrf
+                is_valid, error_msg = validate_url_for_ssrf(self.company.website)
+                if not is_valid:
+                    text_parts.append(f"Company Website: {self.company.website} (URL validation failed: {error_msg})\n")
+                else:
+                    import requests
+                    from bs4 import BeautifulSoup
+                    from urllib.parse import urljoin, urlparse
+                    
+                    # Fetch website content
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                    # SECURITY: Disable redirects to prevent SSRF via redirects
+                    response = requests.get(self.company.website, headers=headers, timeout=10, allow_redirects=False)
+                    response.raise_for_status()
+                    
+                    # Parse HTML and extract text
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Remove script and style elements
+                    for script in soup(["script", "style", "nav", "footer", "header"]):
+                        script.decompose()
+                    
+                    # Get text content
+                    website_text = soup.get_text()
+                    
+                    # Clean up whitespace
+                    lines = (line.strip() for line in website_text.splitlines())
+                    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                    website_text = ' '.join(chunk for chunk in chunks if chunk)
+                    
+                    # Limit to reasonable length (first 5000 characters)
+                    if len(website_text) > 5000:
+                        website_text = website_text[:5000] + "... (truncated)"
+                    
+                    if website_text:
+                        text_parts.append(f"Company Website: {self.company.website}\n{website_text}\n")
+                    else:
+                        text_parts.append(f"Company Website: {self.company.website} (no text content found)\n")
+            except Exception as e:
+                # If scraping fails, just include the URL
+                text_parts.append(f"Company Website: {self.company.website} (scraping failed: {str(e)})\n")
+        
+        # Add company grant history (always included if available)
+        if self.company.grants_received_360:
+            grants_data = self.company.grants_received_360
+            grants = grants_data.get('grants', [])
+            
+            if grants:
+                grant_history_text = []
+                grant_history_text.append(f"Company Grant History (360Giving): {grants_data.get('count', len(grants))} grant(s) received\n")
+                
+                for grant in grants:
+                    grant_info = []
+                    if grant.get('title'):
+                        grant_info.append(f"Title: {grant['title']}")
+                    if grant.get('description'):
+                        grant_info.append(f"Description: {grant['description']}")
+                    if grant.get('amountAwarded'):
+                        grant_info.append(f"Amount Awarded: £{grant['amountAwarded']}")
+                    if grant.get('awardDate'):
+                        grant_info.append(f"Award Date: {grant['awardDate']}")
+                    if grant.get('funder'):
+                        grant_info.append(f"Funder: {grant['funder']}")
+                    if grant.get('recipientOrganization', {}).get('name'):
+                        grant_info.append(f"Recipient: {grant['recipientOrganization']['name']}")
+                    
+                    if grant_info:
+                        grant_history_text.append("\n".join(grant_info))
+                        grant_history_text.append("")  # Empty line between grants
+                
+                if grant_history_text:
+                    text_parts.append("\n".join(grant_history_text).strip())
+            else:
+                text_parts.append("Company Grant History: No grants found in 360Giving database\n")
         
         # Add questionnaire context if available (add early for better matching context)
         if self.questionnaire and self.questionnaire.questionnaire_data:
@@ -530,44 +638,6 @@ class FundingSearch(models.Model):
         if self.project_description:
             text_parts.append(f"Project Description:\n{self.project_description}\n")
         
-        # Add selected company notes
-        selected_notes = self.selected_company_notes.all()
-        if selected_notes:
-            notes_text = "\n\n".join([
-                f"Note: {note.title or 'Untitled'}\n{note.body}"
-                for note in selected_notes
-            ])
-            text_parts.append(f"Company Notes:\n{notes_text}\n")
-        
-        # Add selected company files (extract text)
-        selected_files = self.selected_company_files.all()
-        for company_file in selected_files:
-            try:
-                file = company_file.file
-                file_name = company_file.original_name or file.name
-                
-                # Determine file type
-                file_name_lower = file_name.lower()
-                if file_name_lower.endswith('.pdf'):
-                    file_type = 'pdf'
-                elif file_name_lower.endswith('.docx'):
-                    file_type = 'docx'
-                elif file_name_lower.endswith('.txt'):
-                    file_type = 'txt'
-                else:
-                    file_type = 'txt'  # Default
-                
-                # Extract text from file
-                with file.open('rb') as f:
-                    extracted_text = extract_text_from_file(f, file_type)
-                
-                if extracted_text:
-                    text_parts.append(f"Company File: {file_name}\n{extracted_text}\n")
-            except Exception as e:
-                # If extraction fails, just include the filename
-                file_name = company_file.original_name or (company_file.file.name if company_file.file else 'Unknown')
-                text_parts.append(f"Company File: {file_name} (text extraction failed: {str(e)})\n")
-        
         # Add uploaded files if exists (extract text from all files)
         for uploaded_file in self.uploaded_files.all():
             if uploaded_file.file_type:
@@ -595,53 +665,6 @@ class FundingSearch(models.Model):
                 # If extraction fails, just include the filename
                 text_parts.append(f"Uploaded File: {self.uploaded_file.name} (text extraction failed: {str(e)})\n")
         
-        # Add company website if selected (scrape content)
-        if self.use_company_website and self.company.website:
-            try:
-                # SECURITY: Validate URL to prevent SSRF attacks
-                from .security import validate_url_for_ssrf
-                is_valid, error_msg = validate_url_for_ssrf(self.company.website)
-                if not is_valid:
-                    text_parts.append(f"Company Website: {self.company.website} (URL validation failed: {error_msg})\n")
-                else:
-                    import requests
-                    from bs4 import BeautifulSoup
-                    from urllib.parse import urljoin, urlparse
-                    
-                    # Fetch website content
-                    headers = {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    }
-                    # SECURITY: Disable redirects to prevent SSRF via redirects
-                    response = requests.get(self.company.website, headers=headers, timeout=10, allow_redirects=False)
-                    response.raise_for_status()
-                    
-                    # Parse HTML and extract text
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                    
-                    # Remove script and style elements
-                    for script in soup(["script", "style", "nav", "footer", "header"]):
-                        script.decompose()
-                    
-                    # Get text content
-                    website_text = soup.get_text()
-                    
-                    # Clean up whitespace
-                    lines = (line.strip() for line in website_text.splitlines())
-                    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                    website_text = ' '.join(chunk for chunk in chunks if chunk)
-                    
-                    # Limit to reasonable length (first 5000 characters)
-                    if len(website_text) > 5000:
-                        website_text = website_text[:5000] + "... (truncated)"
-                    
-                    if website_text:
-                        text_parts.append(f"Company Website: {self.company.website}\n{website_text}\n")
-                    else:
-                        text_parts.append(f"Company Website: {self.company.website} (no text content found)\n")
-            except Exception as e:
-                # If scraping fails, just include the URL
-                text_parts.append(f"Company Website: {self.company.website} (scraping failed: {str(e)})\n")
         
         # Combine all text parts
         combined_text = "\n\n---\n\n".join(text_parts)
@@ -692,10 +715,11 @@ class GrantMatchResult(models.Model):
     
     funding_search = models.ForeignKey(FundingSearch, on_delete=models.CASCADE, related_name='match_results')
     grant = models.ForeignKey(Grant, on_delete=models.CASCADE, related_name='match_results')
-    match_score = models.FloatField(db_index=True)  # 0.0 to 1.0 - Overall score (average of eligibility and competitiveness)
+    match_score = models.FloatField(db_index=True)  # 0.0 to 1.0 - Overall score (average of enabled component scores)
     eligibility_score = models.FloatField(null=True, blank=True, db_index=True)  # 0.0 to 1.0 - How well the project meets eligibility criteria
     competitiveness_score = models.FloatField(null=True, blank=True, db_index=True)  # 0.0 to 1.0 - How competitive the project is for this grant
-    match_reasons = models.JSONField(default=dict)  # e.g., {"explanation": "...", "alignment_points": [], "concerns": []}
+    exclusions_score = models.FloatField(null=True, blank=True, db_index=True)  # 0.0 to 1.0 - How well project avoids exclusions (higher = fewer exclusions apply)
+    match_reasons = models.JSONField(default=dict)  # e.g., {"explanation": "...", "alignment_points": [], "concerns": [], "certainty": 0.85}
     matched_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -707,14 +731,91 @@ class GrantMatchResult(models.Model):
         ]
     
     def save(self, *args, **kwargs):
-        # Calculate overall match_score as average of eligibility and competitiveness if both are provided
-        if self.eligibility_score is not None and self.competitiveness_score is not None:
-            self.match_score = (self.eligibility_score + self.competitiveness_score) / 2.0
-        elif self.match_score is None:
-            # Fallback: if no component scores and no match_score set, default to 0
+        """
+        Calculate overall match_score based on which checklists were assessed.
+        Matches the logic in tasks.py to ensure consistency.
+        
+        Rules:
+        1. If exclusions_score < 1.0 (any "yes" in exclusions checklist), set overall score to 0 (disqualifying)
+        2. Otherwise, only recalculate if funding_search is loaded and we need to adjust based on assessment settings
+        3. The main score calculation happens in tasks.py - this method mainly handles exclusions disqualification
+        
+        Note: We avoid loading funding_search here to prevent extra queries. The score should already
+        be set correctly from tasks.py. This method primarily ensures exclusions are disqualifying.
+        Note: exclusions_score = (no_count / decided_count), so if score < 1.0, there's at least one "yes"
+        """
+        # Check if project is excluded first (this doesn't require funding_search)
+        # exclusions_score < 1.0 means at least one "yes" (exclusion applies)
+        if self.exclusions_score is not None and self.exclusions_score < 1.0:
+            # Project is excluded - disqualifying, set score to 0
             self.match_score = 0.0
-        # If only one component score is provided, keep the existing match_score (don't recalculate)
+            super().save(*args, **kwargs)
+            return
+        
+        # Only recalculate if funding_search is already loaded (to avoid extra queries)
+        # and if match_score needs to be calculated
+        if hasattr(self, 'funding_search') and self.funding_search and self.match_score is None:
+            # Calculate overall score using multiplicative approach
+            # Eligibility acts as a base multiplier (paramount importance)
+            # Formula: eligibility_score × (0.3 + 0.7 × competitiveness_score)
+            # This ensures eligibility is foundational - if eligibility is 0%, overall is 0%
+            # If eligibility is 100%, competitiveness can boost the score up to 100%
+            if self.funding_search.assess_eligibility and self.funding_search.assess_competitiveness:
+                # Both assessed: multiplicative (eligibility as base)
+                if self.eligibility_score is not None and self.competitiveness_score is not None:
+                    self.match_score = self.eligibility_score * (0.3 + 0.7 * self.competitiveness_score)
+                elif self.eligibility_score is not None:
+                    # Only eligibility available
+                    self.match_score = self.eligibility_score
+                elif self.competitiveness_score is not None:
+                    # Only competitiveness available (shouldn't happen, but handle gracefully)
+                    self.match_score = self.competitiveness_score
+                else:
+                    self.match_score = 0.0
+            elif self.funding_search.assess_eligibility and self.eligibility_score is not None:
+                # Only eligibility assessed
+                self.match_score = self.eligibility_score
+            elif self.funding_search.assess_competitiveness and self.competitiveness_score is not None:
+                # Only competitiveness assessed
+                self.match_score = self.competitiveness_score
+            else:
+                self.match_score = 0.0
+        elif self.match_score is None:
+            # Fallback: if no match_score set, default to 0
+            self.match_score = 0.0
+        
         super().save(*args, **kwargs)
+    
+    def calculate_certainty(self):
+        """
+        Calculate certainty metric based on proportion of checklist items that were decided.
+        Returns a float between 0.0 and 1.0.
+        """
+        match_reasons = self.match_reasons or {}
+        
+        total_items = 0
+        decided_items = 0
+        
+        # Count eligibility checklist items
+        eligibility_checklist = match_reasons.get('eligibility_checklist', [])
+        for item in eligibility_checklist:
+            total_items += 1
+            if item.get('status') in ['yes', 'no']:
+                decided_items += 1
+        
+        # Count competitiveness checklist items
+        competitiveness_checklist = match_reasons.get('competitiveness_checklist', [])
+        for item in competitiveness_checklist:
+            total_items += 1
+            if item.get('status') in ['yes', 'no']:
+                decided_items += 1
+        
+        # Exclusions checklist is NOT included in certainty calculation
+        
+        if total_items == 0:
+            return 1.0  # No checklists = 100% certain (no uncertainty)
+        
+        return decided_items / total_items
     
     def __str__(self):
         return f"{self.funding_search.name} - {self.grant.title} ({self.match_score:.2f})"

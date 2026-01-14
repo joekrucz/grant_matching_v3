@@ -174,3 +174,96 @@ def grant_source_logo_exists(source):
     valid_sources = ['ukri', 'bbsrc', 'epsrc', 'mrc', 'stfc', 'ahrc', 'esrc', 'nerc', 'nihr', 'catapult', 'innovate_uk']
     return source in valid_sources
 
+
+@register.filter
+def trl_levels_to_range(trl_levels):
+    """Convert a list of TRL levels (e.g., ['TRL 1', 'TRL 2', 'TRL 3']) to a range string (e.g., 'TRL 1-3').
+    
+    Usage: {{ grant.trl_requirements.trl_levels|trl_levels_to_range }}
+    """
+    if not trl_levels:
+        return ''
+    
+    # Extract numbers from TRL strings (e.g., "TRL 1" -> 1)
+    trl_nums = []
+    for trl in trl_levels:
+        if isinstance(trl, str):
+            # Match TRL followed by a number
+            match = re.search(r'TRL\s*(\d+)', trl, re.IGNORECASE)
+            if match:
+                trl_nums.append(int(match.group(1)))
+        elif isinstance(trl, int):
+            trl_nums.append(trl)
+    
+    if not trl_nums:
+        return ''
+    
+    trl_nums = sorted(set(trl_nums))  # Remove duplicates and sort
+    
+    if len(trl_nums) == 1:
+        return f'TRL {trl_nums[0]}'
+    else:
+        return f'TRL {trl_nums[0]}-{trl_nums[-1]}'
+
+
+@register.simple_tag
+def check_project_trl_in_grant_range(project_trl_text, grant_trl_requirements):
+    """Check if project TRL is within grant TRL range.
+    
+    Returns: 'yes', 'no', or 'don\'t know'
+    
+    Usage: {% check_project_trl_in_grant_range match.match_reasons.project_type_and_trl_focus match.grant.trl_requirements as trl_check_status %}
+    """
+    if not project_trl_text or not grant_trl_requirements:
+        return 'don\'t know'
+    
+    # Extract project TRL number from text
+    project_trl_match = re.search(r'TRL\s*(\d+)', str(project_trl_text), re.IGNORECASE)
+    if not project_trl_match:
+        return 'don\'t know'
+    
+    project_trl_num = int(project_trl_match.group(1))
+    
+    # Get grant TRL levels
+    grant_trl_levels = grant_trl_requirements.get('trl_levels', [])
+    grant_trl_range = grant_trl_requirements.get('trl_range', '')
+    
+    # Extract grant TRL numbers
+    grant_trl_nums = []
+    
+    # First try to parse trl_range if it exists (e.g., "1-3" or "TRL 1-3")
+    if grant_trl_range:
+        range_match = re.search(r'(\d+)\s*-\s*(\d+)', str(grant_trl_range))
+        if range_match:
+            min_trl = int(range_match.group(1))
+            max_trl = int(range_match.group(2))
+            grant_trl_nums = list(range(min_trl, max_trl + 1))
+            # Check if project TRL is in the contiguous range
+            if project_trl_num in grant_trl_nums:
+                return 'yes'
+            else:
+                return 'no'
+    
+    # If no range, extract from trl_levels and check if project TRL is within min-max range
+    if grant_trl_levels:
+        for trl in grant_trl_levels:
+            if isinstance(trl, str):
+                match = re.search(r'TRL\s*(\d+)', trl, re.IGNORECASE)
+                if match:
+                    grant_trl_nums.append(int(match.group(1)))
+            elif isinstance(trl, int):
+                grant_trl_nums.append(trl)
+        
+        # If we have TRL levels, check if project TRL is within the min-max range
+        # This handles non-contiguous levels (e.g., ["TRL 1", "TRL 3", "TRL 5"] should accept TRL 2, 3, 4)
+        if grant_trl_nums:
+            min_grant_trl = min(grant_trl_nums)
+            max_grant_trl = max(grant_trl_nums)
+            # Check if project TRL is within the range (inclusive)
+            if min_grant_trl <= project_trl_num <= max_grant_trl:
+                return 'yes'
+            else:
+                return 'no'
+    
+    return 'don\'t know'
+

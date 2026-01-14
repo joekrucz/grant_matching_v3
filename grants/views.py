@@ -19,6 +19,27 @@ from admin_panel.ai_client import build_grant_context, AiAssistantClient, AiAssi
 from companies.models import Company, FundingSearch
 
 
+def sanitize_checklist_items(checklist_items):
+    """Remove null bytes from checklist items to prevent PostgreSQL errors.
+    
+    PostgreSQL cannot store null bytes (\u0000) in text/JSON fields.
+    This function sanitizes checklist items by removing any null bytes.
+    """
+    if not checklist_items:
+        return []
+    sanitized = []
+    for item in checklist_items:
+        if isinstance(item, str):
+            # Remove null bytes and other problematic characters
+            sanitized_item = item.replace('\u0000', '').replace('\x00', '')
+            sanitized.append(sanitized_item)
+        else:
+            # Convert to string and sanitize
+            sanitized_item = str(item).replace('\u0000', '').replace('\x00', '')
+            sanitized.append(sanitized_item)
+    return sanitized
+
+
 @login_required
 def index(request):
     """Dashboard/landing page."""
@@ -308,15 +329,11 @@ def eligibility_checklist(request):
     grant_ctx = build_grant_context(grant)
     parsed, raw_meta, latency_ms = client.eligibility_checklist(grant_ctx)
     
-    checklist_items = parsed.get("checklist_items") or []
-    notes = parsed.get("notes") or []
-    missing_info = parsed.get("missing_info") or []
+    checklist_items = sanitize_checklist_items(parsed.get("checklist_items") or [])
     
     # Save checklist to grant
     checklist_data = {
         "checklist_items": checklist_items,
-        "notes": notes,
-        "missing_info": missing_info,
         "meta": {
             "model": raw_meta.get("model"),
             "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -329,8 +346,6 @@ def eligibility_checklist(request):
     
     return JsonResponse({
         "checklist_items": checklist_items,
-        "notes": notes,
-        "missing_info": missing_info,
         "meta": {
             "model": raw_meta.get("model"),
             "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -365,15 +380,11 @@ def competitiveness_checklist(request):
     grant_ctx = build_grant_context(grant)
     parsed, raw_meta, latency_ms = client.competitiveness_checklist(grant_ctx)
     
-    checklist_items = parsed.get("checklist_items") or []
-    notes = parsed.get("notes") or []
-    missing_info = parsed.get("missing_info") or []
+    checklist_items = sanitize_checklist_items(parsed.get("checklist_items") or [])
     
     # Save checklist to grant
     checklist_data = {
         "checklist_items": checklist_items,
-        "notes": notes,
-        "missing_info": missing_info,
         "meta": {
             "model": raw_meta.get("model"),
             "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -386,8 +397,6 @@ def competitiveness_checklist(request):
     
     return JsonResponse({
         "checklist_items": checklist_items,
-        "notes": notes,
-        "missing_info": missing_info,
         "meta": {
             "model": raw_meta.get("model"),
             "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -422,15 +431,11 @@ def exclusions_checklist(request):
     grant_ctx = build_grant_context(grant)
     parsed, raw_meta, latency_ms = client.exclusions_checklist(grant_ctx)
     
-    checklist_items = parsed.get("checklist_items") or []
-    notes = parsed.get("notes") or []
-    missing_info = parsed.get("missing_info") or []
+    checklist_items = sanitize_checklist_items(parsed.get("checklist_items") or [])
     
     # Save checklist to grant
     checklist_data = {
         "checklist_items": checklist_items,
-        "notes": notes,
-        "missing_info": missing_info,
         "meta": {
             "model": raw_meta.get("model"),
             "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -443,8 +448,6 @@ def exclusions_checklist(request):
     
     return JsonResponse({
         "checklist_items": checklist_items,
-        "notes": notes,
-        "missing_info": missing_info,
         "meta": {
             "model": raw_meta.get("model"),
             "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
@@ -452,6 +455,212 @@ def exclusions_checklist(request):
             "latency_ms": latency_ms,
         },
     })
+
+
+@login_required
+@require_http_methods(["POST"])
+@ratelimit(key='user_or_ip', rate='30/h', block=True)
+def trl_requirements(request):
+    """API endpoint: extract TRL requirements for a grant."""
+    # SECURITY: Parse JSON with size limits
+    from grants_aggregator.security_utils import safe_json_loads
+    payload, error_response = safe_json_loads(request)
+    if error_response:
+        return error_response
+    
+    grant_id = payload.get("grant_id")
+    if not grant_id:
+        return JsonResponse({"error": "grant_id is required"}, status=400)
+    
+    grant = get_object_or_404(Grant, id=grant_id)
+    
+    try:
+        client = AiAssistantClient()
+    except AiAssistantError as e:
+        return JsonResponse({"error": str(e)}, status=503)
+    
+    grant_ctx = build_grant_context(grant)
+    parsed, raw_meta, latency_ms = client.trl_requirements(grant_ctx)
+    
+    trl_levels = parsed.get("trl_levels", [])
+    is_technology_focused = parsed.get("is_technology_focused", False)
+    
+    # Save TRL requirements to grant (even if no TRL levels but is technology-focused)
+    trl_data = {
+        "trl_levels": trl_levels if trl_levels else [],
+        "trl_range": parsed.get("trl_range"),
+        "is_technology_focused": is_technology_focused,
+        "notes": parsed.get("notes"),
+        "meta": {
+            "model": raw_meta.get("model"),
+            "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+            "latency_ms": latency_ms,
+        },
+    }
+    grant.trl_requirements = trl_data
+    grant.save(update_fields=['trl_requirements'])
+    
+    return JsonResponse({
+        "trl_levels": trl_data["trl_levels"],
+        "trl_range": trl_data.get("trl_range"),
+        "is_technology_focused": trl_data.get("is_technology_focused", False),
+        "notes": trl_data.get("notes"),
+        "meta": trl_data["meta"],
+    })
+
+
+@login_required
+@require_POST
+@ratelimit(key='user_or_ip', rate='10/h', block=True)
+def generate_trl_requirements(request, slug):
+    """Generate/regenerate TRL requirements for a single grant (admin only)."""
+    grant = get_object_or_404(Grant, slug=slug)
+    
+    # Check if user is admin
+    if not request.user.admin:
+        messages.error(request, 'You do not have permission to generate TRL requirements.')
+        return redirect('grants:detail', slug=slug)
+    
+    try:
+        client = AiAssistantClient()
+    except AiAssistantError as e:
+        messages.error(request, f'Failed to initialize AI client: {str(e)}')
+        return redirect('grants:detail', slug=slug)
+    
+    grant_ctx = build_grant_context(grant)
+    
+    # Generate TRL requirements
+    try:
+        parsed, raw_meta, latency_ms = client.trl_requirements(grant_ctx)
+        trl_data = {
+            "trl_levels": parsed.get("trl_levels", []),
+            "trl_range": parsed.get("trl_range"),
+            "notes": parsed.get("notes"),
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+            },
+        }
+        grant.trl_requirements = trl_data
+        grant.save(update_fields=['trl_requirements'])
+        messages.success(request, f'Successfully generated TRL requirements for "{grant.title}".')
+    except Exception as e:
+        messages.error(request, f'Failed to generate TRL requirements for "{grant.title}": {str(e)}')
+    
+    return redirect('grants:detail', slug=slug)
+
+
+@login_required
+@require_POST
+@ratelimit(key='user_or_ip', rate='10/h', block=True)
+def generate_grant_analysis(request, slug):
+    """Generate/regenerate all grant analysis data (checklists and TRL requirements) for a single grant (admin only)."""
+    grant = get_object_or_404(Grant, slug=slug)
+    
+    # Check if user is admin
+    if not request.user.admin:
+        messages.error(request, 'You do not have permission to generate grant analysis.')
+        return redirect('grants:detail', slug=slug)
+    
+    try:
+        client = AiAssistantClient()
+    except AiAssistantError as e:
+        messages.error(request, f'Failed to initialize AI client: {str(e)}')
+        return redirect('grants:detail', slug=slug)
+    
+    grant_ctx = build_grant_context(grant)
+    errors = []
+    success_count = 0
+    
+    # Generate eligibility checklist
+    try:
+        parsed, raw_meta, latency_ms = client.eligibility_checklist(grant_ctx)
+        checklist_data = {
+            "checklist_items": sanitize_checklist_items(parsed.get("checklist_items") or []),
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+            },
+        }
+        grant.eligibility_checklist = checklist_data
+        grant.save(update_fields=['eligibility_checklist'])
+        success_count += 1
+    except Exception as e:
+        errors.append(f"Eligibility checklist: {str(e)}")
+    
+    # Generate competitiveness checklist
+    try:
+        parsed, raw_meta, latency_ms = client.competitiveness_checklist(grant_ctx)
+        checklist_data = {
+            "checklist_items": sanitize_checklist_items(parsed.get("checklist_items") or []),
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+            },
+        }
+        grant.competitiveness_checklist = checklist_data
+        grant.save(update_fields=['competitiveness_checklist'])
+        success_count += 1
+    except Exception as e:
+        errors.append(f"Competitiveness checklist: {str(e)}")
+    
+    # Generate exclusions checklist
+    try:
+        parsed, raw_meta, latency_ms = client.exclusions_checklist(grant_ctx)
+        checklist_data = {
+            "checklist_items": sanitize_checklist_items(parsed.get("checklist_items") or []),
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+            },
+        }
+        grant.exclusions_checklist = checklist_data
+        grant.save(update_fields=['exclusions_checklist'])
+        success_count += 1
+    except Exception as e:
+        errors.append(f"Exclusions checklist: {str(e)}")
+    
+    # Generate TRL requirements
+    try:
+        parsed, raw_meta, latency_ms = client.trl_requirements(grant_ctx)
+        trl_levels = parsed.get("trl_levels", [])
+        is_technology_focused = parsed.get("is_technology_focused", False)
+        
+        trl_data = {
+            "trl_levels": trl_levels if trl_levels else [],
+            "trl_range": parsed.get("trl_range"),
+            "is_technology_focused": is_technology_focused,
+            "notes": parsed.get("notes"),
+            "meta": {
+                "model": raw_meta.get("model"),
+                "input_tokens": (raw_meta.get("usage") or {}).get("input_tokens"),
+                "output_tokens": (raw_meta.get("usage") or {}).get("output_tokens"),
+                "latency_ms": latency_ms,
+            },
+        }
+        grant.trl_requirements = trl_data
+        grant.save(update_fields=['trl_requirements'])
+        success_count += 1
+    except Exception as e:
+        errors.append(f"TRL requirements: {str(e)}")
+    
+    if success_count == 4:
+        messages.success(request, f'Successfully generated all grant analysis data for "{grant.title}".')
+    elif success_count > 0:
+        messages.warning(request, f'Generated {success_count} of 4 items for "{grant.title}". Some errors occurred: {", ".join(errors)}')
+    else:
+        messages.error(request, f'Failed to generate grant analysis data for "{grant.title}": {", ".join(errors)}')
+    
+    return redirect('grants:detail', slug=slug)
 
 
 @login_required
@@ -469,6 +678,8 @@ def delete_grant(request, slug):
     grant.delete()
     messages.success(request, f'Grant "{grant_title}" has been deleted.')
     return redirect('grants:list')
+
+
 
 
 @login_required

@@ -15,12 +15,6 @@
                     <div class="step {% if current_step == 'website' %}step-primary{% elif company.website %}step-success{% endif %}">
                         Website
                     </div>
-                    <div class="step {% if current_step == 'notes' %}step-primary{% elif company.company_notes.exists %}step-success{% endif %}">
-                        Notes
-                    </div>
-                    <div class="step {% if current_step == 'files' %}step-primary{% elif company.files.exists %}step-success{% endif %}">
-                        Files
-                    </div>
                 </div>
                 
                 <!-- Step 1: Website -->
@@ -54,98 +48,12 @@
                         </div>
                         
                         <div class="flex gap-3 justify-end">
-                            <a href="?step=notes" class="btn btn-primary" onclick="saveStep('website'); return true;">Next</a>
+                            <button type="submit" class="btn btn-primary" onclick="saveStep('website'); return true;">Finish</button>
                         </div>
                     </form>
                 </div>
                 {% endif %}
                 
-                <!-- Step 2: Notes -->
-                {% if current_step == 'notes' %}
-                <div class="space-y-4">
-                    <h2 class="text-xl font-semibold">Add Notes (Optional)</h2>
-                    <p class="text-sm text-base-content/70">Add any notes about this company. You can skip this step.</p>
-                    
-                    {% if company.company_notes.exists %}
-                    <div class="alert alert-info">
-                        <span>{{ company.company_notes.count }} note{{ company.company_notes.count|pluralize }} already added.</span>
-                    </div>
-                    {% endif %}
-                    
-                    <form method="post" enctype="multipart/form-data" id="notes-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="step" value="notes">
-                        
-                        <div class="form-control mb-4">
-                            <label class="label" for="id_note_title">
-                                <span class="label-text">Note Title (Optional)</span>
-                            </label>
-                            <input 
-                                type="text" 
-                                name="note_title" 
-                                id="id_note_title" 
-                                placeholder="e.g., Initial meeting notes"
-                                class="input input-bordered"
-                            >
-                        </div>
-                        
-                        <div class="form-control mb-4">
-                            <label class="label" for="id_note_body">
-                                <span class="label-text">Note</span>
-                            </label>
-                            <textarea 
-                                name="note_body" 
-                                id="id_note_body" 
-                                rows="5"
-                                placeholder="Enter your notes here..."
-                                class="textarea textarea-bordered"
-                            ></textarea>
-                        </div>
-                        
-                        <div class="flex gap-3 justify-end">
-                            <a href="?step=website" class="btn btn-ghost" onclick="saveStep('notes'); return true;">Back</a>
-                            <a href="?step=files" class="btn btn-primary" onclick="saveStep('notes'); return true;">Next</a>
-                        </div>
-                    </form>
-                </div>
-                {% endif %}
-                
-                <!-- Step 3: Files -->
-                {% if current_step == 'files' %}
-                <div class="space-y-4">
-                    <h2 class="text-xl font-semibold">Upload Files (Optional)</h2>
-                    <p class="text-sm text-base-content/70">Upload any supporting documents or files. You can skip this step.</p>
-                    
-                    {% if company.files.exists %}
-                    <div class="alert alert-info">
-                        <span>{{ company.files.count }} file{{ company.files.count|pluralize }} already uploaded.</span>
-                    </div>
-                    {% endif %}
-                    
-                    <form method="post" enctype="multipart/form-data" id="files-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="step" value="files">
-                        <input type="hidden" name="action" value="finish" id="finish-action">
-                        
-                        <div class="form-control mb-4">
-                            <label class="label" for="id_company_file">
-                                <span class="label-text">Upload File</span>
-                            </label>
-                            <input 
-                                type="file" 
-                                name="company_file" 
-                                id="id_company_file" 
-                                class="file-input file-input-bordered w-full"
-                            >
-                        </div>
-                        
-                        <div class="flex gap-3 justify-end">
-                            <a href="?step=notes" class="btn btn-ghost" onclick="saveStep('files'); return true;">Back</a>
-                            <button type="submit" class="btn btn-primary">Finish</button>
-                        </div>
-                    </form>
-                </div>
-                {% endif %}
                 
                 <div class="text-center mt-6">
                     <a href="{% url 'companies:detail' company.id %}" class="link link-primary">Go to Company Details</a>
@@ -164,18 +72,6 @@ function saveStep(step) {
     if (step === 'website') {
         const website = document.getElementById('id_website').value;
         data.website = website;
-    } else if (step === 'notes') {
-        const noteTitle = document.getElementById('id_note_title').value;
-        const noteBody = document.getElementById('id_note_body').value;
-        data.note_title = noteTitle;
-        data.note_body = noteBody;
-    } else if (step === 'files') {
-        // Files can't be stored in sessionStorage, so we'll handle them on submit
-        const fileInput = document.getElementById('id_company_file');
-        if (fileInput.files.length > 0) {
-            // Store file name for display purposes
-            data.file_name = fileInput.files[0].name;
-        }
     }
     
     sessionStorage.setItem(storageKey, JSON.stringify(data));
@@ -193,13 +89,6 @@ function restoreStep(step) {
         
         if (step === 'website' && data.website) {
             document.getElementById('id_website').value = data.website;
-        } else if (step === 'notes') {
-            if (data.note_title) {
-                document.getElementById('id_note_title').value = data.note_title;
-            }
-            if (data.note_body) {
-                document.getElementById('id_note_body').value = data.note_body;
-            }
         }
     } catch (e) {
         console.error('Error restoring step data:', e);
@@ -211,76 +100,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const currentStep = '{{ current_step }}';
     restoreStep(currentStep);
     
-    // Also restore other steps if they exist
-    if (currentStep !== 'website') restoreStep('website');
-    if (currentStep !== 'notes') restoreStep('notes');
-    if (currentStep !== 'files') restoreStep('files');
-    
-    // Handle form submission for finish button
-    const filesForm = document.getElementById('files-form');
-    if (filesForm) {
-        filesForm.addEventListener('submit', function(e) {
-            // Save current step before submitting
-            saveStep('files');
-            
-            // Add all stored data to form as hidden inputs
-            const websiteData = sessionStorage.getItem('onboarding_website');
-            const notesData = sessionStorage.getItem('onboarding_notes');
-            
-            if (websiteData) {
-                try {
-                    const data = JSON.parse(websiteData);
-                    if (data.website) {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = 'website';
-                        input.value = data.website;
-                        filesForm.appendChild(input);
-                    }
-                } catch (e) {}
-            }
-            
-            if (notesData) {
-                try {
-                    const data = JSON.parse(notesData);
-                    if (data.note_title) {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = 'note_title';
-                        input.value = data.note_title;
-                        filesForm.appendChild(input);
-                    }
-                    if (data.note_body) {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = 'note_body';
-                        input.value = data.note_body;
-                        filesForm.appendChild(input);
-                    }
-                } catch (e) {}
-            }
-        });
-    }
-    
     // Auto-save on input change
     const websiteInput = document.getElementById('id_website');
     if (websiteInput) {
         websiteInput.addEventListener('input', function() {
             saveStep('website');
-        });
-    }
-    
-    const noteTitleInput = document.getElementById('id_note_title');
-    if (noteTitleInput) {
-        noteTitleInput.addEventListener('input', function() {
-            saveStep('notes');
-        });
-    }
-    
-    const noteBodyInput = document.getElementById('id_note_body');
-    if (noteBodyInput) {
-        noteBodyInput.addEventListener('input', function() {
-            saveStep('notes');
         });
     }
 });

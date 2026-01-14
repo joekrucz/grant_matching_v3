@@ -31,7 +31,7 @@ details[open] summary .collapse-indicator::after {
     <div class="md:hidden mb-2">
         <div class="tabs tabs-boxed w-full overflow-x-auto">
             <a href="?tab=info" class="tab {% if current_tab == 'info' %}tab-active font-bold{% else %}hover:underline{% endif %}">Company Info</a>
-            <a href="?tab=notes" class="tab {% if current_tab == 'notes' %}tab-active font-bold{% else %}hover:underline{% endif %}">Website & Notes</a>
+            <a href="?tab=notes" class="tab {% if current_tab == 'notes' %}tab-active font-bold{% else %}hover:underline{% endif %}">Website</a>
             <a href="?tab=grants" class="tab {% if current_tab == 'grants' %}tab-active font-bold{% else %}hover:underline{% endif %}">Grants</a>
             <a href="?tab=filings" class="tab {% if current_tab == 'filings' %}tab-active font-bold{% else %}hover:underline{% endif %}">Filings</a>
             <a href="?tab=funding" class="tab {% if current_tab == 'funding' %}tab-active font-bold{% else %}hover:underline{% endif %}">Funding</a>
@@ -46,7 +46,7 @@ details[open] summary .collapse-indicator::after {
                 Company Information
             </a>
             <a href="?tab=notes" class="tab w-full justify-start {% if current_tab == 'notes' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="notes">
-                Website & Notes
+                Website
             </a>
             <a href="?tab=grants" class="tab w-full justify-start {% if current_tab == 'grants' %}tab-active font-bold{% else %}hover:underline{% endif %}" data-company-tab="grants">
                 Historic Grants
@@ -137,9 +137,9 @@ details[open] summary .collapse-indicator::after {
 {% if current_tab == 'notes' %}
 <div id="tab-notes" class="card bg-base-200 border border-base-300 mb-4">
     <div class="card-body py-4 px-4">
-        <h2 class="card-title text-xl mb-4">Website & Notes</h2>
+        <h2 class="card-title text-xl mb-4">Website</h2>
         {% if can_edit %}
-        <form method="post" enctype="multipart/form-data" class="space-y-4">
+        <form method="post" class="space-y-4">
             {% csrf_token %}
             <div class="form-control">
                 <label class="label" for="id_website">
@@ -154,17 +154,6 @@ details[open] summary .collapse-indicator::after {
                 >
             </div>
             <div class="form-control">
-                <label class="label" for="id_company_file">
-                    <span class="label-text">Upload File</span>
-                </label>
-                <input 
-                    type="file" 
-                    name="company_file" 
-                    id="id_company_file" 
-                    class="file-input file-input-bordered w-full"
-                >
-            </div>
-            <div class="form-control">
                 <button type="submit" class="btn btn-primary btn-sm">Save</button>
             </div>
         </form>
@@ -176,108 +165,9 @@ details[open] summary .collapse-indicator::after {
                 {{ company.website }}
             </a>
         </div>
-        {% endif %}
-        {% endif %}
-        <div class="divider my-6">Notes</div>
-
-        {% if can_edit %}
-        <div class="mb-6">
-            <form method="post" action="{% url 'companies:note_create' company.id %}" class="space-y-3">
-                {% csrf_token %}
-                <div class="form-control">
-                    <label class="label" for="id_note_title">
-                        <span class="label-text">Title (optional)</span>
-                    </label>
-                    <input
-                        type="text"
-                        name="title"
-                        id="id_note_title"
-                        class="input input-bordered"
-                        placeholder="e.g. Call with founder, Eligibility check, Next steps"
-                    >
-                </div>
-                <div class="form-control">
-                    <label class="label" for="id_note_body">
-                        <span class="label-text">Note</span>
-                    </label>
-                    <textarea
-                        name="body"
-                        id="id_note_body"
-                        rows="3"
-                        class="textarea textarea-bordered"
-                        placeholder="Add a note about this company..."
-                    ></textarea>
-                </div>
-                <div class="form-control">
-                    <button type="submit" class="btn btn-success btn-sm">Add Note</button>
-                </div>
-            </form>
-        </div>
-        {% endif %}
-
-        {% if notes %}
-        <div class="space-y-3">
-            {% for note in notes %}
-            <div class="border border-base-300 rounded-lg p-3 bg-base-100">
-                <div class="flex justify-between items-start gap-2">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
-                            {% if note.title %}
-                            <div class="font-semibold text-sm">{{ note.title }}</div>
-                            {% else %}
-                            <div class="font-semibold text-sm text-base-content/70">Note</div>
-                            {% endif %}
-                            <div class="text-xs text-base-content/60">
-                                {{ note.created_at|date:"M d, Y H:i" }} by {{ note.user.name|default:note.user.email }}
-                            </div>
-                        </div>
-                        <div class="text-sm whitespace-pre-wrap">{{ note.body }}</div>
-                    </div>
-                    {% if can_edit %}
-                    <form method="post" action="{% url 'companies:note_delete' note.id %}">
-                        {% csrf_token %}
-                        <button
-                            type="submit"
-                            class="btn btn-ghost btn-xs text-error"
-                            onclick="return confirm('Delete this note?');"
-                        >
-                            Delete
-                        </button>
-                    </form>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
         {% else %}
-        <div class="text-sm text-base-content/60">
-            No notes yet for this company.
-            {% if can_edit %}Use the form above to add the first one.{% endif %}
-        </div>
+        <div class="text-sm text-base-content/60">No website URL set for this company.</div>
         {% endif %}
-
-        {% if company_files %}
-        <div class="mt-4">
-            <div class="text-sm font-semibold mb-2">Files</div>
-            <div class="space-y-2 text-sm">
-                {% for f in company_files %}
-                <div class="flex items-center justify-between rounded-lg border border-base-300 px-3 py-2">
-                    <div class="flex-1">
-                        <a href="{{ f.file.url }}" class="link link-primary" target="_blank" rel="noopener noreferrer">
-                            {{ f.original_name|default:f.file.name }}
-                        </a>
-                        <div class="text-base-content/60">Uploaded {{ f.created_at|date:"M d, Y H:i" }}</div>
-                    </div>
-                    {% if can_edit %}
-                    <form method="post" action="{% url 'companies:file_delete' f.id %}">
-                        {% csrf_token %}
-                        <button class="btn btn-ghost btn-xs text-error" type="submit">Delete</button>
-                    </form>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
         {% endif %}
     </div>
 </div>

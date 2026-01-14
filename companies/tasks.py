@@ -70,7 +70,7 @@ if CELERY_TASKS_AVAILABLE:
             project_text = funding_search.compile_input_sources_text()
             logger.info(f"Found funding search: {funding_search.name}, compiled input sources length: {len(project_text or '')}")
             if not project_text:
-                raise ValueError("No input sources available. Please select company files, notes, website, or add a project description.")
+                raise ValueError("No input sources available. Please select website or add a project description.")
             
             logger.info(f"Input sources compiled. Total text length: {len(project_text)} characters")
             
@@ -193,12 +193,16 @@ if CELERY_TASKS_AVAILABLE:
             
             # Match all grants (don't delete old results yet - we'll do that atomically after saving new ones)
             logger.info(f"Starting matching for {len(grants_list)} grants...")
+            logger.info(f"Checklist assessment settings: exclusions={funding_search.assess_exclusions}, eligibility={funding_search.assess_eligibility}, competitiveness={funding_search.assess_competitiveness}")
             match_results = matcher.match_all_grants(
                 project_text,
                 grants_list,
                 progress_callback=progress_callback,
                 let_system_decide_trl=funding_search.let_system_decide_trl,
-                funding_search_id=funding_search_id
+                funding_search_id=funding_search_id,
+                assess_exclusions=funding_search.assess_exclusions,
+                assess_eligibility=funding_search.assess_eligibility,
+                assess_competitiveness=funding_search.assess_competitiveness
             )
             
             # Check for cancellation after matching completes
@@ -262,6 +266,9 @@ if CELERY_TASKS_AVAILABLE:
                         # Use original items from grant
                         chatgpt_evaluations = result.get('eligibility_checklist', [])
                         
+                        # Filter out non-dict items (defensive check for malformed AI responses)
+                        chatgpt_evaluations = [item for item in chatgpt_evaluations if isinstance(item, dict)]
+                        
                         # First, try to match by exact text
                         chatgpt_by_text = {item.get('criterion', '').strip(): item for item in chatgpt_evaluations}
                         
@@ -294,23 +301,36 @@ if CELERY_TASKS_AVAILABLE:
                                 eligibility_checklist_result.append({
                                     'criterion': original_item,  # Use exact text from grant
                                     'status': evaluation.get('status', 'don\'t know'),
-                                    'reason': evaluation.get('reason', '')
+                                    'reason': evaluation.get('reason', 'No reason provided')
                                 })
                             else:
                                 # If no evaluation found, mark as "don't know"
                                 eligibility_checklist_result.append({
                                     'criterion': original_item,
                                     'status': 'don\'t know',
-                                    'reason': 'Evaluation not provided'
+                                    'reason': 'Evaluation not provided - insufficient information to assess this criterion'
                                 })
                     else:
                         # No pre-generated checklist, use ChatGPT's extracted items
-                        eligibility_checklist_result = result.get('eligibility_checklist', [])
+                        raw_checklist = result.get('eligibility_checklist', [])
+                        # Filter out non-dict items (defensive check for malformed AI responses)
+                        # Ensure each item has required fields with defaults
+                        eligibility_checklist_result = []
+                        for item in raw_checklist:
+                            if isinstance(item, dict):
+                                eligibility_checklist_result.append({
+                                    'criterion': item.get('criterion', 'Unknown criterion'),
+                                    'status': item.get('status', 'don\'t know'),
+                                    'reason': item.get('reason', 'No reason provided')
+                                })
                     
                     competitiveness_checklist_result = []
                     if grant_competitiveness_items:
                         # Use original items from grant
                         chatgpt_evaluations = result.get('competitiveness_checklist', [])
+                        
+                        # Filter out non-dict items (defensive check for malformed AI responses)
+                        chatgpt_evaluations = [item for item in chatgpt_evaluations if isinstance(item, dict)]
                         
                         # First, try to match by exact text
                         chatgpt_by_text = {item.get('criterion', '').strip(): item for item in chatgpt_evaluations}
@@ -344,23 +364,36 @@ if CELERY_TASKS_AVAILABLE:
                                 competitiveness_checklist_result.append({
                                     'criterion': original_item,  # Use exact text from grant
                                     'status': evaluation.get('status', 'don\'t know'),
-                                    'reason': evaluation.get('reason', '')
+                                    'reason': evaluation.get('reason', 'No reason provided')
                                 })
                             else:
                                 # If no evaluation found, mark as "don't know"
                                 competitiveness_checklist_result.append({
                                     'criterion': original_item,
                                     'status': 'don\'t know',
-                                    'reason': 'Evaluation not provided'
+                                    'reason': 'Evaluation not provided - insufficient information to assess this criterion'
                                 })
                     else:
                         # No pre-generated checklist, use ChatGPT's extracted items
-                        competitiveness_checklist_result = result.get('competitiveness_checklist', [])
+                        raw_checklist = result.get('competitiveness_checklist', [])
+                        # Filter out non-dict items (defensive check for malformed AI responses)
+                        # Ensure each item has required fields with defaults
+                        competitiveness_checklist_result = []
+                        for item in raw_checklist:
+                            if isinstance(item, dict):
+                                competitiveness_checklist_result.append({
+                                    'criterion': item.get('criterion', 'Unknown criterion'),
+                                    'status': item.get('status', 'don\'t know'),
+                                    'reason': item.get('reason', 'No reason provided')
+                                })
                     
                     exclusions_checklist_result = []
                     if grant_exclusions_items:
                         # Use original items from grant
                         chatgpt_evaluations = result.get('exclusions_checklist', [])
+                        
+                        # Filter out non-dict items (defensive check for malformed AI responses)
+                        chatgpt_evaluations = [item for item in chatgpt_evaluations if isinstance(item, dict)]
                         
                         # First, try to match by exact text
                         chatgpt_by_text = {item.get('criterion', '').strip(): item for item in chatgpt_evaluations}
@@ -394,51 +427,99 @@ if CELERY_TASKS_AVAILABLE:
                                 exclusions_checklist_result.append({
                                     'criterion': original_item,  # Use exact text from grant
                                     'status': evaluation.get('status', 'don\'t know'),
-                                    'reason': evaluation.get('reason', '')
+                                    'reason': evaluation.get('reason', 'No reason provided')
                                 })
                             else:
                                 # If no evaluation found, mark as "don't know"
                                 exclusions_checklist_result.append({
                                     'criterion': original_item,
                                     'status': 'don\'t know',
-                                    'reason': 'Evaluation not provided'
+                                    'reason': 'Evaluation not provided - insufficient information to assess this criterion'
                                 })
                     else:
                         # No pre-generated checklist, use ChatGPT's extracted items
-                        exclusions_checklist_result = result.get('exclusions_checklist', [])
+                        raw_checklist = result.get('exclusions_checklist', [])
+                        # Filter out non-dict items (defensive check for malformed AI responses)
+                        # Ensure each item has required fields with defaults
+                        exclusions_checklist_result = []
+                        for item in raw_checklist:
+                            if isinstance(item, dict):
+                                exclusions_checklist_result.append({
+                                    'criterion': item.get('criterion', 'Unknown criterion'),
+                                    'status': item.get('status', 'don\'t know'),
+                                    'reason': item.get('reason', 'No reason provided')
+                                })
                     
                     # Recalculate scores from checklist items to ensure accuracy
                     # This is more reliable than trusting ChatGPT's calculation
+                    # For eligibility: count yes out of total items (including "don't know" to penalize uncertainty)
                     eligibility_yes_count = sum(1 for item in eligibility_checklist_result if item.get('status') == 'yes')
-                    eligibility_total_count = len(eligibility_checklist_result) if eligibility_checklist_result else 0
+                    eligibility_no_count = sum(1 for item in eligibility_checklist_result if item.get('status') == 'no')
+                    eligibility_total_count = len(eligibility_checklist_result)  # Include all items (yes, no, don't know)
                     eligibility_score = (eligibility_yes_count / eligibility_total_count) if eligibility_total_count > 0 else 0.0
                     
+                    # For competitiveness: count yes out of total items (including "don't know" to penalize uncertainty)
                     competitiveness_yes_count = sum(1 for item in competitiveness_checklist_result if item.get('status') == 'yes')
-                    competitiveness_total_count = len(competitiveness_checklist_result) if competitiveness_checklist_result else 0
+                    competitiveness_no_count = sum(1 for item in competitiveness_checklist_result if item.get('status') == 'no')
+                    competitiveness_total_count = len(competitiveness_checklist_result)  # Include all items (yes, no, don't know)
                     competitiveness_score = (competitiveness_yes_count / competitiveness_total_count) if competitiveness_total_count > 0 else 0.0
                     
                     # For exclusions: "no" means NOT excluded (good), "yes" means IS excluded (bad)
-                    # So exclusions_score = percentage of "no" answers
+                    # So exclusions_score = percentage of "no" answers out of yes+no (exclude "don't know")
                     exclusions_no_count = sum(1 for item in exclusions_checklist_result if item.get('status') == 'no')
-                    exclusions_total_count = len(exclusions_checklist_result) if exclusions_checklist_result else 0
-                    exclusions_score = (exclusions_no_count / exclusions_total_count) if exclusions_total_count > 0 else 1.0  # Default to 1.0 if no exclusions checklist
+                    exclusions_yes_count = sum(1 for item in exclusions_checklist_result if item.get('status') == 'yes')
+                    exclusions_decided_count = exclusions_no_count + exclusions_yes_count
+                    exclusions_score = (exclusions_no_count / exclusions_decided_count) if exclusions_decided_count > 0 else 1.0  # Default to 1.0 if no exclusions checklist
                     
-                    # Calculate overall score from components
-                    # Include exclusions_score in the average if available
-                    score_components = []
-                    if eligibility_score is not None:
-                        score_components.append(eligibility_score)
-                    if competitiveness_score is not None:
-                        score_components.append(competitiveness_score)
-                    if exclusions_total_count > 0:  # Only include if exclusions checklist exists
-                        score_components.append(exclusions_score)
-                    
-                    if score_components:
-                        calculated_score = sum(score_components) / len(score_components)
+                    # Check if project is excluded (disqualifying)
+                    # If there is even ONE "yes" in the exclusions checklist, the grant is excluded
+                    is_excluded = False
+                    if funding_search.assess_exclusions and exclusions_yes_count > 0:
+                        is_excluded = True
+                        calculated_score = 0.0  # Disqualifying - set score to 0
+                        logger.info(f"Grant {grant_data.get('id')} is excluded ({exclusions_yes_count} exclusion(s) apply), setting match_score to 0")
                     else:
-                        # Fallback to ChatGPT's score if we couldn't calculate
-                        overall_score = result.get('score')
-                        calculated_score = overall_score if overall_score is not None else 0.0
+                        # Calculate overall score using multiplicative approach
+                        # Eligibility acts as a base multiplier (paramount importance)
+                        # Formula: eligibility_score × (0.3 + 0.7 × competitiveness_score)
+                        # This ensures eligibility is foundational - if eligibility is 0%, overall is 0%
+                        # If eligibility is 100%, competitiveness can boost the score up to 100%
+                        if funding_search.assess_eligibility and funding_search.assess_competitiveness:
+                            # Both assessed: multiplicative (eligibility as base)
+                            if eligibility_score is not None and competitiveness_score is not None:
+                                calculated_score = eligibility_score * (0.3 + 0.7 * competitiveness_score)
+                            elif eligibility_score is not None:
+                                # Only eligibility available
+                                calculated_score = eligibility_score
+                            elif competitiveness_score is not None:
+                                # Only competitiveness available (shouldn't happen, but handle gracefully)
+                                calculated_score = competitiveness_score
+                            else:
+                                # Fallback to ChatGPT's score if we couldn't calculate
+                                overall_score = result.get('score')
+                                calculated_score = overall_score if overall_score is not None else 0.0
+                        elif funding_search.assess_eligibility and eligibility_score is not None:
+                            # Only eligibility assessed
+                            calculated_score = eligibility_score
+                        elif funding_search.assess_competitiveness and competitiveness_score is not None:
+                            # Only competitiveness assessed
+                            calculated_score = competitiveness_score
+                        else:
+                            # Fallback to ChatGPT's score if we couldn't calculate
+                            overall_score = result.get('score')
+                            calculated_score = overall_score if overall_score is not None else 0.0
+                    
+                    # Calculate certainty metric (proportion of checklist items that were decided)
+                    # Exclusions checklist is NOT included in certainty calculation
+                    total_checklist_items = (
+                        len(eligibility_checklist_result) +
+                        len(competitiveness_checklist_result)
+                    )
+                    decided_checklist_items = (
+                        sum(1 for item in eligibility_checklist_result if item.get('status') in ['yes', 'no']) +
+                        sum(1 for item in competitiveness_checklist_result if item.get('status') in ['yes', 'no'])
+                    )
+                    certainty = (decided_checklist_items / total_checklist_items) if total_checklist_items > 0 else 1.0
                     
                     # Log if scores differ significantly from ChatGPT's calculation (for debugging)
                     chatgpt_eligibility = result.get('eligibility_score')
@@ -448,10 +529,19 @@ if CELERY_TASKS_AVAILABLE:
                         logger.warning(f"Score mismatch for grant {grant_data.get('id')}: ChatGPT eligibility={chatgpt_eligibility}, Recalculated={eligibility_score}")
                     if chatgpt_competitiveness is not None and abs(chatgpt_competitiveness - competitiveness_score) > 0.1:
                         logger.warning(f"Score mismatch for grant {grant_data.get('id')}: ChatGPT competitiveness={chatgpt_competitiveness}, Recalculated={competitiveness_score}")
-                    if chatgpt_exclusions is not None and exclusions_total_count > 0 and abs(chatgpt_exclusions - exclusions_score) > 0.1:
+                    if chatgpt_exclusions is not None and exclusions_decided_count > 0 and abs(chatgpt_exclusions - exclusions_score) > 0.1:
                         logger.warning(f"Score mismatch for grant {grant_data.get('id')}: ChatGPT exclusions={chatgpt_exclusions}, Recalculated={exclusions_score}")
                     
-                    # Save all matches regardless of score (no threshold)
+                    # Get minimum score threshold (default to 0.0 to save all matches)
+                    # Can be configured per funding_search in the future
+                    min_score_threshold = getattr(funding_search, 'min_match_score_threshold', 0.0)
+                    
+                    # Skip saving if score is below threshold (unless it's excluded, in which case we save with 0.0)
+                    if calculated_score < min_score_threshold and not is_excluded:
+                        logger.debug(f"Grant {grant_data.get('id')} score {calculated_score:.2f} below threshold {min_score_threshold:.2f}, skipping")
+                        continue
+                    
+                    # Save match result
                     # Use update_or_create to handle duplicates gracefully
                     match_obj, created = GrantMatchResult.objects.update_or_create(
                         funding_search=funding_search,
@@ -460,6 +550,7 @@ if CELERY_TASKS_AVAILABLE:
                             'match_score': calculated_score,
                             'eligibility_score': eligibility_score,
                             'competitiveness_score': competitiveness_score,
+                            'exclusions_score': exclusions_score if funding_search.assess_exclusions else None,
                             'match_reasons': {
                                 'explanation': result.get('explanation', ''),  # Keep for backward compatibility
                                 'project_type_and_trl_focus': result.get('project_type_and_trl_focus', ''),
@@ -472,6 +563,7 @@ if CELERY_TASKS_AVAILABLE:
                                 'concerns': result.get('concerns', []),  # Keep for backward compatibility
                                 'matched_via': 'chatgpt',
                                 'batch_processed': True,
+                                'certainty': round(certainty, 3),  # Store certainty as float with 3 decimal places
                             }
                         }
                     )

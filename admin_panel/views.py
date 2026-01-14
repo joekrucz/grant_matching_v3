@@ -163,29 +163,111 @@ def dashboard(request):
     
     # Calculate checklist statistics
     # Count grants that have non-empty eligibility checklists
-    # Using JSONField lookups to check if checklist_items array exists and is not empty
-    grants_with_eligibility = Grant.objects.filter(
-        eligibility_checklist__checklist_items__0__isnull=False
-    ).count()
+    # First, let's check what's actually in the database with a direct query
+    import logging
+    debug_logger = logging.getLogger(__name__)
     
-    grants_with_competitiveness = Grant.objects.filter(
-        competitiveness_checklist__checklist_items__0__isnull=False
-    ).count()
+    # Direct database query to verify what exists
+    from django.db import connection
+    with connection.cursor() as cursor:
+        # Check how many grants have eligibility_checklist that's not null and not empty dict
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM grants 
+            WHERE eligibility_checklist IS NOT NULL 
+            AND eligibility_checklist != '{}'::jsonb
+            AND eligibility_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(eligibility_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(eligibility_checklist->'checklist_items') > 0
+        """)
+        db_count_eligibility = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM grants 
+            WHERE competitiveness_checklist IS NOT NULL 
+            AND competitiveness_checklist != '{}'::jsonb
+            AND competitiveness_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(competitiveness_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(competitiveness_checklist->'checklist_items') > 0
+        """)
+        db_count_competitiveness = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM grants 
+            WHERE exclusions_checklist IS NOT NULL 
+            AND exclusions_checklist != '{}'::jsonb
+            AND exclusions_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(exclusions_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(exclusions_checklist->'checklist_items') > 0
+        """)
+        db_count_exclusions = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM grants 
+            WHERE eligibility_checklist IS NOT NULL 
+            AND eligibility_checklist != '{}'::jsonb
+            AND eligibility_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(eligibility_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(eligibility_checklist->'checklist_items') > 0
+            AND competitiveness_checklist IS NOT NULL 
+            AND competitiveness_checklist != '{}'::jsonb
+            AND competitiveness_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(competitiveness_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(competitiveness_checklist->'checklist_items') > 0
+        """)
+        db_count_both = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM grants 
+            WHERE eligibility_checklist IS NOT NULL 
+            AND eligibility_checklist != '{}'::jsonb
+            AND eligibility_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(eligibility_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(eligibility_checklist->'checklist_items') > 0
+            AND competitiveness_checklist IS NOT NULL 
+            AND competitiveness_checklist != '{}'::jsonb
+            AND competitiveness_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(competitiveness_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(competitiveness_checklist->'checklist_items') > 0
+            AND exclusions_checklist IS NOT NULL 
+            AND exclusions_checklist != '{}'::jsonb
+            AND exclusions_checklist->'checklist_items' IS NOT NULL
+            AND jsonb_typeof(exclusions_checklist->'checklist_items') = 'array'
+            AND jsonb_array_length(exclusions_checklist->'checklist_items') > 0
+        """)
+        db_count_all_three = cursor.fetchone()[0]
     
-    grants_with_exclusions = Grant.objects.filter(
-        exclusions_checklist__checklist_items__0__isnull=False
-    ).count()
+        # Count grants with TRL requirements (either has TRL levels OR is technology-focused)
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM grants 
+            WHERE trl_requirements IS NOT NULL 
+            AND trl_requirements != '{}'::jsonb
+            AND (
+                (trl_requirements->'trl_levels' IS NOT NULL
+                 AND jsonb_typeof(trl_requirements->'trl_levels') = 'array'
+                 AND jsonb_array_length(trl_requirements->'trl_levels') > 0)
+                OR
+                (trl_requirements->'is_technology_focused' IS NOT NULL
+                 AND (trl_requirements->>'is_technology_focused')::boolean = true)
+            )
+        """)
+        db_count_trl = cursor.fetchone()[0]
     
-    grants_with_both = Grant.objects.filter(
-        eligibility_checklist__checklist_items__0__isnull=False,
-        competitiveness_checklist__checklist_items__0__isnull=False
-    ).count()
+    # Use the direct database counts
+    grants_with_eligibility = db_count_eligibility
+    grants_with_competitiveness = db_count_competitiveness
+    grants_with_exclusions = db_count_exclusions
+    grants_with_both = db_count_both
+    grants_with_all_three = db_count_all_three
+    grants_with_trl = db_count_trl
     
-    grants_with_all_three = Grant.objects.filter(
-        eligibility_checklist__checklist_items__0__isnull=False,
-        competitiveness_checklist__checklist_items__0__isnull=False,
-        exclusions_checklist__checklist_items__0__isnull=False
-    ).count()
+    # Log for debugging
+    debug_logger.info(f"Checklist counts from database: eligibility={grants_with_eligibility}, competitiveness={grants_with_competitiveness}, exclusions={grants_with_exclusions}, both={grants_with_both}, all_three={grants_with_all_three}")
     
     # Calculate user statistics
     total_users = User.objects.count()
@@ -246,6 +328,7 @@ def dashboard(request):
         'grants_with_exclusions': grants_with_exclusions,
         'grants_with_both': grants_with_both,
         'grants_with_all_three': grants_with_all_three,
+        'grants_with_trl': grants_with_trl,
         'total_users': total_users,
         'admin_users': admin_users,
         'active_users': active_users,
@@ -1827,7 +1910,7 @@ def generate_checklists(request):
         import logging
         logger = logging.getLogger(__name__)
         
-        checklist_type = request.POST.get('checklist_type', 'both')  # 'eligibility', 'competitiveness', 'exclusions', 'both', or 'all'
+        checklist_type = request.POST.get('checklist_type', 'both')  # 'eligibility', 'competitiveness', 'exclusions', 'trl', 'both', or 'all'
         
         if not CELERY_AVAILABLE or generate_checklists_for_all_grants is None:
             error_msg = 'Background task service (Celery) is not available. Please check Redis connection.'
@@ -1974,6 +2057,56 @@ def cancel_checklist_generation(request):
 
 @login_required
 @admin_required
+def wipe_all_checklists(request):
+    """Wipe all checklists from all grants (admin only)."""
+    if request.method == 'POST':
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Count grants with checklists before wiping
+            grants_with_eligibility = Grant.objects.filter(
+                eligibility_checklist__isnull=False
+            ).exclude(eligibility_checklist={}).count()
+            
+            grants_with_competitiveness = Grant.objects.filter(
+                competitiveness_checklist__isnull=False
+            ).exclude(competitiveness_checklist={}).count()
+            
+            grants_with_exclusions = Grant.objects.filter(
+                exclusions_checklist__isnull=False
+            ).exclude(exclusions_checklist={}).count()
+            
+            # Wipe all checklists by setting them to empty dict
+            from django.db.models import Q
+            grants_updated = Grant.objects.filter(
+                Q(eligibility_checklist__isnull=False) | 
+                Q(competitiveness_checklist__isnull=False) | 
+                Q(exclusions_checklist__isnull=False)
+            ).update(
+                eligibility_checklist={},
+                competitiveness_checklist={},
+                exclusions_checklist={}
+            )
+            
+            logger.info(f"Wiped all checklists from {grants_updated} grants")
+            messages.success(
+                request, 
+                f'Successfully wiped all checklists from {grants_updated} grants. '
+                f'(Eligibility: {grants_with_eligibility}, Competitiveness: {grants_with_competitiveness}, Exclusions: {grants_with_exclusions})'
+            )
+        except Exception as e:
+            logger.error(f"Error wiping checklists: {e}", exc_info=True)
+            messages.error(request, f'Failed to wipe checklists: {str(e)}')
+        
+        return redirect('admin_panel:dashboard')
+    
+    # For GET requests, show confirmation page
+    return render(request, 'admin_panel/wipe_checklists.html')
+
+
+@login_required
+@admin_required
 def system_settings(request):
     """Get or update system settings."""
     from .models import SystemSettings
@@ -2013,19 +2146,19 @@ def system_settings(request):
                 batch_size = request.POST.get('grant_matching_batch_size')
                 if batch_size:
                     new_batch_size = int(batch_size)
-                    # Clamp between 1 and 10
-                    new_batch_size = max(1, min(10, new_batch_size))
+                    # Clamp between 1 and 100 (optimized for tier 2 API limits)
+                    new_batch_size = max(1, min(100, new_batch_size))
                     if settings_obj.grant_matching_batch_size != new_batch_size:
                         settings_obj.grant_matching_batch_size = new_batch_size
                         batch_size_changed = True
-                        messages.success(request, f'Grant matching batch size updated to {new_batch_size}.')
+                        messages.success(request, f'Batch size updated to {new_batch_size} (applies to both grant matching and checklist generation).')
             
             # Save only if something changed
             if batch_size_changed or ai_widget_changed:
                 settings_obj.updated_by = request.user
                 settings_obj.save()
         except ValueError:
-            messages.error(request, 'Invalid batch size value. Must be a number between 1 and 10.')
+            messages.error(request, 'Invalid batch size value. Must be a number between 1 and 100.')
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

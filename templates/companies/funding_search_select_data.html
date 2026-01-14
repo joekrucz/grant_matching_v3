@@ -9,7 +9,7 @@
             <div class="card-body">
                 <h1 class="card-title text-2xl justify-center mb-2">Select Company Data</h1>
                 <p class="text-center text-base-content/70 mb-2">{{ funding_search.name }}</p>
-                <p class="text-center text-base-content/60 text-sm mb-6">Choose which company files and notes to use as input for this funding search</p>
+                <p class="text-center text-base-content/60 text-sm mb-6">Choose which company data sources to use as input for this funding search</p>
                 
                 <form method="post" action="{% url 'companies:funding_search_select_data' funding_search.id %}">
                     {% csrf_token %}
@@ -41,67 +41,36 @@
                         {% endif %}
                     </div>
                     
-                    <!-- Company Files Section -->
+                    <!-- Company Grant History Section -->
                     <div class="mb-6">
-                        <h2 class="text-xl font-semibold mb-4">Company Files</h2>
-                        {% if company_files %}
-                        <div class="space-y-2 max-h-64 overflow-y-auto border border-base-300 rounded-lg p-4">
-                            {% for file in company_files %}
-                            <label class="label cursor-pointer justify-start gap-3 py-2 hover:bg-base-300 rounded px-2">
+                        <h2 class="text-xl font-semibold mb-4">Company Grant History</h2>
+                        {% if company.grants_received_360 and grants_count > 0 %}
+                        <div class="border border-base-300 rounded-lg p-4">
+                            <label class="label cursor-pointer justify-start gap-3">
                                 <input 
                                     type="checkbox" 
                                     class="checkbox checkbox-sm" 
-                                    name="company_files"
-                                    value="{{ file.id }}"
-                                    {% if file.id in selected_file_ids %}checked{% endif %}
+                                    name="use_company_grant_history"
+                                    {% if funding_search.use_company_grant_history %}checked{% endif %}
                                 >
                                 <div class="flex-1">
-                                    <span class="label-text font-medium">{{ file.original_name|default:file.file.name }}</span>
-                                    <span class="label-text-alt text-xs text-base-content/60 ml-2">
-                                        Uploaded {{ file.created_at|date:"M d, Y" }} by {{ file.uploaded_by.name|default:file.uploaded_by.email }}
-                                    </span>
-                                </div>
-                            </label>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <div class="alert alert-info">
-                            <span>No company files available. Files can be uploaded from the company detail page.</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Company Notes Section -->
-                    <div class="mb-6">
-                        <h2 class="text-xl font-semibold mb-4">Company Notes</h2>
-                        {% if company_notes %}
-                        <div class="space-y-2 max-h-64 overflow-y-auto border border-base-300 rounded-lg p-4">
-                            {% for note in company_notes %}
-                            <label class="label cursor-pointer justify-start gap-3 py-2 hover:bg-base-300 rounded px-2">
-                                <input 
-                                    type="checkbox" 
-                                    class="checkbox checkbox-sm" 
-                                    name="company_notes"
-                                    value="{{ note.id }}"
-                                    {% if note.id in selected_note_ids %}checked{% endif %}
-                                >
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        {% if note.title %}
-                                        <span class="label-text font-medium">{{ note.title }}</span>
+                                    <div class="font-medium mb-1">Use company grant history as source</div>
+                                    <div class="text-sm text-base-content/70">
+                                        {{ grants_count }} grant{{ grants_count|pluralize }} received via 360Giving
+                                        {% if company.grants_received_360.fetched_at %}
+                                        (last updated: {{ company.grants_received_360.fetched_at|date:"M d, Y" }})
                                         {% endif %}
-                                        <span class="label-text-alt text-xs text-base-content/60">
-                                            {{ note.created_at|date:"M d, Y" }} by {{ note.user.name|default:note.user.email }}
-                                        </span>
                                     </div>
-                                    <p class="text-sm text-base-content/70 line-clamp-2">{{ note.body|truncatewords:30 }}</p>
                                 </div>
                             </label>
-                            {% endfor %}
                         </div>
+                        {% elif company.grants_received_360 %}
+                            <div class="alert alert-info">
+                                <span>Grant history data exists but no grants were found. This may mean the company has not received any grants via 360Giving, or the data needs to be refreshed.</span>
+                            </div>
                         {% else %}
                         <div class="alert alert-info">
-                            <span>No company notes available. Notes can be added from the company detail page.</span>
+                            <span>No grant history available for this company. Grant history is automatically fetched from 360Giving when a company is created or refreshed. You can refresh grant history from the company detail page.</span>
                         </div>
                         {% endif %}
                     </div>

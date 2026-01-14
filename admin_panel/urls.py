@@ -26,6 +26,7 @@ urlpatterns = [
     path('generate_checklists', views.generate_checklists, name='generate_checklists'),
     path('checklist_generation_status', views.checklist_generation_status, name='checklist_generation_status'),
     path('cancel_checklist_generation', views.cancel_checklist_generation, name='cancel_checklist_generation'),
+    path('wipe_all_checklists', views.wipe_all_checklists, name='wipe_all_checklists'),
     # Admin AI assistant endpoints (admin-only, JSON)
     path('ai/summarise_grant', views.ai_summarise_grant, name='ai_summarise_grant'),
     path('ai/summarise_company', views.ai_summarise_company, name='ai_summarise_company'),

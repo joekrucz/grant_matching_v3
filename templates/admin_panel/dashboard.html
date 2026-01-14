@@ -496,7 +496,7 @@
     <div class="card bg-base-200">
         <div class="card-body">
                 <div class="flex justify-between items-center mb-4">
-            <h2 class="card-title">Checklist Generation</h2>
+            <h2 class="card-title">Grant Analysis Generation</h2>
                 <div class="dropdown dropdown-end">
                     <div tabindex="0" role="button" class="btn btn-sm">
                         Actions
@@ -525,10 +525,24 @@
                             </form>
                         </li>
                         <li>
+                            <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-trl-requirements-form" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="checklist_type" value="trl">
+                                <button type="submit" class="w-full text-left" id="generate-trl-requirements-btn">Generate TRL Requirements</button>
+                            </form>
+                        </li>
+                        <li>
                             <form method="post" action="{% url 'admin_panel:generate_checklists' %}" id="generate-all-checklists-form" class="m-0">
                                 {% csrf_token %}
                                 <input type="hidden" name="checklist_type" value="all">
-                                <button type="submit" class="w-full text-left" id="generate-all-checklists-btn">Generate All Three Checklists</button>
+                                <button type="submit" class="w-full text-left" id="generate-all-checklists-btn">Generate Grant Analysis (Checklists & TRL)</button>
+                            </form>
+                        </li>
+                        <li class="divider my-1"></li>
+                        <li>
+                            <form method="post" action="{% url 'admin_panel:wipe_all_checklists' %}" id="wipe-all-checklists-form" class="m-0">
+                                {% csrf_token %}
+                                <button type="submit" class="text-error w-full text-left" onclick="return confirm('⚠️ WARNING: This will permanently delete ALL checklists (eligibility, competitiveness, and exclusions) from ALL grants.\\n\\nThis action cannot be undone. Are you absolutely sure you want to continue?');">Wipe All Checklists</button>
                             </form>
                         </li>
                     </ul>
@@ -554,6 +568,10 @@
                         <span>{{ grants_with_exclusions }} / {{ total_grants }}</span>
                     </div>
                     <div class="flex justify-between">
+                        <span>TRL Requirements:</span>
+                        <span>{{ grants_with_trl }} / {{ total_grants }}</span>
+                    </div>
+                    <div class="flex justify-between">
                         <span>All Three Checklists:</span>
                         <span>{{ grants_with_all_three }} / {{ total_grants }}</span>
                     </div>
@@ -563,12 +581,12 @@
             <!-- Progress indicator (hidden by default) -->
             <div id="checklist-generation-status-alert" class="alert alert-info mt-4 hidden">
                 <div class="flex justify-between items-center">
-                    <span id="checklist-generation-status-text">Status: Generating checklists... This may take several minutes.</span>
+                    <span id="checklist-generation-status-text">Status: Generating grant analysis data... This may take several minutes.</span>
                     <form method="post" action="{% url 'admin_panel:cancel_checklist_generation' %}" id="cancel-checklist-generation-form" class="hidden">
                         {% csrf_token %}
                         <input type="hidden" name="task_id" id="cancel-checklist-task-id">
                         <input type="hidden" name="checklist_type" id="cancel-checklist-type">
-                        <button type="submit" class="btn btn-error btn-sm" onclick="return confirm('Are you sure you want to cancel the checklist generation job?');">
+                        <button type="submit" class="btn btn-error btn-sm" onclick="return confirm('Are you sure you want to cancel the grant analysis generation job?');">
                             Cancel
                         </button>
                     </form>
@@ -597,10 +615,10 @@
             <div class="space-y-4">
                 <div>
                     <label class="label">
-                        <span class="label-text font-semibold">Grant Matching Batch Size</span>
+                        <span class="label-text font-semibold">API Batch Size</span>
                     </label>
                     <p class="text-sm text-base-content/70 mb-2">
-                        Number of parallel ChatGPT API requests to make simultaneously (1-10). Higher values speed up matching but may hit rate limits.
+                        Number of parallel ChatGPT API requests to make simultaneously (1-100). Applies to both grant matching and grant analysis generation jobs. Optimized for tier 2 API limits (5,000 RPM). Higher values speed up processing but use more memory.
                     </p>
                     <form method="post" action="{% url 'admin_panel:system_settings' %}" class="flex items-center gap-4">
                         {% csrf_token %}
@@ -609,14 +627,14 @@
                             name="grant_matching_batch_size" 
                             value="{{ system_settings.grant_matching_batch_size }}"
                             min="1" 
-                            max="10" 
+                            max="100" 
                             class="input input-bordered w-24"
                             required
                         >
                         <button type="submit" class="btn btn-primary">Update</button>
                     </form>
                     <p class="text-xs text-base-content/60 mt-2">
-                        Current: {{ system_settings.grant_matching_batch_size }} parallel request{{ system_settings.grant_matching_batch_size|pluralize }}
+                        Current: {{ system_settings.grant_matching_batch_size }} parallel request{{ system_settings.grant_matching_batch_size|pluralize }} (applies to both jobs)
                     </p>
                 </div>
             </div>
@@ -889,12 +907,12 @@
             if (data.status === 'running') {
                 statusAlert.classList.add('alert-info');
                 if (statusText) {
-                    statusText.textContent = `Status: Generating ${checklistGenerationType || 'checklists'}... This may take several minutes.`;
+                    statusText.textContent = `Status: Generating ${checklistGenerationType || 'grant analysis data'}... This may take several minutes.`;
                 }
             } else if (data.status === 'completed') {
                 statusAlert.classList.add('alert-success');
                 if (statusText) {
-                    statusText.textContent = 'Status: Checklist generation completed!';
+                    statusText.textContent = 'Status: Grant analysis generation completed!';
                 }
             } else if (data.status === 'error') {
                 statusAlert.classList.add('alert-error');
@@ -911,6 +929,7 @@
             document.getElementById('generate-eligibility-checklists-form'),
             document.getElementById('generate-competitiveness-checklists-form'),
             document.getElementById('generate-exclusions-checklists-form'),
+            document.getElementById('generate-trl-requirements-form'),
             document.getElementById('generate-all-checklists-form')
         ];
         

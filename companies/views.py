@@ -19,12 +19,14 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-from .models import Company, FundingSearch, GrantMatchResult, CompanyFile, CompanyNote, FundingSearchFile, FundingQuestionnaire
+from .models import Company, FundingSearch, GrantMatchResult, FundingSearchFile, FundingQuestionnaire
 from .services import (
     CompaniesHouseService,
     CompaniesHouseError,
     ThreeSixtyGivingService,
     ThreeSixtyGivingError,
+    ChatGPTMatchingService,
+    GrantMatchingError,
 )
 from grants_aggregator import CELERY_AVAILABLE
 from grants.models import Grant, GRANT_SOURCES
@@ -409,30 +411,9 @@ def company_detail(request, id):
         company.website = website if website else None
         allowed_fields.append('website')
         
-        # SECURITY: Validate notes length
-        notes = request.POST.get('notes', company.notes or '')
-        if notes is not None:
-            if len(notes) > 50000:  # Reasonable limit for notes
-                messages.error(request, 'Notes must be 50000 characters or less.')
-                return redirect('companies:detail', id=id)
-            company.notes = notes
-            allowed_fields.append('notes')
-        
         # SECURITY: Only save explicitly allowed fields
         company.save(update_fields=allowed_fields)
-
-        # Handle optional file upload
-        uploaded_file = request.FILES.get('company_file')
-        if uploaded_file:
-            CompanyFile.objects.create(
-                company=company,
-                uploaded_by=request.user,
-                file=uploaded_file,
-                original_name=uploaded_file.name,
-            )
-            messages.success(request, 'Company updated and file uploaded.')
-        else:
-            messages.success(request, 'Company updated successfully.')
+        messages.success(request, 'Company updated successfully.')
 
         return redirect('companies:detail', id=id)
     
@@ -447,76 +428,10 @@ def company_detail(request, id):
         'funding_searches': funding_searches,
         'can_edit': can_edit,
         'trl_levels': TRL_LEVELS,
-        'company_files': company.files.all(),
-        'notes': company.company_notes.all(),
         'current_tab': current_tab,
         'can_edit_tabs': can_edit,
     }
     return render(request, 'companies/detail.html', context)
-
-
-@login_required
-@ratelimit(key='user_or_ip', rate='20/h', method='POST', block=True)
-def company_file_delete(request, file_id):
-    """Delete a company file (owner or admin)."""
-    company_file = get_object_or_404(CompanyFile, id=file_id)
-    company = company_file.company
-
-    if request.user != company.user and not request.user.admin:
-        messages.error(request, 'You do not have permission to delete this file.')
-        return redirect('companies:detail', id=company.id)
-
-    if request.method == 'POST':
-        company_file.delete()
-        messages.success(request, 'File deleted.')
-
-    return redirect('companies:detail', id=company.id)
-
-
-@login_required
-def company_note_create(request, company_id):
-    """Create a new note for a company."""
-    company = get_object_or_404(Company, id=company_id)
-
-    if request.user != company.user and not request.user.admin:
-        messages.error(request, 'You do not have permission to add notes for this company.')
-        return redirect('companies:list')
-
-    if request.method == 'POST':
-        body = (request.POST.get('body') or '').strip()
-        title = (request.POST.get('title') or '').strip() or None
-
-        if not body:
-            messages.error(request, 'Note text cannot be empty.')
-        else:
-            CompanyNote.objects.create(
-                company=company,
-                user=request.user,
-                title=title,
-                body=body,
-            )
-            messages.success(request, 'Note added.')
-
-    detail_url = reverse('companies:detail', args=[company_id])
-    return redirect(f'{detail_url}?tab=notes')
-
-
-@login_required
-def company_note_delete(request, note_id):
-    """Delete a note for a company."""
-    note = get_object_or_404(CompanyNote, id=note_id)
-    company = note.company
-
-    if request.user != company.user and not request.user.admin:
-        messages.error(request, 'You do not have permission to delete notes for this company.')
-        return redirect('companies:list')
-
-    if request.method == 'POST':
-        note.delete()
-        messages.success(request, 'Note deleted.')
-
-    detail_url = reverse('companies:detail', args=[company.id])
-    return redirect(f'{detail_url}?tab=notes')
 
 
 @login_required
@@ -850,29 +765,33 @@ def funding_search_detail(request, id):
             allowed_fields.append('notes')
         
         # Get "Let system decide TRL" checkbox
-        funding_search.let_system_decide_trl = request.POST.get('let_system_decide_trl') == 'on'
-        allowed_fields.append('let_system_decide_trl')
+        # Only update if it's in the POST data (preserve existing value if not)
+        if 'let_system_decide_trl' in request.POST:
+            funding_search.let_system_decide_trl = request.POST.get('let_system_decide_trl') == 'on'
+            allowed_fields.append('let_system_decide_trl')
         
         # SECURITY: Validate TRL levels against allowed choices
-        if not funding_search.let_system_decide_trl:
-            trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
-            trl_levels = [level for level in trl_levels if level]  # Remove empty values
-            
-            # Validate each TRL level against allowed choices
-            valid_trl_values = [choice[0] for choice in TRL_LEVELS]
-            validated_trl_levels = []
-            for level in trl_levels:
-                if level in valid_trl_values:
-                    validated_trl_levels.append(level)
-                else:
-                    messages.error(request, f'Invalid TRL level: {level}')
-                    return redirect('companies:funding_search_detail', id=id)
-            
-            funding_search.trl_levels = validated_trl_levels
-        else:
-            # Clear TRL levels if letting system decide
-            funding_search.trl_levels = []
-        allowed_fields.append('trl_levels')
+        # Only update TRL levels if they're in the POST data or if we're updating let_system_decide_trl
+        if 'trl_levels' in request.POST or 'let_system_decide_trl' in request.POST:
+            if not funding_search.let_system_decide_trl:
+                trl_levels = request.POST.getlist('trl_levels')  # getlist for multiple values
+                trl_levels = [level for level in trl_levels if level]  # Remove empty values
+                
+                # Validate each TRL level against allowed choices
+                valid_trl_values = [choice[0] for choice in TRL_LEVELS]
+                validated_trl_levels = []
+                for level in trl_levels:
+                    if level in valid_trl_values:
+                        validated_trl_levels.append(level)
+                    else:
+                        messages.error(request, f'Invalid TRL level: {level}')
+                        return redirect('companies:funding_search_detail', id=id)
+                
+                funding_search.trl_levels = validated_trl_levels
+            else:
+                # Clear TRL levels if letting system decide
+                funding_search.trl_levels = []
+            allowed_fields.append('trl_levels')
         
         # SECURITY: Validate grant sources against allowed sources
         grant_sources = request.POST.getlist('grant_sources')  # getlist for multiple values
@@ -895,6 +814,16 @@ def funding_search_detail(request, id):
         funding_search.exclude_closed_competitions = request.POST.get('exclude_closed_competitions') == 'on'
         allowed_fields.append('exclude_closed_competitions')
         
+        # Get checklist assessment checkboxes
+        funding_search.assess_exclusions = request.POST.get('assess_exclusions') == 'on'
+        allowed_fields.append('assess_exclusions')
+        
+        funding_search.assess_eligibility = request.POST.get('assess_eligibility') == 'on'
+        allowed_fields.append('assess_eligibility')
+        
+        funding_search.assess_competitiveness = request.POST.get('assess_competitiveness') == 'on'
+        allowed_fields.append('assess_competitiveness')
+        
         # SECURITY: Only save explicitly allowed fields
         funding_search.save(update_fields=allowed_fields)
         
@@ -906,27 +835,120 @@ def funding_search_detail(request, id):
         messages.success(request, 'Funding search updated successfully.')
         return redirect('companies:funding_search_detail', id=id)
     
-    # Get match results
-    match_results = GrantMatchResult.objects.filter(
+    # Get match results (all results, no limit - for debugging and quality assurance)
+    match_results = list(GrantMatchResult.objects.filter(
         funding_search=funding_search
-    ).select_related('grant').order_by('-match_score')[:50]
+    ).select_related('grant').order_by('-match_score', '-matched_at'))
+    
+    # Separate grants into three groups: excluded, not eligible, and eligible (main results)
+    from django.utils import timezone
+    excluded_grants = []
+    not_eligible_grants = []
+    eligible_grants = []
+    
+    for match in match_results:
+        # Check if grant is excluded: exclusions_score < 1.0 means at least one "yes" (exclusion applies)
+        # Excluded grants take precedence - they go to excluded section regardless of eligibility
+        is_excluded = False
+        if match.exclusions_score is not None and match.exclusions_score < 1.0:
+            is_excluded = True
+        elif match.match_score == 0.0 and match.exclusions_score is not None and match.exclusions_score < 1.0:
+            # Also check if match_score is 0 and exclusions were assessed with at least one "yes"
+            is_excluded = True
+        
+        if is_excluded:
+            excluded_grants.append(match)
+        else:
+            # Check if grant has any eligibility "no" items (not eligible)
+            match_reasons = match.match_reasons or {}
+            eligibility_checklist = match_reasons.get('eligibility_checklist', [])
+            has_eligibility_no = any(
+                item.get('status') == 'no' 
+                for item in eligibility_checklist 
+                if isinstance(item, dict)
+            )
+            
+            if has_eligibility_no:
+                not_eligible_grants.append(match)
+            else:
+                eligible_grants.append(match)
+    
+    # Sort eligible grants by match_score descending
+    eligible_grants.sort(key=lambda x: (x.match_score or 0, x.matched_at or timezone.now()), reverse=True)
+    
+    # Sort not eligible grants by match_score descending
+    not_eligible_grants.sort(key=lambda x: (x.match_score or 0, x.matched_at or timezone.now()), reverse=True)
+    
+    # Sort excluded grants by match_score descending (they'll all be 0, but preserve order)
+    excluded_grants.sort(key=lambda x: (x.match_score or 0, x.matched_at or timezone.now()), reverse=True)
+    
+    # Keep eligible grants as main results
+    match_results = eligible_grants
     
     # Convert checklist data to JSON strings for pie charts
     import json
     match_results_with_json = []
     for match in match_results:
         match_reasons = match.match_reasons or {}
+        # Get certainty from match_reasons if available, otherwise calculate it
+        certainty = match_reasons.get('certainty')
+        if certainty is None:
+            # Calculate certainty from checklist items
+            certainty = match.calculate_certainty() if hasattr(match, 'calculate_certainty') else None
+        
+        # Determine if this grant is excluded
+        # exclusions_score < 1.0 means at least one "yes" (exclusion applies)
+        is_excluded = False
+        if match.exclusions_score is not None and match.exclusions_score < 1.0:
+            is_excluded = True
+        elif match.match_score == 0.0 and match.exclusions_score is not None and match.exclusions_score < 1.0:
+            is_excluded = True
+        
         match_dict = {
             'match': match,
             'eligibility_json': json.dumps(match_reasons.get('eligibility_checklist', [])),
             'competitiveness_json': json.dumps(match_reasons.get('competitiveness_checklist', [])),
             'exclusions_json': json.dumps(match_reasons.get('exclusions_checklist', [])),
+            'certainty': certainty,  # Include certainty for frontend use
+            'is_excluded': is_excluded,  # Flag for template
         }
         match_results_with_json.append(match_dict)
     
-    # Get selected sources (company files and notes)
-    selected_files = funding_search.selected_company_files.all().order_by('-created_at')
-    selected_notes = funding_search.selected_company_notes.all().order_by('-created_at')
+    # Convert not eligible grants to JSON format
+    not_eligible_grants_with_json = []
+    for match in not_eligible_grants:
+        match_reasons = match.match_reasons or {}
+        certainty = match_reasons.get('certainty')
+        if certainty is None:
+            certainty = match.calculate_certainty() if hasattr(match, 'calculate_certainty') else None
+        
+        match_dict = {
+            'match': match,
+            'eligibility_json': json.dumps(match_reasons.get('eligibility_checklist', [])),
+            'competitiveness_json': json.dumps(match_reasons.get('competitiveness_checklist', [])),
+            'exclusions_json': json.dumps(match_reasons.get('exclusions_checklist', [])),
+            'certainty': certainty,
+            'is_excluded': False,  # Not excluded, but not eligible
+        }
+        not_eligible_grants_with_json.append(match_dict)
+    
+    # Convert excluded grants to JSON format
+    excluded_grants_with_json = []
+    for match in excluded_grants:
+        match_reasons = match.match_reasons or {}
+        certainty = match_reasons.get('certainty')
+        if certainty is None:
+            certainty = match.calculate_certainty() if hasattr(match, 'calculate_certainty') else None
+        
+        match_dict = {
+            'match': match,
+            'eligibility_json': json.dumps(match_reasons.get('eligibility_checklist', [])),
+            'competitiveness_json': json.dumps(match_reasons.get('competitiveness_checklist', [])),
+            'exclusions_json': json.dumps(match_reasons.get('exclusions_checklist', [])),
+            'certainty': certainty,
+            'is_excluded': True,
+        }
+        excluded_grants_with_json.append(match_dict)
     
     # Get all uploaded files for this funding search
     uploaded_files = funding_search.uploaded_files.all().order_by('-created_at')
@@ -942,7 +964,7 @@ def funding_search_detail(request, id):
     total_attachments_count = uploaded_files_count + (1 if has_legacy_file else 0)
     
     # Tab selection
-    allowed_tabs = ['setup', 'results', 'settings']
+    allowed_tabs = ['setup', 'preflight', 'results', 'settings']
     current_tab = request.GET.get('tab', 'setup')
     if current_tab not in allowed_tabs:
         current_tab = 'setup'
@@ -967,8 +989,8 @@ def funding_search_detail(request, id):
         'grant_sources': GRANT_SOURCES,
         'match_results': match_results,
         'match_results_with_json': match_results_with_json,
-        'selected_files': selected_files,
-        'selected_notes': selected_notes,
+        'not_eligible_grants_with_json': not_eligible_grants_with_json,
+        'excluded_grants_with_json': excluded_grants_with_json,
         'uploaded_files': uploaded_files,
         'uploaded_file_name': uploaded_file_name,
         'total_attachments_count': total_attachments_count,
@@ -977,6 +999,300 @@ def funding_search_detail(request, id):
         'questionnaires': questionnaires,
     }
     return render(request, 'companies/funding_search_detail.html', context)
+
+
+@login_required
+@require_POST
+def funding_search_preflight(request, id):
+    """
+    Run pre-flight checks on the input material for a funding search.
+    This does NOT run matching – it only assesses input quality and stores a JSON summary.
+    """
+    import datetime
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"Pre-flight check requested for funding search {id} by user {request.user.id}")
+
+    try:
+        funding_search = get_object_or_404(FundingSearch, id=id)
+        logger.info(f"Funding search {id} found, starting pre-flight checks...")
+
+        # Check permissions (owner or admin)
+        if request.user != funding_search.user and not request.user.admin:
+            messages.error(request, "You do not have permission to run pre-flight checks for this funding search.")
+            return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
+
+        # Reuse compile_input_sources_text to get combined project text
+        try:
+            project_text = funding_search.compile_input_sources_text()
+        except Exception as e:
+            logger.warning(f"Error compiling input sources for funding search {id}: {str(e)}", exc_info=True)
+            project_text = ""
+        
+        total_word_count = len(project_text.split()) if project_text else 0
+        
+        if not project_text or len(project_text.strip()) == 0:
+            logger.warning(f"No input text found for funding search {id}")
+            messages.warning(request, "No input sources available to assess. Please add a questionnaire, project description, company notes, or files.")
+            return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
+
+        # Initialize ChatGPT service
+        try:
+            matcher = ChatGPTMatchingService()
+            logger.info("ChatGPTMatchingService initialized for pre-flight check")
+        except GrantMatchingError as e:
+            logger.error(f"Failed to initialize ChatGPT service: {e}", exc_info=True)
+            messages.error(request, "Pre-flight check service is not available. Please check configuration.")
+            return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
+
+        # Create prompt for pre-flight assessment
+        preflight_prompt = f"""Analyze the following project input material and provide a comprehensive quality assessment, including Technology Readiness Level (TRL) assessment.
+
+PROJECT INPUT MATERIAL:
+{project_text[:15000]}
+
+Please provide a JSON assessment with the following structure:
+{{
+    "summary": {{
+        "overall_score": <0-100>,
+        "overall_grade": "<A-F>",
+        "readiness_level": "<excellent|good|fair|poor>",
+        "readiness_description": "<brief description>",
+        "estimated_match_quality": "<high|medium|low>"
+    }},
+    "dimension_scores": {{
+        "coverage": {{"score": <0-100>, "grade": "<A-F>", "description": "<text>"}},
+        "clarity": {{"score": <0-100>, "grade": "<A-F>", "description": "<text>"}},
+        "specificity": {{"score": <0-100>, "grade": "<A-F>", "description": "<text>"}},
+        "completeness": {{"score": <0-100>, "grade": "<A-F>", "description": "<text>"}},
+        "relevance": {{"score": <0-100>, "grade": "<A-F>", "description": "<text>"}}
+    }},
+    "critical_checks": {{
+        "has_problem_statement": {{"passed": <true|false>, "severity": "<critical|high|medium>", "message": "<text>"}},
+        "has_funding_amount": {{"passed": <true|false>, "severity": "<critical|high|medium>", "message": "<text>"}},
+        "has_target_market": {{"passed": <true|false>, "severity": "<critical|high|medium>", "message": "<text>"}}
+    }},
+    "recommendations": {{
+        "critical": [{{"id": "<id>", "priority": "critical", "title": "<text>"}}],
+        "high": [{{"id": "<id>", "priority": "high", "title": "<text>"}}]
+    }},
+    "trl_assessment": {{
+        "assessed_trl_level": "<TRL 1|TRL 2|...|TRL 9|unknown>",
+        "trl_level_number": <1-9 or null>,
+        "confidence": "<high|medium|low>",
+        "reasoning": "<brief explanation of why this TRL level was assessed>",
+        "is_technology_focused": <true|false>,
+        "indicators": ["<indicator1>", "<indicator2>"]
+    }},
+    "strengths": ["<strength1>", "<strength2>"],
+    "warnings": ["<warning1>", "<warning2>"]
+}}
+
+Assess:
+- Coverage: How well does the material cover key areas (problem, solution, impact, market)?
+- Clarity: How clear and understandable is the information?
+- Specificity: How specific are the details (funding amounts, timelines, requirements)?
+- Completeness: How complete is the information (are critical pieces missing)?
+- Relevance: How relevant is the information to grant matching?
+
+TRL Assessment:
+Assess the Technology Readiness Level (TRL) of the project based on the input material:
+- TRL 1-3 (Early Stage): Basic principles observed, concept formulated, proof of concept. Look for keywords: "concept", "idea", "research", "feasibility", "proof of concept", "early stage", "theoretical", "exploratory", "discovery"
+- TRL 4-6 (Prototype Stage): Technology validated in lab, validated in relevant environment, demonstrated in relevant environment. Look for keywords: "prototype", "demonstration", "validation", "laboratory", "testing", "development", "pilot testing", "proof of principle"
+- TRL 7-9 (Commercialization): System prototype in operational environment, system complete and qualified, actual system proven in operational environment. Look for keywords: "pilot", "deployment", "commercialization", "market ready", "scale up", "production", "launch", "rollout", "market entry"
+- If the project is clearly technology-focused but the TRL level cannot be determined from the material, set assessed_trl_level to "unknown" and provide reasoning.
+- If the project is not technology-focused (e.g., pure service, consulting, non-technical), set is_technology_focused to false and assessed_trl_level to "unknown".
+- Extract specific indicators from the text that support your TRL assessment (e.g., "prototype developed", "market ready", "proof of concept").
+
+Provide actionable recommendations for improvement. Return only valid JSON."""
+
+        # Call ChatGPT API
+        import json
+        import asyncio
+        
+        try:
+            async def get_preflight_assessment():
+                response = await matcher.async_client.chat.completions.create(
+                    model=matcher.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert at assessing grant application materials. Always respond with valid JSON only, no additional text."
+                        },
+                        {"role": "user", "content": preflight_prompt}
+                    ],
+                    temperature=0.3,
+                    response_format={"type": "json_object"},
+                    max_tokens=2500,
+                )
+                return response.choices[0].message.content
+            
+            # Run async function
+            logger.info(f"Calling ChatGPT API for pre-flight assessment of funding search {id}...")
+            response_content = asyncio.run(get_preflight_assessment())
+            
+            if not response_content:
+                raise GrantMatchingError("Empty response from ChatGPT API")
+            
+            result = json.loads(response_content)
+            logger.info(f"ChatGPT API response received for funding search {id}")
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse ChatGPT response for pre-flight check: {e}", exc_info=True)
+            logger.error(f"Response content: {response_content[:500] if 'response_content' in locals() else 'N/A'}")
+            messages.error(request, "Pre-flight check completed but response format was invalid. Please try again.")
+            return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
+        except GrantMatchingError as e:
+            logger.error(f"ChatGPT API error during pre-flight check: {e}", exc_info=True)
+            messages.error(request, f"Pre-flight check failed: {str(e)}")
+            return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
+        except Exception as e:
+            logger.error(f"Unexpected error during pre-flight check: {e}", exc_info=True)
+            messages.error(request, f"An unexpected error occurred during pre-flight check: {str(e)}")
+            return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
+
+        # Add metadata and statistics
+        now_iso = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        questionnaire = funding_search.questionnaire
+        
+        result["version"] = "1.0"
+        result["checked_at"] = now_iso
+        result["checked_by"] = request.user.email
+        
+        # Ensure all required fields exist with defaults
+        if "summary" not in result:
+            result["summary"] = {
+                "overall_score": 0,
+                "overall_grade": "F",
+                "readiness_level": "poor",
+                "readiness_description": "Assessment incomplete",
+                "estimated_match_quality": "low"
+            }
+        if "dimension_scores" not in result:
+            result["dimension_scores"] = {
+                "coverage": {"score": 0, "grade": "F", "description": "Not assessed"},
+                "clarity": {"score": 0, "grade": "F", "description": "Not assessed"},
+                "specificity": {"score": 0, "grade": "F", "description": "Not assessed"},
+                "completeness": {"score": 0, "grade": "F", "description": "Not assessed"},
+                "relevance": {"score": 0, "grade": "F", "description": "Not assessed"}
+            }
+        if "recommendations" not in result:
+            result["recommendations"] = {"critical": [], "high": []}
+        if "strengths" not in result:
+            result["strengths"] = []
+        if "warnings" not in result:
+            result["warnings"] = []
+        if "critical_checks" not in result:
+            result["critical_checks"] = {}
+        if "trl_assessment" not in result:
+            result["trl_assessment"] = {
+                "assessed_trl_level": "unknown",
+                "trl_level_number": None,
+                "confidence": "low",
+                "reasoning": "TRL assessment not available",
+                "is_technology_focused": False,
+                "indicators": []
+            }
+        else:
+            # Ensure TRL assessment has all required fields
+            trl_assessment = result["trl_assessment"]
+            if "assessed_trl_level" not in trl_assessment:
+                trl_assessment["assessed_trl_level"] = "unknown"
+            if "trl_level_number" not in trl_assessment:
+                trl_assessment["trl_level_number"] = None
+            if "confidence" not in trl_assessment:
+                trl_assessment["confidence"] = "low"
+            if "reasoning" not in trl_assessment:
+                trl_assessment["reasoning"] = "No reasoning provided"
+            if "is_technology_focused" not in trl_assessment:
+                trl_assessment["is_technology_focused"] = False
+            if "indicators" not in trl_assessment:
+                trl_assessment["indicators"] = []
+        
+        # Ensure dimension_scores have all required sub-fields
+        for dimension in ["coverage", "clarity", "specificity", "completeness", "relevance"]:
+            if dimension not in result["dimension_scores"]:
+                result["dimension_scores"][dimension] = {"score": 0, "grade": "F", "description": "Not assessed"}
+            else:
+                # Ensure each dimension has required fields
+                dim = result["dimension_scores"][dimension]
+                if "score" not in dim:
+                    dim["score"] = 0
+                if "grade" not in dim:
+                    dim["grade"] = "F"
+                if "description" not in dim:
+                    dim["description"] = "Not assessed"
+        
+        result["metadata"] = {
+            "assessment_method": "chatgpt_api",
+            "model_version": matcher.model,
+            "input_sources_analyzed": ["questionnaire", "project_description", "company_website", "company_grant_history"]
+        }
+        
+        # Calculate grant history word count
+        grant_history_word_count = 0
+        if funding_search.use_company_grant_history and funding_search.company.grants_received_360:
+            grants = funding_search.company.grants_received_360.get('grants', [])
+            for grant in grants:
+                if grant.get('title'):
+                    grant_history_word_count += len(grant['title'].split())
+                if grant.get('description'):
+                    grant_history_word_count += len(grant['description'].split())
+        
+        result["statistics"] = {
+            "total_word_count": total_word_count,
+            "total_sources": 4,
+            "sources_with_content": sum([
+                bool(questionnaire and questionnaire.questionnaire_data),
+                bool(funding_search.project_description),
+                bool(funding_search.company.website),
+                bool(funding_search.use_company_grant_history and funding_search.company.grants_received_360 and funding_search.company.grants_received_360.get('grants')),
+            ]),
+        }
+        
+        # Add source breakdown if not present
+        if "source_breakdown" not in result:
+            questionnaire_data = questionnaire.questionnaire_data if (questionnaire and questionnaire.questionnaire_data) else {}
+            questionnaire_word_count = 0
+            if questionnaire_data:
+                for key, value in questionnaire_data.items():
+                    if isinstance(value, str):
+                        questionnaire_word_count += len(value.split())
+            
+            result["source_breakdown"] = {
+                "questionnaire": {
+                    "present": bool(questionnaire_data),
+                    "word_count": questionnaire_word_count,
+                },
+                "project_description": {
+                    "present": bool(funding_search.project_description),
+                },
+                "company_website": {
+                    "present": bool(funding_search.company.website),
+                    "enabled": funding_search.use_company_website,
+                },
+                "company_grant_history": {
+                    "present": bool(funding_search.company.grants_received_360 and funding_search.company.grants_received_360.get('grants')),
+                    "enabled": funding_search.use_company_grant_history,
+                    "count": len(funding_search.company.grants_received_360.get('grants', [])) if funding_search.company.grants_received_360 else 0,
+                    "word_count": grant_history_word_count,
+                },
+            }
+
+        funding_search.preflight_result = result
+        funding_search.save(update_fields=["preflight_result"])
+        
+        overall_score = result.get("summary", {}).get("overall_score", 0)
+        logger.info(f"Pre-flight checks completed for funding search {id}. Overall score: {overall_score}")
+
+        messages.success(request, "Pre-flight checks completed.")
+        return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
+    
+    except Exception as e:
+        logger.error(f"Error running pre-flight checks for funding search {id}: {str(e)}", exc_info=True)
+        messages.error(request, f"An error occurred while running pre-flight checks: {str(e)}")
+        return redirect(reverse("companies:funding_search_detail", args=[id]) + "?tab=preflight")
 
 
 @login_required
@@ -992,10 +1308,15 @@ def funding_search_download_report(request, id):
         messages.error(request, 'You do not have permission to view this funding search.')
         return redirect('companies:list')
     
-    # Get match results (limited to 50, same as displayed on page)
-    match_results = GrantMatchResult.objects.filter(
+    # Get match results (all results, no limit - for debugging and quality assurance)
+    match_results = list(GrantMatchResult.objects.filter(
         funding_search=funding_search
-    ).select_related('grant').order_by('-match_score')[:50]
+    ).select_related('grant').order_by('-match_score', '-matched_at'))
+    
+    # Explicitly sort by match_score descending as a safety measure
+    # This ensures correct ordering even if database query doesn't preserve it
+    from django.utils import timezone
+    match_results.sort(key=lambda x: (x.match_score or 0, x.matched_at or timezone.now()), reverse=True)
     
     # Create the HttpResponse object with PDF headers
     response = HttpResponse(content_type='application/pdf')
@@ -1345,8 +1666,6 @@ def funding_search_clear_results(request, id):
 @login_required
 def funding_search_select_data(request, id):
     """Second step: Select company data to use for funding search."""
-    from .models import CompanyFile, CompanyNote
-    
     # SECURITY: Check authorization before loading data
     funding_search = get_object_or_404(FundingSearch, id=id)
     
@@ -1358,24 +1677,11 @@ def funding_search_select_data(request, id):
     company = funding_search.company
     
     if request.method == 'POST':
-        # Get selected company files
-        selected_file_ids = request.POST.getlist('company_files')
-        selected_files = CompanyFile.objects.filter(
-            id__in=selected_file_ids,
-            company=company
-        )
-        funding_search.selected_company_files.set(selected_files)
-        
-        # Get selected company notes
-        selected_note_ids = request.POST.getlist('company_notes')
-        selected_notes = CompanyNote.objects.filter(
-            id__in=selected_note_ids,
-            company=company
-        )
-        funding_search.selected_company_notes.set(selected_notes)
-        
         # Get website selection
         funding_search.use_company_website = request.POST.get('use_company_website') == 'on'
+        
+        # Get grant history selection
+        funding_search.use_company_grant_history = request.POST.get('use_company_grant_history') == 'on'
         
         funding_search.save()
         
@@ -1383,20 +1689,16 @@ def funding_search_select_data(request, id):
         return redirect('companies:funding_search_detail', id=id)
     
     # GET request - show selection form
-    company_files = company.files.all().order_by('-created_at')
-    company_notes = company.company_notes.all().order_by('-created_at')
-    
-    # Get currently selected items
-    selected_file_ids = set(funding_search.selected_company_files.values_list('id', flat=True))
-    selected_note_ids = set(funding_search.selected_company_notes.values_list('id', flat=True))
+    # Calculate grants count for display
+    grants_count = 0
+    if company.grants_received_360:
+        grants = company.grants_received_360.get('grants', [])
+        grants_count = len(grants) if grants else 0
     
     context = {
         'funding_search': funding_search,
         'company': company,
-        'company_files': company_files,
-        'company_notes': company_notes,
-        'selected_file_ids': selected_file_ids,
-        'selected_note_ids': selected_note_ids,
+        'grants_count': grants_count,
     }
     return render(request, 'companies/funding_search_select_data.html', context)
 
@@ -1446,6 +1748,7 @@ def funding_search_copy(request, id):
             project_description=original.project_description,
             file_type=original.file_type,
             use_company_website=original.use_company_website,
+            use_company_grant_history=original.use_company_grant_history,
             selected_grant_sources=original.selected_grant_sources.copy() if original.selected_grant_sources else [],
             matching_status='pending',
             matching_progress={},
@@ -1469,10 +1772,6 @@ def funding_search_copy(request, id):
                 # If file copying fails, continue without the file
                 messages.warning(request, f'Funding search copied, but file could not be copied: {str(e)}')
         
-        # Copy ManyToMany relationships
-        new_funding_search.selected_company_files.set(original.selected_company_files.all())
-        new_funding_search.selected_company_notes.set(original.selected_company_notes.all())
-        
         # Copy matching results
         if original.match_results.exists():
             for original_result in original.match_results.all():
@@ -1482,6 +1781,7 @@ def funding_search_copy(request, id):
                     match_score=original_result.match_score,
                     eligibility_score=original_result.eligibility_score,
                     competitiveness_score=original_result.competitiveness_score,
+                    exclusions_score=original_result.exclusions_score,
                     match_reasons=original_result.match_reasons.copy() if original_result.match_reasons else {},
                 )
             
@@ -1712,16 +2012,15 @@ def funding_search_match(request, id):
     if request.method == 'POST':
         # Check if there are any input sources selected
         has_sources = (
-            funding_search.selected_company_files.exists() or
-            funding_search.selected_company_notes.exists() or
             funding_search.use_company_website or
+            funding_search.use_company_grant_history or
             funding_search.uploaded_file or
             funding_search.project_description
         )
         
         if not has_sources:
             logger.warning(f"Funding search {id} has no input sources")
-            messages.error(request, 'Please select input sources (company files, notes, website) or add a project description first.')
+            messages.error(request, 'Please select input sources (website, grant history) or add a project description first.')
             return redirect('companies:funding_search_detail', id=id)
         
         if funding_search.matching_status == 'running':
@@ -1784,16 +2083,15 @@ def funding_search_match_test(request, id):
     if request.method == 'POST':
         # Check if there are any input sources selected
         has_sources = (
-            funding_search.selected_company_files.exists() or
-            funding_search.selected_company_notes.exists() or
             funding_search.use_company_website or
+            funding_search.use_company_grant_history or
             funding_search.uploaded_file or
             funding_search.project_description
         )
         
         if not has_sources:
             logger.warning(f"Funding search {id} has no input sources")
-            messages.error(request, 'Please select input sources (company files, notes, website) or add a project description first.')
+            messages.error(request, 'Please select input sources (website, grant history) or add a project description first.')
             return redirect('companies:funding_search_detail', id=id)
         
         if funding_search.matching_status == 'running':
@@ -2064,8 +2362,8 @@ def company_onboarding(request, id):
         step = request.POST.get('step', 'website')
         action = request.POST.get('action', 'next')
         
-        # Only save when "Finish" is clicked (step == 'files' and action == 'finish')
-        if step == 'files' and action == 'finish':
+        # Only save when "Finish" is clicked (step == 'website' and action == 'finish')
+        if step == 'website' and action == 'finish':
             # Save all data at once
             saved_items = []
             
@@ -2082,45 +2380,6 @@ def company_onboarding(request, id):
                 company.save(update_fields=['website'])
                 saved_items.append('website')
             
-            # Save note
-            note_title = request.POST.get('note_title', '').strip()
-            note_body = request.POST.get('note_body', '').strip()
-            if note_body:
-                CompanyNote.objects.create(
-                    company=company,
-                    user=request.user,
-                    title=note_title or None,
-                    body=note_body
-                )
-                saved_items.append('note')
-            
-            # Save file
-            uploaded_file = request.FILES.get('company_file')
-            if uploaded_file:
-                # SECURITY: Validate file size (10MB max)
-                if uploaded_file.size > 10 * 1024 * 1024:
-                    messages.error(request, 'File size exceeds 10MB limit.')
-                    return redirect('companies:onboarding', id=id)
-                
-                # SECURITY: Sanitize filename
-                import os
-                import re
-                original_filename = uploaded_file.name
-                safe_filename = os.path.basename(original_filename)
-                safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', safe_filename)
-                if len(safe_filename) > 255:
-                    name, ext = os.path.splitext(safe_filename)
-                    safe_filename = name[:250] + ext
-                
-                uploaded_file.name = safe_filename
-                CompanyFile.objects.create(
-                    company=company,
-                    uploaded_by=request.user,
-                    file=uploaded_file,
-                    original_name=original_filename[:255],  # Store original but limit length
-                )
-                saved_items.append('file')
-            
             if saved_items:
                 messages.success(request, f'Company setup completed. Saved: {", ".join(saved_items)}.')
             else:
@@ -2131,7 +2390,7 @@ def company_onboarding(request, id):
     
     # Allow user to manually navigate steps, default to website
     requested_step = request.GET.get('step', 'website')
-    if requested_step in ['website', 'notes', 'files']:
+    if requested_step in ['website']:
         current_step = requested_step
     else:
         current_step = 'website'

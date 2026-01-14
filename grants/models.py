@@ -54,6 +54,12 @@ class Grant(models.Model):
     eligibility_checklist = models.JSONField(default=dict, blank=True, null=True)
     competitiveness_checklist = models.JSONField(default=dict, blank=True, null=True)
     exclusions_checklist = models.JSONField(default=dict, blank=True, null=True)
+    trl_requirements = models.JSONField(
+        default=dict,
+        blank=True,
+        null=True,
+        help_text="Extracted TRL requirements for this grant (e.g., {'trl_levels': ['TRL 1', 'TRL 2'], 'trl_range': '1-3'})"
+    )
     scraped_at = models.DateTimeField(blank=True, null=True)
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_changed_at = models.DateTimeField(blank=True, null=True)
