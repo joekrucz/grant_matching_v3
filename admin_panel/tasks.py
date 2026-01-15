@@ -915,10 +915,175 @@ if CELERY_TASKS_AVAILABLE:
         return asyncio.run(_generate_checklists_async(
             task_id, grants, checklist_type, client
         ))
+    @shared_task(bind=True)
+    def generate_embeddings_for_all_grants(self, missing_only=False, source=None, limit=None):
+        """
+        Generate embeddings for all grants (or a subset).
+        
+        Args:
+            missing_only: If True, only generate embeddings for grants that don't have one
+            source: Optional source filter (e.g., 'ukri', 'nihr')
+            limit: Optional limit on number of grants to process
+        
+        Returns:
+            dict with status, total, processed, success, errors, skipped
+        """
+        from grants.models import Grant
+        from grants.embedding_service import EmbeddingService
+        from django.db.models import Q
+        
+        logger.info(f"generate_embeddings_for_all_grants task started (missing_only={missing_only}, source={source}, limit={limit})")
+        
+        # Get grants to process
+        grants_query = Grant.objects.all()
+        
+        if source:
+            grants_query = grants_query.filter(source=source)
+        
+        if missing_only:
+            grants_query = grants_query.filter(
+                Q(embedding__isnull=True) | Q(embedding=[])
+            )
+        
+        grants = list(grants_query)
+        
+        if limit:
+            grants = grants[:limit]
+        
+        total_grants = len(grants)
+        logger.info(f"Found {total_grants} grants to process")
+        
+        if total_grants == 0:
+            return {
+                'status': 'completed',
+                'total': 0,
+                'processed': 0,
+                'success': 0,
+                'skipped': 0,
+                'errors': 0,
+            }
+        
+        try:
+            embedding_service = EmbeddingService()
+            logger.info(f"Embedding service initialized with model: {embedding_service.model} (fallback: {embedding_service.fallback_model})")
+        except Exception as e:
+            error_msg = f"Failed to initialize embedding service: {str(e)}"
+            logger.error(error_msg)
+            return {
+                'status': 'error',
+                'error': error_msg,
+                'total': total_grants,
+                'processed': 0,
+                'success': 0,
+                'skipped': 0,
+                'errors': 1
+            }
+        
+        success_count = 0
+        error_count = 0
+        skipped_count = 0
+        fallback_used = False  # Track if fallback was used
+        
+        for idx, grant in enumerate(grants, 1):
+            try:
+                # Generate embedding text
+                embedding_text = embedding_service.generate_grant_embedding_text(grant)
+                
+                if not embedding_text or not embedding_text.strip():
+                    logger.warning(f"Grant {grant.id} ({grant.slug}): No content to embed, skipping")
+                    skipped_count += 1
+                    # Update progress even for skipped grants
+                    processed = idx
+                    percentage = (processed / total_grants) * 100 if total_grants > 0 else 0
+                    self.update_state(
+                        state='PROGRESS',
+                        meta={
+                            'current': processed,
+                            'total': total_grants,
+                            'percentage': round(percentage, 1),
+                            'processed': processed,
+                            'success': success_count,
+                            'skipped': skipped_count,
+                            'errors': error_count,
+                        }
+                    )
+                    continue
+                
+                # Generate embedding (with automatic fallback in service)
+                embedding = embedding_service.generate_embedding(embedding_text)
+                
+                # Save to grant
+                grant.embedding = embedding
+                grant.embedding_updated_at = timezone.now()
+                grant.save(update_fields=['embedding', 'embedding_updated_at'])
+                
+                success_count += 1
+                
+                # Update progress every grant (for real-time updates)
+                processed = idx
+                percentage = (processed / total_grants) * 100 if total_grants > 0 else 0
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': processed,
+                        'total': total_grants,
+                        'percentage': round(percentage, 1),
+                        'processed': processed,
+                        'success': success_count,
+                        'skipped': skipped_count,
+                        'errors': error_count,
+                    }
+                )
+                
+                if idx % 10 == 0:
+                    logger.info(f"Processed {idx}/{total_grants} grants (success: {success_count}, errors: {error_count}, skipped: {skipped_count})")
+                
+            except Exception as e:
+                error_count += 1
+                error_msg = str(e)
+                # Log more detailed error information
+                if '403' in error_msg or 'permission' in error_msg.lower() or 'does not have access' in error_msg.lower():
+                    logger.error(
+                        f"Permission error for grant {grant.id} ({grant.slug}): {error_msg}. "
+                        f"This usually means the OpenAI project doesn't have access to the embedding model. "
+                        f"Check your OpenAI project settings or use a different API key."
+                    )
+                else:
+                    logger.error(f"Error generating embedding for grant {grant.id} ({grant.slug}): {e}", exc_info=True)
+                
+                # Update progress even on errors
+                processed = idx
+                percentage = (processed / total_grants) * 100 if total_grants > 0 else 0
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': processed,
+                        'total': total_grants,
+                        'percentage': round(percentage, 1),
+                        'processed': processed,
+                        'success': success_count,
+                        'skipped': skipped_count,
+                        'errors': error_count,
+                    }
+                )
+        
+        logger.info(f"Embedding generation completed: {success_count} success, {error_count} errors, {skipped_count} skipped")
+        
+        return {
+            'status': 'completed',
+            'total': total_grants,
+            'processed': total_grants,
+            'success': success_count,
+            'skipped': skipped_count,
+            'errors': error_count,
+        }
 else:
     def refresh_companies_house_data():
         raise Exception("Celery is not available")
-    
+
     def generate_checklists_for_all_grants():
+        raise Exception("Celery is not available")
+    
+    def generate_embeddings_for_all_grants():
         raise Exception("Celery is not available")
 

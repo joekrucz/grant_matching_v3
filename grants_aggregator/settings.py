@@ -267,6 +267,8 @@ SLACK_BOT_TOKEN = env('SLACK_BOT_TOKEN', default='')
 
 # OpenAI API (for grant matching)
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
+# Embedding model (defaults to text-embedding-3-small, falls back to text-embedding-ada-002 if not available)
+EMBEDDING_MODEL = env('EMBEDDING_MODEL', default='text-embedding-3-small')
 
 # Scraper Service
 # On Railway, services are accessible via {service-name}.railway.internal

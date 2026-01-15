@@ -42,6 +42,7 @@ if CELERY_AVAILABLE:
         trigger_innovate_uk_scrape,
         refresh_companies_house_data,
         generate_checklists_for_all_grants,
+        generate_embeddings_for_all_grants,
     )
 else:
     trigger_ukri_scrape = None
@@ -50,6 +51,7 @@ else:
     trigger_innovate_uk_scrape = None
     refresh_companies_house_data = None
     generate_checklists_for_all_grants = None
+    generate_embeddings_for_all_grants = None
 
 
 def admin_required(view_func):
@@ -257,6 +259,17 @@ def dashboard(request):
             )
         """)
         db_count_trl = cursor.fetchone()[0]
+        
+        # Count grants with embeddings
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM grants 
+            WHERE embedding IS NOT NULL 
+            AND embedding != '[]'::jsonb
+            AND jsonb_typeof(embedding) = 'array'
+            AND jsonb_array_length(embedding) > 0
+        """)
+        db_count_embeddings = cursor.fetchone()[0]
     
     # Use the direct database counts
     grants_with_eligibility = db_count_eligibility
@@ -265,6 +278,7 @@ def dashboard(request):
     grants_with_both = db_count_both
     grants_with_all_three = db_count_all_three
     grants_with_trl = db_count_trl
+    grants_with_embeddings = db_count_embeddings
     
     # Log for debugging
     debug_logger.info(f"Checklist counts from database: eligibility={grants_with_eligibility}, competitiveness={grants_with_competitiveness}, exclusions={grants_with_exclusions}, both={grants_with_both}, all_three={grants_with_all_three}")
@@ -329,6 +343,7 @@ def dashboard(request):
         'grants_with_both': grants_with_both,
         'grants_with_all_three': grants_with_all_three,
         'grants_with_trl': grants_with_trl,
+        'grants_with_embeddings': grants_with_embeddings,
         'total_users': total_users,
         'admin_users': admin_users,
         'active_users': active_users,
@@ -1943,6 +1958,181 @@ def generate_checklists(request):
         
         return redirect('admin_panel:dashboard')
     
+    return redirect('admin_panel:dashboard')
+
+
+@login_required
+@admin_required
+@ratelimit(key='user_or_ip', rate='10/h', block=True)
+def generate_embeddings(request):
+    """Trigger embedding generation for grants."""
+    if request.method == 'POST':
+        import logging
+        logger = logging.getLogger(__name__)
+
+        missing_only = request.POST.get('missing_only', 'false') == 'true'
+        source = request.POST.get('source', '') or None
+        limit = request.POST.get('limit', '') or None
+        if limit:
+            try:
+                limit = int(limit)
+            except ValueError:
+                limit = None
+
+        if not CELERY_AVAILABLE or generate_embeddings_for_all_grants is None:
+            error_msg = 'Background task service (Celery) is not available. Please check Redis connection.'
+            logger.error(error_msg)
+            messages.error(request, error_msg)
+            return redirect('admin_panel:dashboard')
+
+        try:
+            # Trigger the embedding generation task
+            logger.info(f"Calling generate_embeddings_for_all_grants.delay() with missing_only={missing_only}, source={source}, limit={limit}...")
+            result = generate_embeddings_for_all_grants.delay(missing_only=missing_only, source=source, limit=limit)
+            logger.info(f"Task queued successfully. Task ID: {result.id}")
+            messages.success(request, f'Embedding generation started (Task ID: {result.id}).')
+
+            # Store task ID in cache for later retrieval
+            from django.core.cache import cache
+            cache_key = 'last_embedding_generation_task_id'
+            cache.set(cache_key, result.id, timeout=3600)  # 1 hour
+
+            # Return JSON response with task ID for AJAX handling
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'task_id': result.id,
+                    'status': 'started',
+                    'missing_only': missing_only,
+                    'source': source,
+                    'limit': limit
+                })
+
+            # Redirect with task ID for non-AJAX requests
+            return redirect(f"{reverse('admin_panel:dashboard')}?embedding_task_id={result.id}")
+        except Exception as e:
+            error_msg = f'Failed to start embedding generation: {str(e)}'
+            logger.error(f"Error triggering embedding generation: {e}", exc_info=True)
+            messages.error(request, error_msg)
+
+        return redirect('admin_panel:dashboard')
+    
+    return redirect('admin_panel:dashboard')
+
+
+@login_required
+@admin_required
+def embedding_generation_status(request):
+    """API endpoint to get embedding generation status and progress (for AJAX polling)."""
+    from celery.result import AsyncResult
+    
+    # Get task ID from request
+    task_id = request.GET.get('task_id')
+    if not task_id:
+        return JsonResponse({
+            'status': 'idle',
+            'progress': {'current': 0, 'total': 0, 'percentage': 0}
+        })
+    
+    try:
+        task_result = AsyncResult(task_id)
+        
+        if task_result.state == 'PENDING':
+            status = 'running'
+            progress = {'current': 0, 'total': 0, 'percentage': 0}
+        elif task_result.state == 'PROGRESS':
+            status = 'running'
+            meta = task_result.info or {}
+            progress = {
+                'current': meta.get('current', 0),
+                'total': meta.get('total', 0),
+                'percentage': meta.get('percentage', 0),
+                'processed': meta.get('processed', 0),
+                'success': meta.get('success', 0),
+                'skipped': meta.get('skipped', 0),
+                'errors': meta.get('errors', 0)
+            }
+        elif task_result.state == 'SUCCESS':
+            status = 'completed'
+            result = task_result.result or {}
+            progress = {
+                'current': result.get('total', 0),
+                'total': result.get('total', 0),
+                'percentage': 100,
+                'processed': result.get('processed', 0),
+                'success': result.get('success', 0),
+                'skipped': result.get('skipped', 0),
+                'errors': result.get('errors', 0),
+            }
+        elif task_result.state == 'FAILURE':
+            status = 'error'
+            progress = {
+                'current': 0,
+                'total': 0,
+                'percentage': 0,
+                'error': str(task_result.info)
+            }
+        else:
+            status = 'unknown'
+            progress = {'current': 0, 'total': 0, 'percentage': 0}
+        
+        return JsonResponse({
+            'status': status,
+            'progress': progress,
+            'task_id': task_id
+        })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'progress': {'current': 0, 'total': 0, 'percentage': 0},
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@admin_required
+def cancel_embedding_generation(request):
+    """Cancel a running embedding generation job."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if request.method == 'POST':
+        # Get task ID from request
+        task_id = request.POST.get('task_id') or request.GET.get('task_id')
+        if not task_id:
+            # Try to get from cache
+            from django.core.cache import cache
+            cache_key = 'last_embedding_generation_task_id'
+            task_id = cache.get(cache_key)
+        
+        if not task_id:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': 'No embedding generation job found to cancel.'}, status=400)
+            messages.error(request, 'No embedding generation job found to cancel.')
+            return redirect('admin_panel:dashboard')
+        
+        try:
+            from celery.result import AsyncResult
+            task = AsyncResult(task_id)
+            
+            # Check if task is still running
+            if task.state in ['PENDING', 'PROGRESS']:
+                task.revoke(terminate=True)
+                logger.info(f"Cancelled embedding generation task {task_id}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'message': 'Embedding generation job cancelled successfully.'})
+                messages.success(request, 'Embedding generation job cancelled successfully.')
+            else:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'message': 'Embedding generation job is not running.'})
+                messages.info(request, 'Embedding generation job is not running.')
+        except Exception as e:
+            logger.error(f"Error cancelling embedding generation: {e}", exc_info=True)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': f'Error cancelling embedding generation: {str(e)}'}, status=500)
+            messages.error(request, f'Error cancelling embedding generation: {str(e)}')
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=400)
     return redirect('admin_panel:dashboard')
 
 

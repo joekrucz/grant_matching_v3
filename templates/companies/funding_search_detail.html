@@ -309,9 +309,17 @@
             <div class="card-body">
         <h2 class="card-title text-lg mb-4">Grant Matching Setup</h2>
         
+                                {% if funding_search.matching_status == 'running' %}
+        <div class="mb-4">
+                                <div class="badge badge-warning">Locked - Matching in progress</div>
+                            </div>
+        {% endif %}
+        
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         {% if can_edit %}
         <!-- Questionnaire Management Section -->
-        <div class="mb-6 p-4 bg-base-100 rounded-lg border border-base-300">
+                        <div class="p-4 bg-base-100 rounded-lg border border-base-300">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-base font-semibold">Questionnaire</h3>
                 <a href="{% url 'companies:questionnaires_list' %}" class="btn btn-sm btn-outline">
@@ -364,15 +372,6 @@
             {% endif %}
         </div>
         {% endif %}
-        
-                                {% if funding_search.matching_status == 'running' %}
-        <div class="mb-4">
-                                <div class="badge badge-warning">Locked - Matching in progress</div>
-                            </div>
-        {% endif %}
-        
-                <div class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <!-- Attachments -->
                         <div class="border border-base-300 rounded-lg p-4 bg-white">
                             <div class="flex justify-between items-center mb-3">
@@ -454,32 +453,6 @@
                             </div>
                     </div>
                     
-                        <!-- Company Information (Always Included) -->
-                    <div class="border border-base-300 rounded-lg p-4 bg-white">
-                        <div class="flex justify-between items-center mb-3">
-                            <div class="font-semibold">
-                                Company Information
-                                <span class="text-xs font-normal text-base-content/70 ml-2">(Always included)</span>
-                            </div>
-                        </div>
-                        <div class="space-y-2">
-                            <div class="text-sm text-base-content/70">
-                                The following company information is automatically included in all matching:
-                            </div>
-                            <ul class="list-disc list-inside text-sm space-y-1 ml-2">
-                                <li>Company registration details (name, number, status, type)</li>
-                                <li>SIC codes and descriptions</li>
-                                <li>Registered address</li>
-                                {% if funding_search.company.website %}
-                                <li>Company website content</li>
-                                {% endif %}
-                                {% if funding_search.company.grants_received_360 and funding_search.company.grants_received_360.grants %}
-                                <li>Grant history from 360Giving ({{ funding_search.company.grants_received_360.grants|length }} grant{{ funding_search.company.grants_received_360.grants|length|pluralize }})</li>
-                                {% endif %}
-                            </ul>
-                        </div>
-                    </div>
-                    
                     <!-- Uploaded Files -->
                     {% if selected_files %}
                     <div class="border border-base-300 rounded-lg p-4 bg-white">
@@ -487,7 +460,7 @@
                             <div class="font-semibold">
                                 Uploaded Files
                                 <span class="text-xs font-normal text-base-content/70 ml-2">({{ selected_files|length }} file{{ selected_files|length|pluralize }})</span>
-                            </div>
+                    </div>
                         </div>
                         <div class="space-y-2">
                             {% for file in selected_files %}
@@ -530,102 +503,8 @@
                     {% endif %}
         </div>
         
-                <!-- TRL Levels and Grant Sources -->
+                <!-- Grant Sources and Checklist Assessment Options -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <!-- TRL Levels Selection -->
-                    <div class="border border-base-300 rounded-lg p-4 bg-white">
-                {% if can_edit %}
-                <form method="post" id="trl-levels-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %}>
-                    {% csrf_token %}
-                    {# Preserve grant sources when submitting TRL levels form #}
-                    {% if funding_search.selected_grant_sources %}
-                        {% for source_code in funding_search.selected_grant_sources %}
-                            <input type="hidden" name="grant_sources" value="{{ source_code }}">
-                        {% endfor %}
-                    {% endif %}
-                                    <div class="form-control">
-                                        <div class="flex items-center gap-4 flex-wrap mb-3">
-                                            <h3 class="text-sm font-semibold flex items-center gap-2">
-                                TRL Levels
-                                <div class="tooltip tooltip-right" data-tip="Click to view TRL level explanations">
-                                    <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick="document.getElementById('trl-info-modal').showModal()">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </button>
-            </div>
-                                            </h3>
-                                        </div>
-                                        <label class="label cursor-pointer gap-2 justify-start">
-                                    <input type="checkbox" name="let_system_decide_trl" id="let-system-decide-trl" class="checkbox checkbox-sm" {% if funding_search.let_system_decide_trl != False %}checked{% endif %} {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
-                                            <span class="label-text text-xs">Let system decide</span>
-                        </label>
-                        <div class="relative mb-2" style="padding: 0.5rem 0;" id="trl-slider-container">
-                            <div class="relative" style="height: 20px;">
-                                <input type="range" min="1" max="9" value="1" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-min" style="z-index: 2;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
-                                <input type="range" min="1" max="9" value="9" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-max" style="z-index: 3;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
-                                <div class="absolute w-full h-2 bg-base-300 rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
-                                <div id="trl-range-track" class="absolute h-2 bg-primary rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
-        </div>
-                            <div class="flex justify-between text-xs text-base-content/60 mt-1" style="padding: 0 10px;">
-                                {% for i in "123456789" %}
-                                <span>{{ i }}</span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {# Hidden inputs to store selected TRL levels #}
-                        <div id="trl-levels-hidden-inputs"></div>
-                    </div>
-                </form>
-                
-                <!-- TRL Info Modal -->
-                <dialog id="trl-info-modal" class="modal">
-                    <div class="modal-box">
-                        <h3 class="font-bold text-base mb-4">TRL Level Explanations</h3>
-                        <div class="space-y-3">
-                                {% for value, label in trl_levels %}
-                            <div class="border-b border-base-300 pb-2 last:border-b-0">
-                                <div class="font-semibold text-[0.625rem] leading-tight">{{ value }}</div>
-                                <div class="text-[0.625rem] text-base-content/70 mt-1 leading-tight">{{ label }}</div>
-                            </div>
-                                {% endfor %}
-                    </div>
-                        <div class="modal-action">
-                            <form method="dialog">
-                                <button class="btn">Close</button>
-                            </form>
-                    </div>
-                    </div>
-                    <form method="dialog" class="modal-backdrop">
-                        <button>close</button>
-                </form>
-                </dialog>
-                {% else %}
-                <!-- Display TRL levels for non-editors -->
-                {% if funding_search.trl_levels or funding_search.trl_level %}
-                                <div>
-                    <div class="text-xs font-semibold mb-2">TRL Levels</div>
-                    <div class="flex flex-wrap gap-2">
-                        {% for trl_value in funding_search.trl_levels %}
-                        {% for value, label in trl_levels %}
-                                {% if value == trl_value %}
-                                <span class="badge badge-primary">{{ label }}</span>
-                                {% endif %}
-                            {% endfor %}
-                        {% endfor %}
-                        {% if funding_search.trl_level and funding_search.trl_level not in funding_search.trl_levels %}
-                            {% for value, label in trl_levels %}
-                                {% if value == funding_search.trl_level %}
-                                <span class="badge badge-primary">{{ label }}</span>
-                                {% endif %}
-                            {% endfor %}
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
-                {% endif %}
-        </div>
-                
                             <!-- Grant Sources Selection -->
                             <div class="border border-base-300 rounded-lg p-4 bg-white">
                                 <div class="flex items-center justify-between gap-4 flex-wrap mb-3">
@@ -654,8 +533,9 @@
                                             <input type="hidden" name="trl_levels" value="{{ trl_level }}">
                                         {% endfor %}
                                     {% endif %}
+                                    <div class="grid grid-cols-2 gap-x-4 gap-y-2">
                                     {% for source_code, source_name in grant_sources %}
-                                    <label class="flex items-center gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
+                                        <label class="flex items-center gap-2 {% if not forloop.counter0|divisibleby:2 %}ml-6{% endif %} {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
                                         <input 
                                             type="checkbox" 
                                             name="grant_sources" 
@@ -666,9 +546,10 @@
                                             data-funding-search-id="{{ funding_search.id }}"
                                         >
                                         <img src="{% grant_source_logo source_code %}" alt="{{ source_name }}" class="h-4 w-auto" onerror="this.style.display='none'">
-                                        <span class="label-text">{{ source_name }}</span>
+                                            <span class="label-text text-xs">{{ source_name }}</span>
                                     </label>
                                     {% endfor %}
+                                    </div>
                                     <div class="border-t border-base-300 pt-2 mt-2">
                                         <label class="flex items-center gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
                                             <input 
@@ -682,8 +563,45 @@
                                             <span class="label-text text-xs">Exclude closed competitions</span>
                                         </label>
                                     </div>
-                                    <div class="border-t border-base-300 pt-3 mt-3">
-                                        <div class="text-xs font-semibold mb-2 text-base-content/80">Checklist Assessment Options</div>
+                                        </form>
+                                {% else %}
+                                <div class="flex flex-wrap gap-2">
+                                    {% if funding_search.selected_grant_sources %}
+                                        {% for source_code in funding_search.selected_grant_sources %}
+                                            {% for code, name in grant_sources %}
+                                                {% if code == source_code %}
+                                                <div class="badge badge-primary badge-outline flex items-center gap-1">
+                                                    <img src="{% grant_source_logo code %}" alt="{{ name }}" class="h-4 w-auto" onerror="this.style.display='none'">
+                                                    <span>{{ name }}</span>
+                                                </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    {% else %}
+                                    <div class="text-xs text-base-content/70">All sources selected</div>
+                    {% endif %}
+                </div>
+                        {% endif %}
+                    </div>
+                
+                            <!-- Checklist Assessment Options -->
+                            <div class="border border-base-300 rounded-lg p-4 bg-white">
+                    <h3 class="text-sm font-semibold mb-3">Checklist Assessment Options</h3>
+                    {% if can_edit %}
+                    <form method="post" id="checklist-assessment-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %}>
+                        {% csrf_token %}
+                        {# Preserve other form data when submitting checklist assessment form #}
+                        {% if funding_search.trl_levels %}
+                            {% for trl_level in funding_search.trl_levels %}
+                                <input type="hidden" name="trl_levels" value="{{ trl_level }}">
+                            {% endfor %}
+                        {% endif %}
+                        {% if funding_search.selected_grant_sources %}
+                            {% for source_code in funding_search.selected_grant_sources %}
+                                <input type="hidden" name="grant_sources" value="{{ source_code }}">
+                            {% endfor %}
+                        {% endif %}
+                        <input type="hidden" name="exclude_closed_competitions" value="{% if funding_search.exclude_closed_competitions != False %}on{% endif %}">
                                         <div class="space-y-2">
                                             <label class="flex items-start gap-2 {% if funding_search.matching_status == 'running' %}cursor-not-allowed opacity-60{% else %}cursor-pointer{% endif %}">
                                                 <input 
@@ -730,28 +648,27 @@
                                         </div>
                                         <div class="text-xs text-base-content/60 mt-2">
                                             Assessment order: Exclusions → Eligibility → Competitiveness (if selected)
-                                        </div>
                                     </div>
                                         </form>
                                 {% else %}
-                                <div class="flex flex-wrap gap-2">
-                                    {% if funding_search.selected_grant_sources %}
-                                        {% for source_code in funding_search.selected_grant_sources %}
-                                            {% for code, name in grant_sources %}
-                                                {% if code == source_code %}
-                                                <div class="badge badge-primary badge-outline flex items-center gap-1">
-                                                    <img src="{% grant_source_logo code %}" alt="{{ name }}" class="h-4 w-auto" onerror="this.style.display='none'">
-                                                    <span>{{ name }}</span>
-                                                </div>
+                    <div class="space-y-2">
+                        <div class="text-xs">
+                            {% if funding_search.assess_exclusions != False %}
+                                <span class="badge badge-primary badge-sm">Exclusions</span>
                                                 {% endif %}
-                                            {% endfor %}
-                                        {% endfor %}
-                                    {% else %}
-                                    <div class="text-xs text-base-content/70">All sources selected</div>
+                            {% if funding_search.assess_eligibility != False %}
+                                <span class="badge badge-primary badge-sm">Eligibility</span>
                     {% endif %}
+                            {% if funding_search.assess_competitiveness != False %}
+                                <span class="badge badge-primary badge-sm">Competitiveness</span>
+                            {% endif %}
+                            {% if funding_search.assess_exclusions == False and funding_search.assess_eligibility == False and funding_search.assess_competitiveness == False %}
+                                <span class="text-base-content/70">No assessments selected</span>
+                    {% endif %}
+                    </div>
                 </div>
                         {% endif %}
-                    </div>
+                            </div>
                 </div>
             </div>
         </div>
@@ -790,26 +707,27 @@
                         {% endif %}
                     </li>
                     <li>
-                        Company registration details:
-                        <span class="font-medium">Always included</span>
+                        Company status:
                         {% if funding_search.company.company_number %}
-                            <span class="text-xs text-base-content/70">(Company Number: {{ funding_search.company.company_number }})</span>
+                            <span class="font-medium text-success">UK Registered Entity</span>
+                        {% else %}
+                            <span class="text-warning">not UK Registered Entity</span>
                         {% endif %}
                     </li>
                     <li>
                         Company website:
                         {% if funding_search.company.website %}
-                            <span class="font-medium">Always included if available</span>
+                            <span class="font-medium">Website stored</span>
                         {% else %}
-                            <span class="text-warning">No website set</span>
+                            No website stored
                         {% endif %}
                     </li>
                     <li>
                         Company grant history:
                         {% if funding_search.company.grants_received_360 and funding_search.company.grants_received_360.grants %}
                             <span class="font-medium">Always included ({{ funding_search.company.grants_received_360.grants|length }} grant{{ funding_search.company.grants_received_360.grants|length|pluralize }})</span>
-                        {% else %}
-                            <span class="text-warning">No grant history available</span>
+                            {% else %}
+                            No previous grants found
                         {% endif %}
                     </li>
                 </ul>
@@ -821,7 +739,7 @@
 
                 {% if funding_search.preflight_result %}
                     {% with pf=funding_search.preflight_result %}
-                    
+
                     {% if pf.recommendations %}
                     <div class="mb-4">
                         <h4 class="font-semibold text-xs mb-2">Top recommendations</h4>
@@ -851,9 +769,9 @@
                                         {% if trl.confidence %}
                                             <span class="text-[0.65rem] text-base-content/60 ml-2">
                                                 ({{ trl.confidence }} confidence)
-                                            </span>
-                                        {% endif %}
-                                    </div>
+                            </span>
+                        {% endif %}
+                    </div>
                                     {% if trl.reasoning %}
                                         <p class="text-xs text-base-content/70 mb-2">
                                             {{ trl.reasoning }}
@@ -869,33 +787,117 @@
                                             </ul>
                                         </div>
                                     {% endif %}
-                                {% else %}
+                    {% else %}
                                     <p class="text-xs text-base-content/70">
                                         {% if trl.reasoning %}
                                             {{ trl.reasoning }}
                                         {% else %}
                                             TRL level could not be determined from the input material.
                                         {% endif %}
-                                    </p>
-                                {% endif %}
+                    </p>
+                    {% endif %}
                             {% endwith %}
-                        {% else %}
+                                {% else %}
                             <p class="text-xs text-base-content/70">
                                 TRL assessment not available. Please run pre-flight checks again.
                             </p>
-                        {% endif %}
-                    </div>
+                                {% endif %}
+                            </div>
 
                     <p class="text-[0.65rem] text-base-content/60 mt-3">
                         Last checked:
                         {{ pf.checked_at|default:"Not available" }}
                     </p>
                     {% endwith %}
-                {% else %}
+                                {% else %}
                     <p class="text-xs text-base-content/70 mb-3">
                         No pre-flight checks have been run yet for this funding search.
                     </p>
+                                {% endif %}
+
+                {# TRL Level Selection - Moved from Setup tab #}
+                <div class="border-t border-base-300 pt-4 mt-4">
+                    <div class="flex items-center gap-2 mb-3">
+                        <h4 class="font-semibold text-xs">TRL Level Selection</h4>
+                        <div class="tooltip tooltip-right" data-tip="Click to view TRL level explanations">
+                            <button type="button" class="btn btn-ghost btn-xs btn-circle" onclick="document.getElementById('trl-info-modal').showModal()">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
+                            </div>
+                        </div>
+                    {% if can_edit %}
+                    <form method="post" id="trl-levels-form" {% if funding_search.matching_status == 'running' %}onsubmit="return false;"{% endif %}>
+                        {% csrf_token %}
+                        {# Preserve grant sources and checklist assessment options when submitting TRL levels form #}
+                        {% if funding_search.selected_grant_sources %}
+                            {% for source_code in funding_search.selected_grant_sources %}
+                                <input type="hidden" name="grant_sources" value="{{ source_code }}">
+                            {% endfor %}
+                                {% endif %}
+                        <input type="hidden" name="exclude_closed_competitions" value="{% if funding_search.exclude_closed_competitions != False %}on{% endif %}">
+                        {% if funding_search.assess_exclusions != False %}
+                            <input type="hidden" name="assess_exclusions" value="on">
+                        {% endif %}
+                        {% if funding_search.assess_eligibility != False %}
+                            <input type="hidden" name="assess_eligibility" value="on">
+                        {% endif %}
+                        {% if funding_search.assess_competitiveness != False %}
+                            <input type="hidden" name="assess_competitiveness" value="on">
+                        {% endif %}
+                        
+                        <div class="form-control">
+                            <label class="label cursor-pointer gap-2 justify-start mb-2">
+                                <input type="checkbox" name="let_system_decide_trl" id="let-system-decide-trl" class="checkbox checkbox-sm" {% if funding_search.let_system_decide_trl != False %}checked{% endif %} {% if funding_search.matching_status == 'running' %}disabled{% endif %}>
+                                <span class="label-text text-xs">Let system decide TRL level</span>
+                            </label>
+                            <p class="text-xs text-base-content/60 mb-3">
+                                When enabled, the system will assess your project's TRL level during matching. 
+                                You can override this by unchecking and selecting TRL levels manually below.
+                            </p>
+                            
+                            <div class="relative mb-2" style="padding: 0.5rem 0;" id="trl-slider-container">
+                                <div class="relative" style="height: 20px;">
+                                    <input type="range" min="1" max="9" value="1" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-min" style="z-index: 2;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
+                                    <input type="range" min="1" max="9" value="9" step="1" class="absolute w-full h-2 bg-transparent appearance-none cursor-pointer" id="trl-range-max" style="z-index: 3;" {% if funding_search.matching_status == 'running' or funding_search.let_system_decide_trl %}disabled{% endif %}>
+                                    <div class="absolute w-full h-2 bg-base-300 rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
+                                    <div id="trl-range-track" class="absolute h-2 bg-primary rounded-full" style="top: 50%; transform: translateY(-50%); pointer-events: none;"></div>
+                            </div>
+                                <div class="flex justify-between text-xs text-base-content/60 mt-1" style="padding: 0 10px;">
+                                    {% for i in "123456789" %}
+                                    <span>{{ i }}</span>
+                                    {% endfor %}
+                        </div>
+                            </div>
+                            {# Hidden inputs to store selected TRL levels #}
+                            <div id="trl-levels-hidden-inputs"></div>
+                        </div>
+                    </form>
+                                {% else %}
+                    <!-- Display TRL levels for non-editors -->
+                    {% if funding_search.trl_levels or funding_search.trl_level %}
+                    <div class="flex flex-wrap gap-2">
+                        {% for trl_value in funding_search.trl_levels %}
+                        {% for value, label in trl_levels %}
+                            {% if value == trl_value %}
+                            <span class="badge badge-primary badge-sm">{{ label }}</span>
+                                {% endif %}
+                                {% endfor %}
+                        {% endfor %}
+                        {% if funding_search.trl_level and funding_search.trl_level not in funding_search.trl_levels %}
+                            {% for value, label in trl_levels %}
+                                {% if value == funding_search.trl_level %}
+                                <span class="badge badge-primary badge-sm">{{ label }}</span>
+                            {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                    </div>
+                {% else %}
+                    <p class="text-xs text-base-content/60">TRL will be assessed automatically during matching.</p>
                 {% endif %}
+                    {% endif %}
+                </div>
 
                 {% if can_edit %}
                 <!-- Pre-flight Status Alert (hidden by default) -->
@@ -2760,6 +2762,29 @@
     </form>
 </dialog>
 
+<!-- TRL Info Modal -->
+<dialog id="trl-info-modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-base mb-4">TRL Level Explanations</h3>
+        <div class="space-y-3">
+            {% for value, label in trl_levels %}
+            <div class="border-b border-base-300 pb-2 last:border-b-0">
+                <div class="font-semibold text-[0.625rem] leading-tight">{{ value }}</div>
+                <div class="text-[0.625rem] text-base-content/70 mt-1 leading-tight">{{ label }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="modal-action">
+            <form method="dialog">
+                <button class="btn">Close</button>
+            </form>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const rangeMin = document.getElementById('trl-range-min');
@@ -3279,6 +3304,133 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.nextElementSibling.textContent = shouldSelectAll ? 'Deselect All' : 'Select All';
             });
         }
+    }
+    
+    // Handle checklist assessment form checkbox changes with AJAX
+    const checklistAssessmentCheckboxes = document.querySelectorAll(
+        '#checklist-assessment-form input.grant-source-checkbox[name^="assess_"]'
+    );
+    const checklistAssessmentForm = document.getElementById('checklist-assessment-form');
+    
+    if (checklistAssessmentCheckboxes.length > 0 && checklistAssessmentForm && !isMatchingRunning) {
+        checklistAssessmentCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function(e) {
+                // Prevent default form submission
+                e.preventDefault();
+                
+                // Collect all form data
+                const formData = new FormData(checklistAssessmentForm);
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                // Submit via AJAX
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // If it's a redirect (302), follow it
+                        if (response.redirected) {
+                            // Reload the page but maintain scroll position
+                            const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+                            sessionStorage.setItem('fundingSearchScrollPosition', scrollPosition.toString());
+                            window.location.href = response.url;
+                        } else {
+                            // If response is OK but not redirected, just reload maintaining scroll
+                            const scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+                            sessionStorage.setItem('fundingSearchScrollPosition', scrollPosition.toString());
+                            window.location.reload();
+                        }
+                    } else {
+                        showToast('Error updating checklist assessment options. Please try again.', 'error');
+                        // Revert checkbox on error
+                        this.checked = !this.checked;
+                    }
+                })
+                .catch(error => {
+                    showToast('Error updating checklist assessment options. Please try again.', 'error');
+                    // Revert checkbox on error
+                    this.checked = !this.checked;
+                });
+            });
+        });
+    }
+    
+    // Add validation for matching form - require at least one checklist assessment option
+    const matchingForm = document.getElementById('matching-form');
+    if (matchingForm) {
+        matchingForm.addEventListener('submit', function(e) {
+            // Check if at least one checklist assessment option is selected
+            const assessExclusions = document.getElementById('assess-exclusions');
+            const assessEligibility = document.getElementById('assess-eligibility');
+            const assessCompetitiveness = document.getElementById('assess-competitiveness');
+            
+            const hasChecklistAssessment = (
+                (assessExclusions && assessExclusions.checked) ||
+                (assessEligibility && assessEligibility.checked) ||
+                (assessCompetitiveness && assessCompetitiveness.checked)
+            );
+            
+            if (!hasChecklistAssessment) {
+                e.preventDefault();
+                showToast('Please select at least one checklist assessment option (Exclusions, Eligibility, or Competitiveness) before running the matching job.', 'error');
+                // Scroll to checklist assessment section
+                const checklistSection = document.querySelector('#checklist-assessment-form');
+                if (checklistSection) {
+                    checklistSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Highlight the section briefly
+                    const checklistCard = checklistSection.closest('.border');
+                    if (checklistCard) {
+                        checklistCard.style.transition = 'box-shadow 0.3s';
+                        checklistCard.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.5)';
+                        setTimeout(() => {
+                            checklistCard.style.boxShadow = '';
+                        }, 2000);
+                    }
+                }
+                return false;
+            }
+        });
+    }
+    
+    // Also add validation for test matching form if it exists
+    const testMatchingForm = document.querySelector('form[action*="funding_search_match_test"]');
+    if (testMatchingForm) {
+        testMatchingForm.addEventListener('submit', function(e) {
+            const assessExclusions = document.getElementById('assess-exclusions');
+            const assessEligibility = document.getElementById('assess-eligibility');
+            const assessCompetitiveness = document.getElementById('assess-competitiveness');
+            
+            const hasChecklistAssessment = (
+                (assessExclusions && assessExclusions.checked) ||
+                (assessEligibility && assessEligibility.checked) ||
+                (assessCompetitiveness && assessCompetitiveness.checked)
+            );
+            
+            if (!hasChecklistAssessment) {
+                e.preventDefault();
+                showToast('Please select at least one checklist assessment option (Exclusions, Eligibility, or Competitiveness) before running the matching job.', 'error');
+                const checklistSection = document.querySelector('#checklist-assessment-form');
+                if (checklistSection) {
+                    checklistSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const checklistCard = checklistSection.closest('.border');
+                    if (checklistCard) {
+                        checklistCard.style.transition = 'box-shadow 0.3s';
+                        checklistCard.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.5)';
+                        setTimeout(() => {
+                            checklistCard.style.boxShadow = '';
+                        }, 2000);
+                    }
+                }
+                return false;
+            }
+        });
     }
 });
 
@@ -4494,26 +4646,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
                 } else {
                     // Fallback to calculating from checklist data
-                    const matchId = certaintyElement.getAttribute('data-match-id');
-                    const svgElement = card.querySelector(`svg[data-match-id="${matchId}"]`);
+                const matchId = certaintyElement.getAttribute('data-match-id');
+                const svgElement = card.querySelector(`svg[data-match-id="${matchId}"]`);
+                
+                if (svgElement) {
+                    const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
+                    const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
+                    const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
                     
-                    if (svgElement) {
-                        const eligibilityData = JSON.parse(svgElement.getAttribute('data-eligibility') || '[]');
-                        const competitivenessData = JSON.parse(svgElement.getAttribute('data-competitiveness') || '[]');
-                        const exclusionsData = JSON.parse(svgElement.getAttribute('data-exclusions') || '[]');
-                        
-                        const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
-                        const totalItems = allItems.length;
-                        
-                        if (totalItems > 0) {
-                            const yesNoCount = allItems.filter(item => item.status === 'yes' || item.status === 'no').length;
-                            const certaintyPercentage = Math.round((yesNoCount / totalItems) * 100);
-                            certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
-                        } else {
-                            certaintyElement.textContent = '';
-                        }
+                    const allItems = [...eligibilityData, ...competitivenessData, ...exclusionsData];
+                    const totalItems = allItems.length;
+                    
+                    if (totalItems > 0) {
+                        const yesNoCount = allItems.filter(item => item.status === 'yes' || item.status === 'no').length;
+                        const certaintyPercentage = Math.round((yesNoCount / totalItems) * 100);
+                        certaintyElement.textContent = `${certaintyPercentage}% Certainty`;
                     } else {
                         certaintyElement.textContent = '';
+                    }
+                } else {
+                    certaintyElement.textContent = '';
                     }
                 }
             } catch (e) {

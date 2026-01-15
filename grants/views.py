@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from .models import Grant
+from .embedding_service import EmbeddingService
 from admin_panel.ai_client import build_grant_context, AiAssistantClient, AiAssistantError
 from companies.models import Company, FundingSearch
 
@@ -297,9 +298,16 @@ def grant_detail(request, slug):
         # Sort: sections in order first, then others alphabetically
         sections_list.sort(key=lambda x: (section_order.index(x['key']) if x['key'] in section_order else 999, x['key']))
     
+    # Tab selection
+    allowed_tabs = ['details', 'analysis', 'similar']
+    current_tab = request.GET.get('tab', 'details')
+    if current_tab not in allowed_tabs:
+        current_tab = 'details'
+    
     context = {
         'grant': grant,
         'sections_list': sections_list,
+        'current_tab': current_tab,
     }
     return render(request, 'grants/detail.html', context)
 
@@ -766,4 +774,51 @@ def global_search(request):
     }
     
     return render(request, 'grants/search_results.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def similar_grants(request, slug):
+    """API endpoint to get similar grants for a given grant."""
+    grant = get_object_or_404(Grant, slug=slug)
+    
+    try:
+        embedding_service = EmbeddingService()
+        similar_grants_list = embedding_service.find_similar_grants(
+            grant,
+            limit=20,
+            min_similarity=0.5
+        )
+        
+        # Format results for JSON response
+        results = []
+        for similar_grant, similarity_score in similar_grants_list:
+            results.append({
+                'id': similar_grant.id,
+                'slug': similar_grant.slug,
+                'title': similar_grant.title,
+                'source': similar_grant.get_source_display(),
+                'summary': similar_grant.summary[:200] if similar_grant.summary else '',
+                'funding_amount': similar_grant.funding_amount,
+                'deadline': similar_grant.deadline.isoformat() if similar_grant.deadline else None,
+                'status': similar_grant.get_computed_status(),
+                'url': similar_grant.url,
+                'similarity_score': round(similarity_score, 3),
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'similar_grants': results,
+            'count': len(results),
+        })
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error finding similar grants: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'similar_grants': [],
+            'count': 0,
+        }, status=500)
 

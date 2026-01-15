@@ -66,6 +66,9 @@ class Grant(models.Model):
     hash_checksum = models.CharField(max_length=64, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Embedding fields for semantic search
+    embedding = models.JSONField(default=list, blank=True, null=True, help_text="Vector embedding for semantic search")
+    embedding_updated_at = models.DateTimeField(blank=True, null=True)
     
     class Meta:
         db_table = 'grants'

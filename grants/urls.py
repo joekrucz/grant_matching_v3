@@ -10,6 +10,7 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('grants', views.grants_list, name='list'),
     path('grants/<slug:slug>/', views.grant_detail, name='detail'),
+    path('grants/<slug:slug>/similar', views.similar_grants, name='similar_grants'),
     path('grants/<slug:slug>/delete', views.delete_grant, name='delete'),
     path('grants/<slug:slug>/generate-analysis', views.generate_grant_analysis, name='generate_grant_analysis'),
     path('grants/<slug:slug>/generate-trl', views.generate_trl_requirements, name='generate_trl_requirements'),

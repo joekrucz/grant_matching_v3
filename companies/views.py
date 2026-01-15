@@ -2023,6 +2023,18 @@ def funding_search_match(request, id):
             messages.error(request, 'Please select input sources (website, grant history) or add a project description first.')
             return redirect('companies:funding_search_detail', id=id)
         
+        # Check if at least one checklist assessment option is selected
+        has_checklist_assessment = (
+            funding_search.assess_exclusions is True or
+            funding_search.assess_eligibility is True or
+            funding_search.assess_competitiveness is True
+        )
+        
+        if not has_checklist_assessment:
+            logger.warning(f"Funding search {id} has no checklist assessment options selected")
+            messages.error(request, 'Please select at least one checklist assessment option (Exclusions, Eligibility, or Competitiveness) before running the matching job.')
+            return redirect('companies:funding_search_detail', id=id)
+        
         if funding_search.matching_status == 'running':
             logger.info(f"Funding search {id} matching already running")
             messages.info(request, 'Matching job is already running.')
@@ -2092,6 +2104,18 @@ def funding_search_match_test(request, id):
         if not has_sources:
             logger.warning(f"Funding search {id} has no input sources")
             messages.error(request, 'Please select input sources (website, grant history) or add a project description first.')
+            return redirect('companies:funding_search_detail', id=id)
+        
+        # Check if at least one checklist assessment option is selected
+        has_checklist_assessment = (
+            funding_search.assess_exclusions is True or
+            funding_search.assess_eligibility is True or
+            funding_search.assess_competitiveness is True
+        )
+        
+        if not has_checklist_assessment:
+            logger.warning(f"Funding search {id} has no checklist assessment options selected")
+            messages.error(request, 'Please select at least one checklist assessment option (Exclusions, Eligibility, or Competitiveness) before running the matching job.')
             return redirect('companies:funding_search_detail', id=id)
         
         if funding_search.matching_status == 'running':
